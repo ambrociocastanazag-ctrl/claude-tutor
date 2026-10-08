@@ -275,7 +275,7 @@ El tutor, además de `<marcas>`, puede terminar su respuesta con un bloque `<acc
 
 ## Pasarlo a otra PC
 
-Estos cinco archivos van en el paquete del tutor (`../paquete-tutor/`). Después de cambiar cualquiera, rehaz el .zip con `python paquete-tutor/construir.py`.
+Estos cinco archivos van en el repositorio del tutor (`../paquete-tutor/`). Después de cambiar cualquiera, sincronízalo con `python paquete-tutor/construir.py "qué cambió"`.
 
 ## Notas de este Excel
 
