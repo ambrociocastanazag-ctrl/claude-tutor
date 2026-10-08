@@ -1,0 +1,221 @@
+{
+  "titulo": "Referencias absolutas",
+  "titulo_codigo": "$",
+  "hoja": "Ejemplo",
+  "tema_tutor": "referencias absolutas ($) en Excel: por qué una fórmula se corre al copiarla y cómo anclar una celda",
+  "notas_tutor": "Tu turno (E4:E7): precio con el descuento de E1 y luego el IVA de B1, copiado hacia abajo; el cuaderno debe dar 15,12. Solución: =B4*(1-$E$1)*(1+$B$1).",
+  "pasos": [
+    {
+      "titulo": "Los datos",
+      "acciones": [
+        {
+          "poner": "A1",
+          "valor": "IVA"
+        },
+        {
+          "poner": "B1",
+          "valor": 0.12,
+          "formato": "0%"
+        },
+        {
+          "color": "B1",
+          "es": "amarillo"
+        },
+        {
+          "poner": "A3:C3",
+          "valores": [
+            [
+              "Producto",
+              "Precio",
+              "Con IVA"
+            ]
+          ]
+        },
+        {
+          "negrita": "A3:C3"
+        },
+        {
+          "poner": "A4:B7",
+          "valores": [
+            [
+              "Cuaderno",
+              15
+            ],
+            [
+              "Lápiz",
+              2
+            ],
+            [
+              "Mochila",
+              120
+            ],
+            [
+              "Regla",
+              5
+            ]
+          ]
+        },
+        {
+          "ancho": "A:D",
+          "valor": 14
+        }
+      ],
+      "texto": "Datos listos. El IVA (12 %) vive en B1, en amarillo. Queremos el precio con IVA en la columna C.",
+      "donde": "Mira la hoja **Ejemplo**: el IVA está solo en **B1**."
+    },
+    {
+      "titulo": "Una fórmula sin $",
+      "acciones": [
+        {
+          "poner": "C4",
+          "valor": "=B4*(1+B1)"
+        },
+        {
+          "seleccionar": "C4"
+        }
+      ],
+      "texto": "Escribo en C4 la fórmula sin $: {f:C4}. Sale bien: {C4}.",
+      "donde": "Clic en **C4** → escribe la fórmula → **Enter**."
+    },
+    {
+      "titulo": "Copiar hacia abajo",
+      "acciones": [
+        {
+          "copiar": "C4",
+          "a": "C5:C7"
+        },
+        {
+          "color": "C5:C7",
+          "es": "rojo"
+        }
+      ],
+      "texto": "La arrastro hacia abajo y sale mal (rojo): C5 = {C5}, C6 = {C6}, C7 = {C7}. Ninguna aplicó el 12 %.",
+      "donde": "Selecciona **C4** y arrastra el **controlador de relleno** (el cuadrito de la esquina) hasta **C7**."
+    },
+    {
+      "titulo": "Qué se rompió",
+      "acciones": [
+        {
+          "poner": "D3",
+          "valor": "Fórmula"
+        },
+        {
+          "negrita": "D3"
+        },
+        {
+          "mostrar_formulas": "C4:C7",
+          "en": "D4:D7"
+        }
+      ],
+      "texto": "En la columna D se ve la fórmula de cada fila: {D5}, {D6}, {D7}. El B1 se fue corriendo hacia abajo con cada copia.",
+      "donde": "Doble clic en **C6** para ver a qué celdas apunta: cada referencia sale con un borde de color."
+    },
+    {
+      "titulo": "Las flechas de Excel",
+      "acciones": [
+        {
+          "seleccionar": "C7"
+        },
+        {
+          "precedentes": "C7"
+        }
+      ],
+      "texto": "Las flechas azules de C7 muestran de dónde saca sus datos: B7 (el precio) y B4, que vale {B4}. Por eso C7 da {C7}: tomó el precio de otra fila como si fuera el IVA.",
+      "donde": "**Fórmulas** → **Rastrear precedentes** dibuja estas flechas; **Quitar flechas** las borra."
+    },
+    {
+      "titulo": "Fijar con $",
+      "acciones": [
+        {
+          "poner": "C4",
+          "valor": "=B4*(1+$B$1)"
+        },
+        {
+          "copiar": "C4",
+          "a": "C5:C7"
+        },
+        {
+          "color": "C4:C7",
+          "es": "verde"
+        },
+        {
+          "mostrar_formulas": "C4:C7",
+          "en": "D4:D7"
+        }
+      ],
+      "texto": "Cambio a $B$1 y copio de nuevo (verde): {C4}, {C5}, {C6}, {C7}. El precio se mueve (B4, B5...), el IVA se queda en B1.",
+      "donde": "En la barra de fórmulas, pon el cursor sobre **B1** y pulsa **F4**: rota entre B1, $B$1, B$1 y $B1."
+    },
+    {
+      "titulo": "Tu turno",
+      "acciones": [
+        {
+          "poner": "D1",
+          "valor": "Descuento"
+        },
+        {
+          "poner": "E1",
+          "valor": 0.1,
+          "formato": "0%"
+        },
+        {
+          "color": "E1",
+          "es": "amarillo"
+        },
+        {
+          "poner": "E3",
+          "valor": "Tu turno"
+        },
+        {
+          "negrita": "E3"
+        },
+        {
+          "seleccionar": "E4"
+        }
+      ],
+      "texto": "Tu turno: en E4 calcula el precio con el 10 % de descuento (E1) y luego el IVA (B1), y cópiala hasta E7. Piensa qué referencias necesitan $.",
+      "turno": {
+        "rango": "E4:E7",
+        "solucion": "=B4*(1-$E$1)*(1+$B$1)",
+        "al_empezar": "Escribe la fórmula en E4, cópiala hasta E7 y pulsa Comprobar cuando termines.",
+        "al_terminar": "¡Perfecto! Descuento, IVA y los dos $ en su sitio. Ya puedes pasar al módulo 2.",
+        "errores": [
+          {
+            "formula": "=B4*(1-$E$1)",
+            "dice": "El descuento está bien, pero falta el IVA: multiplica también por el factor de B1."
+          },
+          {
+            "formula": "=B4*(1+$E$1)",
+            "dice": "El precio subió: estás sumando el descuento, y además falta el IVA. Un descuento resta."
+          },
+          {
+            "formula": "=B4*(1+$E$1)*(1+$B$1)",
+            "dice": "El IVA está, pero el descuento se está sumando: un descuento resta."
+          },
+          {
+            "formula": "=B4*(1-$E$1)+(C4-B4)",
+            "dice": "Le sumaste el IVA del precio original. El IVA va sobre el precio ya rebajado: multiplica."
+          },
+          {
+            "formula": "=B4*(1-$E$1)+B4*$B$1",
+            "dice": "Le sumaste el IVA del precio original. El IVA va sobre el precio ya rebajado: multiplica."
+          },
+          {
+            "formula": "=B4*(1-E1)*(1+B1)",
+            "dice": "La primera fila da bien, pero al copiar se corren E1 y B1: les falta el $."
+          },
+          {
+            "formula": "=B4*(1-E1)*(1+$B$1)",
+            "dice": "Al copiar se corre el descuento: a E1 le falta el $."
+          },
+          {
+            "formula": "=B4*(1-$E$1)*(1+B1)",
+            "dice": "Al copiar se corre el IVA: a B1 le falta el $."
+          }
+        ],
+        "titulo": "Descuento e IVA · E4:E7"
+      },
+      "donde": "Clic en **E4** → escribe la fórmula → **F4** sobre cada referencia que deba quedarse quieta → arrastra hasta **E7**."
+    }
+  ]
+}

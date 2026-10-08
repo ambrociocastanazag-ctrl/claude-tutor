@@ -1,0 +1,11 @@
+# Solo se versiona lo del tutor; lo de cada persona (CLAUDE.md, contexto.md, README.md, sus temas y cursos) queda fuera.
+/*
+!/.gitignore
+!/INSTALAR_TUTOR.md
+!/requirements.txt
+!/panel-excel/
+!/herramientas/
+panel-excel/preferencias.json
+__pycache__/
+*.pyc
+herramientas/node_modules/
