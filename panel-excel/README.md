@@ -153,7 +153,7 @@ Más acciones (las de las lecciones y las del tutor; las del tutor siempre con p
 
 Cada paso se rehace desde la hoja vacía (`Clase._limpiar` y `_construir`): se quitan las celdas, las tablas, los gráficos y formas que pusieron los pasos (se renombran `lec_N` para reconocerlos aunque se reabra el panel), las dinámicas, el formato condicional, la validación, los nombres que crearon los pasos, sus consultas de Power Query, escenarios y módulos de VBA, los filtros y los anchos de columna. Así, al volver a un paso, cada cosa está una sola vez y nada de pasos posteriores.
 
-Lo de la persona (decidido el 2026-10-08):
+Lo de la persona:
 - **Sus celdas** se conservan como antes (`suyo`).
 - **Sus gráficos y formas** no se tocan: siguen ahí y apuntando a sus celdas.
 - **Sus tablas, dinámicas, formato condicional y validación** se reconocen porque aparecieron después de rehacer el paso (`avanzado.inventario`, por su sitio y su regla) y se rehacen igual después (`avanzado.recrear`). Si algo no se puede rehacer (p. ej. su tabla quedaría encima de una de la lección), el tutor lo sabe por el [Estado actual].
@@ -346,9 +346,9 @@ Buscar objetivo, tablas de datos y escenarios se aplican con la copia de la hoja
    **Pruebas más cortas:**
    - `--probar --rapido`: la lección (pasos y revisión automática) y lo mínimo de cada bloque opcional en hojas nuevas (`rapida_matrices`, `rapida_power_query`, `rapida_analisis`, `rapida_vba`: proponer código, marcar y borrar, deshacer, Comprobar bien y un `Do: Loop` cortado). **Unos 25 s** con la lección suelta (40 s con el curso avanzado). Es la que usa el instalador y la de después de un `git pull`.
    - `--probar --solo vba,pq`: solo esos bloques (nombres: `leccion`, `propuestas`, `marcas`, `libre`, `pasos`, `objetos`, `progreso`, `matrices`, `pq`, `analisis`, `vba`); con `--rapido`, sus versiones rápidas.
-   - La completa (sin `--rapido`) tarda **unos 7 minutos** (411 s el 2026-10-08) y usa el Excel abierto, visible: va **antes de publicar cambios del panel**.
+   - La completa (sin `--rapido`) tarda **unos 7 minutos** (unos 411 s) y usa el Excel abierto, visible: va **antes de publicar cambios del panel**.
 
-   **En un curso, `--probar` prueba solo sus módulos** (desde el 2026-10-08): las pruebas del motor de arriba (propuestas, marcas, modo libre y lo avanzado) suponen el primer módulo como el de `ejemplo_leccion.json` y en otro curso fallaban por eso; van con la lección suelta o con `--completo`. Además mira que el libro sea .xlsm si el curso pide macros, muestra lo que le falta a Excel por módulo y, en los ejercicios de objetos o de VBA, que Comprobar sin hacer nada diga «vacío» (lo del ejemplo no cuenta). `--probar` no cambia dónde se quedó la persona.
+   **En un curso, `--probar` prueba solo sus módulos**: las pruebas del motor de arriba (propuestas, marcas, modo libre y lo avanzado) suponen el primer módulo como el de `ejemplo_leccion.json` y en otro curso fallaban por eso; van con la lección suelta o con `--completo`. Además mira que el libro sea .xlsm si el curso pide macros, muestra lo que le falta a Excel por módulo y, en los ejercicios de objetos o de VBA, que Comprobar sin hacer nada diga «vacío» (lo del ejemplo no cuenta). `--probar` no cambia dónde se quedó la persona.
 
    **Al terminar cierra el libro que abrió** (`Libro.cerrar_si_lo_abri`): con una lección suelta, sin guardar («Libro de prueba cerrado sin guardar.»); con un curso, lo guarda (como al usar el panel) y lo cierra, para que no quede abierto con su `~$` («Libro del curso (…) guardado y cerrado»). Si el libro del curso ya estaba abierto antes de la prueba, lo deja abierto y lo dice. Nunca toca otros libros. `--probar-tutor` además le hace una pregunta al tutor (gasta del plan; es opcional; con `--solo leccion` no corre el resto).
 3. Prueba la revisión escribiendo respuestas buenas y malas en la zona del "Tu turno" y pulsando **Comprobar** con el panel abierto.
