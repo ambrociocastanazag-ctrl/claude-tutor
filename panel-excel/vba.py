@@ -2,24 +2,57 @@
 cosa en la PC, así que:
 - Todo pide que la persona haya activado una vez «Confiar en el acceso al modelo de objetos de proyectos de VBA»
   (Centro de confianza). El panel lo detecta y, si no está, explica cómo activarlo; nunca lo cambia él.
-- El tutor LEE los módulos (en el [Estado actual]), MARCA líneas con comentarios temporales «' ← tutor: …» (una línea
-  aparte encima, que se quita con Borrar marcas) y PROPONE código con la tarjeta de permiso (Deshacer deja el módulo
+- El tutor LEE los módulos (en el [Estado actual]), MARCA líneas con comentarios temporales «' <- tutor: …» (una línea
+  aparte encima, que se quita con Borrar marcas; en ASCII, porque el editor de VBA guarda en ANSI y una «←» quedaba
+  como «?» y ya no se reconocía) y PROPONE código con la tarjeta de permiso (Deshacer deja el módulo
   como estaba). Nunca ejecuta nada.
 - Antes de insertar o ejecutar código: análisis estático con lista negra fuerte (analizar).
 - Comprobar de un ejercicio de VBA (solo al pulsarlo): copia la hoja a un libro temporal, mete ahí el código de la
   persona con un vigía en cada bucle (corta a los pocos segundos) y sin MsgBox/InputBox que se queden esperando,
   la ejecuta, hace lo mismo con la solución y compara los resultados. Los libros temporales se cierran sin guardar.
 Todo se usa desde el hilo de Excel (COM)."""
-import re, threading, time
+import codecs, ctypes, re, threading, time, unicodedata
 import motor as M
 
 ACCESO = ("Para las macros, activa una vez en Excel: Archivo → Opciones → Centro de confianza → Configuración del Centro de "
           "confianza → Configuración de macros → «Confiar en el acceso al modelo de objetos de proyectos de VBA». Después vuelve a pulsar.")
-MARCA = "' ← tutor: "
+MARCA = "' <- tutor: "          # solo ASCII: el editor de VBA guarda en ANSI
+# Se reconocen (y se quitan) la marca de ahora y las de antes: «' ← tutor:», que el editor guardó como «' ? tutor:»
+ES_MARCA = re.compile(r"^\s*'\s*(<-|←|\?)\s*tutor:", re.I)
 MAX_LINEAS, MAX_CHARS = 400, 20000
 NOMBRE_MODULO = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,30}$")
 NOMBRE_MACRO = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,60}$")
 TIPOS = {1: "módulo", 2: "módulo de clase", 3: "formulario", 100: "hoja o libro"}
+
+
+def _pagina_ansi():
+    """La página de códigos ANSI de Windows (la del editor de VBA): cp1252 en Windows en español o inglés."""
+    try: return codecs.lookup(f"cp{ctypes.windll.kernel32.GetACP()}").name
+    except Exception: return "cp1252"
+
+
+PAGINA = _pagina_ansi()
+PARECIDOS = {"←": "<-", "→": "->", "↑": "^", "↓": "v", "↔": "<->", "⇒": "=>", "✔": "OK", "✓": "OK", "✘": "X", "✗": "X",
+             "≤": "<=", "≥": ">=", "≠": "<>", "·": "-", "•": "-", "…": "..."}
+
+
+def ansi(texto):
+    """El texto tal como lo guarda el editor de VBA (ANSI): lo que no cabe se cambia por algo parecido («→» por «->»,
+    una letra con un signo raro por la letra sola) en vez de quedar como «?»."""
+    out = []
+    for ch in texto:
+        try: ch.encode(PAGINA); out.append(ch); continue
+        except UnicodeEncodeError: pass
+        if ch in PARECIDOS: out.append(PARECIDOS[ch]); continue
+        base = "".join(c for c in unicodedata.normalize("NFKD", ch) if not unicodedata.combining(c))
+        try: base.encode(PAGINA); out.append(base or "?")
+        except UnicodeEncodeError: out.append("?")
+    return "".join(out)
+
+
+def es_marca(linea):
+    """¿Es una línea de marca del tutor? (la de ahora o una de antes)."""
+    return bool(ES_MARCA.match(linea))
 
 
 def acceso(wb):
@@ -61,6 +94,7 @@ SENTENCIAS = [
     (re.compile(r"\.\s*Show\b", re.I), "abre formularios o diálogos (.Show)"),
     (re.compile(r"\bDir\s*\$?\s*\(", re.I), "lee carpetas (Dir)"),
     (re.compile(r"\bApplication\s*\.\s*InputBox\b", re.I), "abre un diálogo (Application.InputBox)"),
+    (re.compile(r"\bDebug\s*\.\s*Assert\b", re.I), "detiene la macro en el editor (Debug.Assert)"),
 ]
 
 
@@ -135,7 +169,7 @@ def _texto(comp):
 
 
 def _sin_marcas(texto):
-    return "\n".join(l for l in texto.split("\n") if not l.strip().startswith(MARCA.strip()))
+    return "\n".join(l for l in texto.split("\n") if not es_marca(l))
 
 
 def modulos(wb):
@@ -170,13 +204,13 @@ def contexto(wb, max_lineas=160):
 
 
 def borrar_marcas(wb):
-    """Quita las líneas «' ← tutor: …» de todos los módulos."""
+    """Quita las líneas «' <- tutor: …» de todos los módulos (también las de antes: «' ← tutor:» y «' ? tutor:»)."""
     if not acceso(wb): return 0
     n = 0
     for comp in wb.VBProject.VBComponents:
         cm = comp.CodeModule; lineas = _texto(comp).split("\n")
         for i in range(len(lineas), 0, -1):
-            if lineas[i - 1].strip().startswith(MARCA.strip()): cm.DeleteLines(i, 1); n += 1
+            if es_marca(lineas[i - 1]): cm.DeleteLines(i, 1); n += 1
     return n
 
 
@@ -193,7 +227,7 @@ def marcar(wb, marcas):
         if not isinstance(k, int) or not 1 <= k <= len(lineas): fallos.append(f"linea: el módulo «{comp.Name}» no tiene la línea {k}"); continue
         while k > 1 and re.search(r"\s_\s*$", lineas[k - 2]): k -= 1          # al principio de la sentencia (las que siguen con « _» van juntas)
         sangria = re.match(r"\s*", lineas[k - 1]).group(0)
-        texto = " ".join(str(m.get("texto", "mira aquí")).split())[:80].replace('"', "'")
+        texto = ansi(" ".join(str(m.get("texto", "mira aquí")).split())[:80].replace('"', "'"))
         comp.CodeModule.InsertLines(k, sangria + MARCA + texto); hechas += 1
     return hechas, fallos
 
@@ -208,7 +242,7 @@ def aplicar(wb, a):
     antes = None if comp is None else _texto(comp)
     if comp is None:
         comp = vbp.VBComponents.Add(1); comp.Name = a["vba"]
-    cm = comp.CodeModule; codigo = a["codigo"].replace("\r\n", "\n").strip("\n").replace("\n", "\r\n")
+    cm = comp.CodeModule; codigo = ansi(a["codigo"]).replace("\r\n", "\n").strip("\n").replace("\n", "\r\n")
     if a.get("modo", "reemplazar") == "reemplazar":
         if cm.CountOfLines: cm.DeleteLines(1, cm.CountOfLines)
         cm.AddFromString(codigo)
@@ -310,8 +344,10 @@ def _sentencias(linea):
 
 
 def instrumentar(codigo):
-    """El código con «tutorVigia» antes de cada Next, Loop, Wend y GoTo (corta los bucles que no terminan) y con
-    MsgBox e InputBox de mentira (no se quedan esperando a que alguien pulse Aceptar)."""
+    """El código con «Call tutorVigia» antes de cada Next, Loop, Wend, GoTo y Resume (corta los bucles que no terminan)
+    y con MsgBox e InputBox de mentira (no se quedan esperando a que alguien pulse Aceptar).
+    Va con «Call»: «tutorVigia: Loop» al empezar una sentencia es una ETIQUETA (el editor la manda a la columna 1 y el
+    vigía nunca se llamaba)."""
     out = []
     for _, linea in _logicas(codigo):
         cod, _ = _sin_textos(linea)
@@ -319,8 +355,9 @@ def instrumentar(codigo):
         sentencias, comentario = _sentencias(linea)      # sobre la línea original: los textos y comentarios no se tocan
         nuevas = []
         for st in sentencias:
-            if re.match(r"^\s*(Next|Loop|Wend|GoTo)\b", st, re.I): st = " tutorVigia: " + st.lstrip()
-            st = re.sub(r"\b(Then|Else)\s+GoTo\b", r"\1 tutorVigia: GoTo", st, flags=re.I)
+            if re.match(r"^\s*(Next|Loop|Wend|GoTo|Resume)\b", st, re.I) and not re.match(r"^\s*Resume\s+Next\b", st, re.I):
+                st = " Call tutorVigia: " + st.lstrip()
+            st = re.sub(r"\b(Then|Else)\s+(GoTo|Resume)\b(?!\s+Next\b)", r"\1 Call tutorVigia: \2", st, flags=re.I)
             nuevas.append(st)
         out.append(":".join(nuevas) + comentario)
     texto = "\n".join(out)
@@ -328,27 +365,53 @@ def instrumentar(codigo):
     return texto
 
 
-def _vigilar_dialogos(xl, parar):
-    """Mientras corre la macro: si aparece un aviso de Visual Basic (error de compilación, error en tiempo de ejecución),
-    pulsa su botón seguro (Finalizar / Aceptar) para que Excel no se quede esperando."""
+MODULO_VIGIA = "zzTutorPanel"     # el módulo del vigía: NUNCA con el nombre de uno de sus procedimientos (tutorVigia), o
+                                  # «Call tutorVigia» es un error de compilación («se esperaba un procedimiento, no un módulo»)
+
+
+def _vigilar_dialogos(pid, flujo, parar, res):
+    """Mientras corre la macro (en otro hilo): si aparece un aviso de Visual Basic (error de compilación, error en tiempo
+    de ejecución), pulsa su botón seguro (Finalizar / Aceptar) y guarda su texto; y si VBA queda en modo interrupción
+    (tras un error de compilación o un Debug.Assert), lo restablece, para que Excel no se quede esperando.
+    Solo mira ventanas (sin COM) mientras la macro corre; usa Excel por COM (pasado de hilo con `flujo`) solo para
+    restablecer, que es cuando Excel acepta llamadas."""
     try:
-        import win32gui, win32process, win32con
-        pid = win32process.GetWindowThreadProcessId(xl.Hwnd)[1]
+        import pythoncom, win32com.client, win32gui, win32process, win32con
+        pythoncom.CoInitialize()
     except Exception: return
-    while not parar.is_set():
-        def ver(h, _):
-            try:
-                if win32gui.GetClassName(h) != "#32770" or win32process.GetWindowThreadProcessId(h)[1] != pid: return
-                if "visual basic" not in win32gui.GetWindowText(h).lower(): return
-                botones = []
-                win32gui.EnumChildWindows(h, lambda c, _: botones.append(c) if win32gui.GetClassName(c) == "Button" else None, None)
-                for b in botones:
-                    if win32gui.GetWindowText(b).replace("&", "").lower() in ("finalizar", "end", "aceptar", "ok"):
-                        win32gui.PostMessage(b, win32con.BM_CLICK, 0, 0); return
+    xl = None
+    try: xl = win32com.client.Dispatch(pythoncom.CoGetInterfaceAndReleaseStream(flujo, pythoncom.IID_IDispatch))
+    except Exception: pass
+    try:
+        while not parar.is_set():
+            vistos = {"dialogo": False, "interrupcion": False}
+            def ver(h, _):
+                try:
+                    if win32process.GetWindowThreadProcessId(h)[1] != pid or not win32gui.IsWindowVisible(h): return
+                    clase, titulo = win32gui.GetClassName(h), win32gui.GetWindowText(h)
+                    if clase == "wndclass_desked_gsk" and re.search(r"\[(interrupci|break)", titulo, re.I): vistos["interrupcion"] = True
+                    if clase != "#32770" or "visual basic" not in titulo.lower(): return
+                    vistos["dialogo"] = True; hijos = []
+                    win32gui.EnumChildWindows(h, lambda c, _: hijos.append(c), None)
+                    texto = " ".join(t for t in (win32gui.GetWindowText(c).strip() for c in hijos if win32gui.GetClassName(c) == "Static") if t)
+                    if texto and not res.get("aviso"): res["aviso"] = " ".join(texto.split())[:200]
+                    for b in hijos:
+                        if win32gui.GetClassName(b) == "Button" and win32gui.GetWindowText(b).replace("&", "").lower() in ("finalizar", "end", "aceptar", "ok"):
+                            win32gui.PostMessage(b, win32con.BM_CLICK, 0, 0); return
+                except Exception: pass
+            try: win32gui.EnumWindows(ver, None)
             except Exception: pass
-        try: win32gui.EnumWindows(ver, None)
+            if vistos["interrupcion"] and not vistos["dialogo"] and xl is not None:
+                try:
+                    xl.VBE.CommandBars.FindControl(1, 228).Execute()        # 228 = Ejecutar → Restablecer
+                    res["restablecida"] = True
+                    if not res.get("vbe_visible"): xl.VBE.MainWindow.Visible = False
+                except Exception: pass
+            parar.wait(0.3)
+    finally:
+        xl = None
+        try: pythoncom.CoUninitialize()
         except Exception: pass
-        parar.wait(0.3)
 
 
 def _copia(xl, ws):
@@ -372,19 +435,30 @@ def _correr(xl, ws, mods, macro, entradas=(), limite=4):
         comp = vbp.VBComponents.Add(1); comp.Name = nombre
         cm = comp.CodeModule
         if cm.CountOfLines: cm.DeleteLines(1, cm.CountOfLines)
-        cm.AddFromString(instrumentar(codigo).replace("\n", "\r\n"))
+        cm.AddFromString(instrumentar(ansi(codigo)).replace("\n", "\r\n"))
         if donde is None and buscar_proc([(nombre, 1, codigo)], macro): donde = nombre
     if donde is None: res["error"] = f"no encontré la Sub {macro} en un módulo normal"; return res
     lista = ", ".join('"' + str(x).replace('"', '""') + '"' for x in entradas)
-    vig = vbp.VBComponents.Add(1); vig.Name = "TutorVigia"
+    vig = vbp.VBComponents.Add(1); vig.Name = MODULO_VIGIA
     vig.CodeModule.AddFromString(VIGIA.format(limite=float(limite), entradas=lista, llamada=f"{donde}.{macro}").replace("\n", "\r\n"))
     tmp.Activate(); hoja.Activate()
-    parar = threading.Event(); hilo = threading.Thread(target=_vigilar_dialogos, args=(xl, parar), daemon=True); hilo.start()
+    import pythoncom, win32process
+    try: pid = win32process.GetWindowThreadProcessId(xl.Hwnd)[1]
+    except Exception: pid = None
+    try: res["vbe_visible"] = bool(xl.VBE.MainWindow.Visible)
+    except Exception: res["vbe_visible"] = True          # si no se sabe, no se esconde el editor
+    parar = threading.Event(); hilo = None
+    if pid:
+        flujo = pythoncom.CoMarshalInterThreadInterfaceInStream(pythoncom.IID_IDispatch, xl._oleobj_)
+        hilo = threading.Thread(target=_vigilar_dialogos, args=(pid, flujo, parar, res), daemon=True); hilo.start()
     eventos = xl.EnableEvents; xl.EnableEvents = False; t0 = time.time()
-    try: xl.Run(f"'{tmp.Name}'!TutorVigia.tutorCorrer")
+    try: xl.Run(f"'{tmp.Name}'!{MODULO_VIGIA}.tutorCorrer")
     except Exception as e: res["error"] = M.motivo(e, 160)
     finally:
         xl.EnableEvents = eventos; parar.set(); res["segundos"] = time.time() - t0
+        if hilo: hilo.join(2)
+    if res.get("restablecida") or res.get("aviso"):
+        res["error"] = "Visual Basic no pudo ejecutarla" + (f": {res['aviso']}" if res.get("aviso") else " (¿un error de compilación?)")
     nombres = {n.Name.split("!")[-1].lower(): n for n in tmp.Names}
     if "tutorcortado" in nombres: res["cortada"] = True
     elif "tutorerror" in nombres and not res["error"]:

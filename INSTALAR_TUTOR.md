@@ -4,7 +4,9 @@
 
 > **Esta carpeta es un repositorio git** (`tutor-de-estudio`). Junto a este archivo hay archivos ya hechos y probados: `panel-excel/` (panel de clase en vivo para Excel), `prueba-dia/` (panel de clase en vivo para el editor de diagramas Dia, con su plugin y un curso de ejemplo), `herramientas/` (capturas de páginas con Chrome) y `requirements.txt` (las librerías de Python). Úsalos tal cual: no los reescribas ni los copies a mano. Si falta algo, pídele a la persona que clone el repositorio completo.
 >
-> **Lo de la persona no va al repositorio.** Su `CLAUDE.md`, `contexto.md`, `README.md`, `panel-excel/preferencias.json`, sus diagramas y su progreso en los cursos de Dia, y sus carpetas de temas o cursos quedan fuera (el `.gitignore` ya lo hace). No hagas commits ni cambies archivos del repositorio: así `git pull` actualiza las herramientas sin chocar con lo suyo.
+> **Lo de la persona no va al repositorio.** Su `CLAUDE.md`, `contexto.md`, `README.md`, `panel-excel/preferencias.json`, sus diagramas y su progreso en los cursos de Dia, y sus carpetas de temas o cursos quedan fuera (el `.gitignore` es una lista blanca: solo versiona los archivos del tutor, uno por uno). No hagas commits ni cambies archivos del repositorio: así `git pull` actualiza las herramientas sin chocar con lo suyo.
+>
+> **Dónde va cada cosa de la persona:** cada tema y cada curso, en **su propia carpeta en la raíz** de esta carpeta, una por tema (por ejemplo `calculo-integral/`, `curso-excel/`, `curso-uml/`), con su `README.md`. Nunca dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, que son del repositorio.
 
 Reglas mientras lo haces:
 - **Trabaja siempre con la carpeta donde está este archivo como directorio actual** (`cd` a ella al empezar): todos los comandos y scripts de aquí usan rutas relativas a esa carpeta.
@@ -25,7 +27,7 @@ Pregunta (con `AskUserQuestion` si encaja en opciones, o en texto):
 4. Cómo prefiere aprender: más teoría o más práctica; si quiere fórmulas en LaTeX para copiar.
 5. Si quiere que el tutor le pregunte antes de cambiar cosas (recomendado: sí, proponer y esperar su visto bueno).
 6. (Opcional) Pronombres, si quiere decirlos, y en qué editor o programa trabaja (VS Code, Cursor…).
-7. Qué tema prefiere para las páginas y paneles que le hagas: **claro**, **oscuro** o **el de Windows**. Pregúntalo siempre; no lo supongas.
+7. Qué tema prefiere: **claro**, **oscuro** o **el de Windows**, para las páginas (artefactos) y para los paneles del tutor (Excel, Dia); puede ser distinto en cada uno. Pregúntalo siempre; no lo supongas.
 8. Qué materias o programas va a estudiar primero (de esto depende qué herramientas proponer en los pasos 2 y 3).
 
 Guarda las respuestas; las usarás en los pasos 2 a 4.
@@ -44,10 +46,12 @@ Comprueba con un comando cada una (no instales todavía) y apunta cuáles existe
 | `openpyxl` | `python -c "import openpyxl"` |
 | `pywin32` | `python -c "import win32com.client"` |
 | `pywebview` | `python -c "import webview"` (solo para los paneles de Excel y de Dia) |
-| Dia | existe `C:\Program Files (x86)\Dia\bin\diaw.exe`; la versión, con `"C:\Program Files (x86)\Dia\bin\dia.exe" --version` (solo para el panel de Dia; ver 4.7) |
+| Dia | existe `C:\Program Files (x86)\Dia\bin\diaw.exe`; la versión, como dice 4.7 (solo para el panel de Dia) |
 | Pillow | `python -c "import PIL"` (solo para las flechas del panel de Dia encima de su ventana) |
 | PyMuPDF | `python -c "import pymupdf"` (opcional: leer PDFs con fórmulas como imagen) |
 | Claude Code en terminal | `claude --version` (el tutor de los paneles de Excel y de Dia lo usa) |
+
+**Entorno virtual:** si la persona usa un entorno virtual (venv, conda) para esta carpeta, todas las comprobaciones e instalaciones van con **ese** Python, y en su `CLAUDE.md` los comandos `python …` también (pon la ruta de ese `python.exe` o di que se active antes). Si no usa ninguno, el `python` del sistema.
 
 Con las materias del paso 1, decide qué le sirve:
 - **Si ya está instalado**, no pidas permiso: pruébalo y anótalo.
@@ -60,7 +64,7 @@ Usa la plantilla del paso 4 y haz esto con la sección "Herramientas":
 - **Siempre entran:** "Si falta una herramienta, búscala", "Artefactos y archivos" y "Comunicación".
 - **MATLAB:** solo si lo tiene **y** le sirve para sus materias (matemáticas, ingeniería, física, estadística). Si lo tiene pero no le sirve, anótalo solo en «Equipo» de `contexto.md`.
 - **Excel por COM:** solo si tiene Excel y Python (o si aprueba instalar `pywin32`).
-- **Panel de clase en vivo para Excel** (4.6): solo si va a estudiar Excel y tiene (o aprueba instalar) `pywin32` y `pywebview`. Si no, la sección de Excel queda sin el panel.
+- **Panel de clase en vivo para Excel** (4.6): solo si va a estudiar Excel y tiene (o aprueba instalar) `pywin32` y `pywebview`. Si no, la sección de Excel queda sin su parte del panel (el bloque B de 4.4).
 - **Panel de clase en vivo para Dia** (4.7): solo si va a estudiar diagramas UML (o cualquier diagrama) en Dia y tiene Dia 0.97.2 (o aprueba instalarlo). Si no, no pongas la sección de Dia.
 - **Falstad y verificación en Chrome:** la herramienta queda **guardada** en el `CLAUDE.md`, pero **se aplica solo si estudia electricidad o circuitos** (la sección dice esa condición). Si `herramientas/` no se crea ahora (no estudia electricidad o no aprueba descargar `puppeteer-core`), añade al final de la sección la línea de _pendiente_ que da 4.5.
 - **Plotly 3D girable:** entra como línea dentro de "Artefactos" (sirve para cualquier superficie o figura 3D).
@@ -68,9 +72,16 @@ Usa la plantilla del paso 4 y haz esto con la sección "Herramientas":
 
 ## Paso 4. Crear los archivos
 
+**Orden (síguelo así):**
+1. **Primero las pruebas de los paneles que tocan** (4.6 pasos 1 a 4 para Excel, 4.7 pasos 1 a 3 para Dia). Todavía no escribas `CLAUDE.md`. Apunta qué salió bien, qué bloques opcionales fallaron y cuáles no se pudieron probar.
+2. **Después escribe `CLAUDE.md`** (4.1) una sola vez, ya con lo que pasó: las secciones de 4.3 a 4.5 según el paso 3, el bloque del panel de Excel (4.4 B) solo si su prueba básica salió bien, y la sección de Dia (4.7) solo si sus pruebas salieron bien. Lo opcional que falló o no se pudo probar se anota como _pendiente_ (ver 4.6.5).
+3. Luego `contexto.md` (4.2), con lo que quedó pendiente en «Equipo».
+
+Si no va a usar ningún panel, empieza directamente por 4.1.
+
 ### 4.1 `CLAUDE.md` (raíz de la carpeta)
 
-Escríbelo con este contenido, adaptado según el paso 3. Revisa los pronombres de la plantilla (él, ella, «la persona») y ajústalos a los de la persona; si no los dijo, usa su nombre o «la persona». Donde diga `{{NOMBRE}}` pon su nombre; `{{DOCS}}` es su carpeta de Documentos (puede estar en OneDrive): `powershell -NoProfile -Command "[Environment]::GetFolderPath('MyDocuments')"`.
+Escríbelo (después de las pruebas de los paneles, ver «Orden») con este contenido, adaptado según el paso 3. Revisa los pronombres de la plantilla (él, ella, «la persona») y ajústalos a los de la persona; si no los dijo, usa su nombre o «la persona». Donde diga `{{NOMBRE}}` pon su nombre; `{{DOCS}}` es su carpeta de Documentos (puede estar en OneDrive): `powershell -NoProfile -Command "[Environment]::GetFolderPath('MyDocuments')"`.
 
 ````markdown
 # Tutor de estudio
@@ -123,10 +134,10 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 ### Artefactos y archivos
 
 - **Artefactos HTML** para lo visual e interactivo: explicaciones con diagramas, simuladores con deslizadores, cuestionarios de repaso.
-- **Tema (claro u oscuro):** el que diga su preferencia en `contexto.md`. Si existe `panel-excel/`, el panel lo lee de `panel-excel/preferencias.json`.
+- **Tema (claro u oscuro):** el que diga su preferencia en `contexto.md` (puede ser uno para los artefactos y otro para los paneles). Los paneles del tutor (el de Excel y el de Dia, si están instalados) lo leen los dos de `panel-excel/preferencias.json`.
 - **Tutor dentro de las guías completas:** toda guía de un curso o tema completo lleva un tutor integrado (capacidad `sample` del artefacto; carga antes la skill `artifact-capabilities`, si existe en la cuenta) para preguntar mientras estudia. Sabe en qué módulo está y qué tocó por último, y sigue las reglas de "Cómo enseñar": primero la idea y luego la cuenta, señala el paso exacto del error y en ejercicios sin resolver solo da pistas. Las **pruebas rápidas** y los artefactos sueltos no lo llevan.
 - **3D girable** (superficies, sólidos, campos): Plotly dentro del artefacto.
-- **Archivos** para lo que va a repasar: resúmenes, hojas de fórmulas, listas de ejercicios con solución. Van en esta carpeta, en una subcarpeta por tema.
+- **Archivos** para lo que va a repasar: resúmenes, hojas de fórmulas, listas de ejercicios con solución. Van en esta carpeta, en una subcarpeta por tema en la raíz (también sus cursos de Excel o de Dia), nunca dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, que son del repositorio.
 - Los PDFs o imágenes que pase se leen directamente.
 - **Cada carpeta de proyecto lleva un `README.md`**: se escribe al crear la carpeta y se actualiza cada vez que cambian sus archivos o su forma de uso. Debe decir qué es el proyecto y su enlace publicado si lo tiene, su **historia y decisiones** (estado, diagnóstico, qué se eligió y qué se descartó, y por qué), qué es cada archivo (incluidos los que se generan y no se editan a mano), cómo cambiarlo paso a paso (editar, construir, verificar y publicar) y qué dependencias usa. Corto y en español.
 
@@ -152,7 +163,7 @@ Lo esencial de la persona y de su estudio. Actualízalo cuando diga algo nuevo; 
 - Se llama **{{NOMBRE}}**{{; pronombres: … (si los dijo)}}.
 - {{lo que contestó en el paso 1: dónde estudia, cómo prefiere ver las cosas, LaTeX o no, ritmo}}
 - **Antes de cambiar algo, propón y espera su visto bueno.** Si una decisión tiene opciones, dáselas con una recomendada.
-- **Tema:** {{claro | oscuro | el de Windows}} en artefactos y paneles.
+- **Tema:** artefactos en {{claro | oscuro | el de Windows}}; paneles del tutor (Excel y Dia, en `panel-excel/preferencias.json`) en {{claro | oscuro | el de Windows}}. Pueden ser distintos.
 - Le gusta entender cómo funcionan las herramientas: explícalo en corto cuando pregunte.
 
 ## Lo que estudia
@@ -212,7 +223,9 @@ Si tiene MATLAB pero no hay MCP, dile que existe el servidor MCP oficial de Math
 
 ### 4.4 Sección Excel (solo si tiene Excel y Python)
 
-Pégala en el lugar de `{{SECCIÓN EXCEL}}`:
+Tiene dos bloques. Pega en el lugar de `{{SECCIÓN EXCEL}}` el **bloque A** siempre (si tiene Excel y Python) y, justo debajo, el **bloque B** solo si se instaló el panel y su prueba básica salió bien (4.6). Cada bloque es un recuadro aparte: pega el recuadro entero, sin mezclar.
+
+**Bloque A: Excel por COM** (siempre):
 
 ````markdown
 ### Excel (Python: `openpyxl` + `pywin32`)
@@ -220,18 +233,26 @@ Pégala en el lugar de `{{SECCIÓN EXCEL}}`:
 - **Crear y editar libros:** `openpyxl` escribe fórmulas, formato y gráficos, pero **no calcula** las fórmulas.
 - **Recalcular y verificar con el Excel real:** `pywin32` (COM) abre Excel desde Python: `win32com.client.Dispatch('Excel.Application')`. Con él se recalcula, se leen los resultados de las fórmulas, se exporta a PDF/imagen para verlo y se crean tablas dinámicas, Power Query y macros (que `openpyxl` no hace).
 - Siempre verifica que cada fórmula dé el resultado esperado antes de entregar el libro. No cierres libros de la persona sin preguntar.
-- **Cursos de Excel: con el panel de clase en vivo** (`panel-excel/`, ver su README), si está instalado. Cada curso va en su carpeta con `curso.json` y un JSON por módulo:
+- **Cuidados con COM:**
+  - Mientras la persona escribe en una celda (antes de Enter), Excel no deja leer nada.
+  - `ListColumns.Add`, `ListRows.Add` y `ConvertFormula` pueden fallar o devolver fórmulas en el idioma de Excel: el motor del panel ya los evita.
+  - Selecciona y dibuja solo en la hoja activa.
+````
+
+**Bloque B: panel de clase en vivo** (solo si 4.6 salió bien; si algún bloque opcional falló o no se pudo probar, añade al final la línea de _pendiente_ de 4.6.5):
+
+````markdown
+#### Panel de clase en vivo para Excel (`panel-excel/`)
+
+- **Cursos de Excel: con el panel** (ver `panel-excel/README.md`). Cada curso va en **su propia carpeta en la raíz** (una por tema, p. ej. `curso-excel/`; nunca dentro de `panel-excel/`, que es del repositorio) con `curso.json` y un JSON por módulo:
   - una hoja por módulo en un libro del curso que se guarda solo;
   - pasos con ← → que mueven Excel en vivo, conservando lo que escribe;
   - revisión automática del "Tu turno" al pulsar **Comprobar**, sin IA y al instante;
   - un tutor en su propia pestaña (Lección | Tutor) que conoce el curso entero, responde en 2–3 s y marca la hoja con flechas y notas; acepta capturas, PDF y texto;
   - cursos avanzados: fórmulas de matriz dinámica (FILTRAR, UNICOS, BUSCARX…), «Comprobar» de gráficos, tablas, dinámicas, formato condicional y validación, Power Query solo con datos del libro o de la carpeta `datos` del curso, Buscar objetivo, tablas de datos y escenarios, y VBA (si la persona activó el acceso al proyecto): leer y marcar sus macros, proponer código con permiso y revisar sus ejercicios ejecutando la macro en una copia. Plantilla: `panel-excel/ejemplos/avanzado/`;
   - el tutor también puede modificar el libro (armar un ejercicio en una hoja nueva, completar un ejemplo, dar formato y, con su «modo libre», gráficos, tablas dinámicas, formato condicional, validación y nombres, siempre dentro del libro del curso), **siempre con permiso**: tarjeta con Aplicar / No y luego Deshacer; sus ejercicios se revisan con Comprobar, sin IA.
-- Antes de dar un módulo: `python panel-excel/panel_web.py <curso.json> --probar`, y prueba la revisión con respuestas buenas y malas.
-- **Cuidados con COM:**
-  - Mientras la persona escribe en una celda (antes de Enter), Excel no deja leer nada.
-  - `ListColumns.Add`, `ListRows.Add` y `ConvertFormula` pueden fallar o devolver fórmulas en el idioma de Excel: el motor ya los evita.
-  - Selecciona y dibuja solo en la hoja activa.
+- Antes de dar un módulo: `python panel-excel/panel_web.py <curso.json> --probar` (prueba sus módulos con el Excel abierto, sin ventana; al terminar guarda y cierra el libro del curso si lo abrió la prueba, y lo deja abierto si ya lo estaba), y prueba la revisión con respuestas buenas y malas.
+- Para ver que el panel sigue bien (p. ej. después de `git pull`): `python panel-excel/panel_web.py panel-excel/ejemplo_leccion.json --probar --rapido` (menos de un minuto); para repetir un bloque, `--probar --rapido --solo vba` (o `pq`, `matrices`, `analisis`). La prueba completa (sin `--rapido`, varios minutos) es para quien cambia el código del panel.
 ````
 
 Si no tiene `pywin32`, **propón** `python -m pip install -r requirements.txt` (o solo `python -m pip install pywin32`) y pruébalo con `Dispatch('Excel.Application')` antes de anotarlo.
@@ -248,7 +269,7 @@ Pégala en el lugar de `{{SECCIÓN FALSTAD Y CHROME}}`. **Aplica solo si la pers
   - EMStatic: `https://www.falstad.com/emstatic/EMStatic.html?rol=<texto>`, con los espacios como `+` y luego codificado. También acepta `&dc=<vista>` (0 E, 1 líneas, 2 E y líneas, 3 potencial, 4 potencial en 3D, 5 carga) y `&eq=0|1` (equipotenciales).
   - El formato sale de los ejemplos oficiales (menú File > Examples en la propia página): copia uno parecido y ajústalo.
 - **Siempre se verifica antes de dar un enlace**, con un script de Node + `puppeteer-core` (usa el Chrome instalado; no instales otro navegador) en `herramientas/`:
-  - `captura.js <url|archivo.txt> <salida.png> [espera_ms] [expresión JS]`: abre la página, guarda la captura y evalúa la expresión. En CircuitJS, `window.CircuitJS1.getElements()` da la corriente y el voltaje de cada elemento.
+  - `node herramientas/captura.js <url|archivo.txt> <salida.png> [espera_ms] [expresión JS]` (desde la raíz de esta carpeta): abre la página, guarda la captura y evalúa la expresión. Las capturas y los `.txt` de escenas van en la carpeta del tema, no en `herramientas/`. En CircuitJS, `window.CircuitJS1.getElements()` da la corriente y el voltaje de cada elemento.
   - Mira tú la captura con Read antes de publicar.
 - **Falstad 3D no sirve para Gauss**: no tiene superficies ni flujo. Para eso, Plotly dentro de un artefacto.
 ````
@@ -269,23 +290,29 @@ Cómo es: una ventana con pestañas encima de Excel, pegada a la derecha y a tod
 
 Cada curso es un `curso.json` con un JSON por módulo; el formato está en `panel-excel/README.md`.
 
-Si la persona no va a estudiar Excel o el panel no se instala, deja la carpeta `panel-excel/` donde está (es del repositorio y no estorba) y no pongas la parte del panel en su `CLAUDE.md`.
+Si la persona no va a estudiar Excel o el panel no se instala, deja la carpeta `panel-excel/` donde está (es del repositorio y no estorba) y no pongas el bloque B de 4.4 en su `CLAUDE.md`.
+
+Los cursos que se hagan para la persona van en **su propia carpeta en la raíz** (por ejemplo `curso-excel/`, copiando `panel-excel/ejemplos/avanzado/` como plantilla), nunca dentro de `panel-excel/`.
 
 1. **Los archivos ya están en `panel-excel/`** (vienen en el repositorio): `README.md`, `motor.py`, `avanzado.py`, `vba.py`, `panel_web.py`, `panel.html` y `ejemplo_leccion.json`, más el curso de ejemplo avanzado en `ejemplos/avanzado/` (matrices dinámicas, gráficos y dinámicas, Power Query y VBA; sirve de plantilla). Comprueba que están y no los reescribas: ya resuelven varios fallos de COM.
-   Después crea `panel-excel/preferencias.json` con el tema que eligió en el paso 1: `{"tema": "claro"}`, `{"tema": "oscuro"}` o `{"tema": "auto"}` (el de Windows).
-2. **Prueba sin ventana:** `python panel-excel/panel_web.py panel-excel/ejemplo_leccion.json --probar`. Tiene que salir:
-   - los 7 pasos del ejemplo con valores reales (16,8; 2; un error de Excel como #¡VALOR! o #VALUE!; 80…);
-   - las líneas de `revisión ✔`, `Cambios del tutor: todo bien` y al final `Revisión automática: todo bien`;
-   - `Libro de prueba cerrado sin guardar`.
-   La prueba abre siempre un libro nuevo y lo cierra ella misma: no toca ni cierra libros de la persona.
-3. **Tutor del panel (opcional):** `--probar-tutor` le hace una pregunta y gasta del plan como un mensaje normal. Si no lo corres, anota en «Equipo» de `contexto.md`: «tutor del panel sin probar».
-4. **Solo si va a hacer cursos con macros (VBA) o Solver:** pídele que lo active él (tú no cambies el Centro de confianza ni el registro): Archivo → Opciones → Centro de confianza → Configuración del Centro de confianza → Configuración de macros → «Confiar en el acceso al modelo de objetos de proyectos de VBA»; y, para Solver, Archivo → Opciones → Complementos → Solver. Sin eso el panel funciona igual y avisa en los módulos que lo necesitan. Anota en «Equipo» de `contexto.md` qué quedó activado.
-5. Solo si los pasos 1 y 2 salieron bien, deja en su `CLAUDE.md` la parte del panel dentro de la sección de Excel. Si algo falló, quítala y explícale qué faltó.
+   Después crea `panel-excel/preferencias.json` con el tema que eligió para los paneles en el paso 1: `{"tema": "claro"}`, `{"tema": "oscuro"}` o `{"tema": "auto"}` (el de Windows).
+2. **Solo si va a hacer cursos con macros (VBA) o Solver:** pídele que lo active él **antes de la prueba** (tú no cambies el Centro de confianza ni el registro): Archivo → Opciones → Centro de confianza → Configuración del Centro de confianza → Configuración de macros → «Confiar en el acceso al modelo de objetos de proyectos de VBA»; y, para Solver, Archivo → Opciones → Complementos → Solver. Sin eso el panel funciona igual y avisa en los módulos que lo necesitan. Anota en «Equipo» de `contexto.md` qué quedó activado.
+3. **Prueba sin ventana (la rápida: es la de instalar):** `python panel-excel/panel_web.py panel-excel/ejemplo_leccion.json --probar --rapido`.
+   - **Antes, avísale:** usa el Excel que tenga abierto (lo deja visible), abre un libro nuevo y lo cierra sin guardar al final; no toca ni cierra sus libros, pero mientras corre no debe usar Excel. Tarda menos de un minuto.
+   - Prueba la lección de ejemplo y su revisión automática (lo **básico**) y lo mínimo de cada bloque **opcional**: matrices dinámicas, Power Query, análisis (Buscar objetivo; Solver si está activado) y VBA (si tiene el acceso: proponer código, marcar una línea, deshacer, y Comprobar una macro, también una con un bucle sin fin, que se corta a los 4 s).
+   - Tiene que salir: los 7 pasos del ejemplo con valores reales (16,8; 2; un error de Excel como #¡VALOR! o #VALUE!; 80…), las líneas `revisión ✔`, el **«Resumen por bloque»** (una línea por bloque con ✔ o ✘, básico u opcional), `Revisión automática: todo bien` y `Libro de prueba cerrado sin guardar`.
+   - La prueba **completa** (sin `--rapido`) prueba todo el motor y tarda unos 7 minutos con Excel en pantalla: no hace falta para instalar; es para quien cambia el código del panel. Para repetir un solo bloque: `--probar --rapido --solo vba` (bloques: `leccion`, `matrices`, `pq`, `analisis`, `vba`; en la completa, además `propuestas`, `marcas`, `libre`, `pasos`, `objetos` y `progreso`).
+4. **Tutor del panel (opcional):** `python panel-excel/panel_web.py panel-excel/ejemplo_leccion.json --probar-tutor --solo leccion` le hace una pregunta y gasta del plan como un mensaje normal. Si no lo corres, anota en «Equipo» de `contexto.md`: «tutor del panel sin probar».
+5. **Qué pegar en su `CLAUDE.md`** (al escribirlo, ver «Orden» al principio del paso 4), según el resumen del paso 3:
+   - **Todo ✔:** el bloque B de 4.4 tal cual.
+   - **Falló solo algún bloque opcional** (sale «Lo básico del panel: todo bien. Falló solo lo opcional: …»): el panel **se queda**. Pega el bloque B y añade al final una línea por cada bloque que falló: `- _Pendiente:_ {{bloque}} no pasó la prueba ({{lo que dice su línea del resumen}}): no lo uses en sus cursos hasta arreglarlo.` Anótalo también en «Equipo» de `contexto.md` y díselo a la persona.
+   - **Un bloque opcional dice «no se pudo probar todo: …»** (Solver no activado, sin acceso a VBA, un Excel sin Power Query…): no es un fallo. Si la persona lo va a usar, añade la misma línea de _pendiente_ con ese motivo; si no, basta anotarlo en «Equipo».
+   - **Falló lo básico** (sale «Falló lo básico del panel: …»): no pegues el bloque B y explícale qué faltó (la línea del resumen y los ✘ de arriba dicen qué).
 
 ### 4.7 Panel de clase en vivo para Dia (opcional)
 
 Solo si la persona va a estudiar **diagramas UML** (clases, casos de uso, secuencia, actividades, estados…) o cualquier diagrama en **Dia**, y tiene:
-- **Dia 0.97.2 de dia-installer.de** (la versión de 32 bits, la habitual en Windows), instalado en la ruta estándar `C:\Program Files (x86)\Dia`. Compruébalo con `"C:\Program Files (x86)\Dia\bin\dia.exe" --version`: tiene que decir **0.97.2** (compilada el 22 de diciembre de 2011, la de dia-installer.de). El plugin del panel (`prueba-dia/plugin-dia/dia-tutor.dll`) está compilado para ese Dia exacto: con otro, Dia no lo carga y el panel trabaja «a la antigua» (una ventana por archivo, sin cambios en vivo ni flechas).
+- **Dia 0.97.2 de dia-installer.de** (la versión de 32 bits, la habitual en Windows), instalado en la ruta estándar `C:\Program Files (x86)\Dia`. Compruébalo con `python -c "import subprocess; print(subprocess.run([r'C:\Program Files (x86)\Dia\bin\dia.exe', '--version'], capture_output=True, text=True, encoding='cp1252').stdout)"`: tiene que decir **«Versión 0.97.2 de Dia, compilada … Dec 22 2011»** (la de dia-installer.de). Si la «ó» sale como «�» (pasa con `dia.exe --version` directo y en algunas consolas, como Git Bash), no es un fallo: Dia escribe en cp1252 y la consola lo lee en otra codificación; lo que cuenta es el «0.97.2» y la fecha. El plugin del panel (`prueba-dia/plugin-dia/dia-tutor.dll`) está compilado para ese Dia exacto: con otro, Dia no lo carga y el panel trabaja «a la antigua» (una ventana por archivo, sin cambios en vivo ni flechas).
 - Python con `pywebview` y `pywin32`, y `Pillow` para las flechas encima de Dia (están en `requirements.txt`; sin Pillow todo lo demás funciona).
 - Claude Code en la terminal (`claude --version`) para el tutor.
 
@@ -296,18 +323,20 @@ Cómo es: Dia en una ventana con dos pestañas (el ejemplo de la lección, que c
 Cada curso es una carpeta con `curso.json` y un JSON por módulo; el formato y la plantilla están en `prueba-dia/README.md` («Cómo hacer un curso») y en `prueba-dia/curso-ejemplo/`.
 
 1. **Los archivos ya están en `prueba-dia/`** (vienen en el repositorio): el código (`panel_dia.py`, `curso_dia.py`, `interfaz_dia.py`, `overlay_dia.py`, `cambios_dia.py`, `dia_uml.py`, `dia_objetos.py`, `dia_planes.py`), `catalogo_dia.json` (los tipos de objeto de Dia 0.97.2), `leccion_clase.json`, `curso-ejemplo/` y `plugin-dia/` con la DLL ya compilada. No los reescribas ni recompiles la DLL (no hace falta: se carga desde esa carpeta, sin tocar la instalación de Dia).
-2. **Prueba sin ventanas** (no abre Dia):
+   El tema del panel de Dia sale de `panel-excel/preferencias.json`, igual que el de Excel: si no se instaló el panel de Excel, créalo igual (como en 4.6, paso 1).
+   Los cursos que se hagan para la persona van en **su propia carpeta en la raíz** (por ejemplo `curso-uml/`, copiando `prueba-dia/curso-ejemplo/`), nunca dentro de `prueba-dia/`.
+2. **Prueba sin ventanas** (no abre Dia; las dos juntas tardan menos de un minuto, así que no tienen modo rápido):
    - `python prueba-dia/panel_dia.py --probar`: tiene que terminar en «Cambios del tutor en Dia: todo bien», «Otros diagramas y modo libre: todo bien» y «Fase 2 y arreglos: todo bien».
    - `python prueba-dia/panel_dia.py prueba-dia/curso-ejemplo/curso.json --probar`: los pasos de los tres módulos, cada «Tu turno» con su solución y sus errores típicos, y al final «Curso de Dia: todo bien». Trabaja sobre una copia: no deja nada en la carpeta del curso.
    El primer `--probar` crea `prueba-dia/mi_diagrama.dia` (vacío) si no existe; es el diagrama del ejemplo y queda fuera del repositorio.
 3. **Prueba con Dia (opcional, con su permiso: abre ventanas):** `python prueba-dia/panel_dia.py prueba-dia/curso-ejemplo/curso.json` abre Dia y el panel. La primera vez arma cada módulo en Dia (unos segundos). Si el panel dice «Dia va en el modo de antes», el plugin no cargó: casi siempre es otra versión de Dia. Al terminar, cierra el panel; Dia queda abierto con su diagrama.
-4. Solo si el paso 2 salió bien, pega esta sección en su `CLAUDE.md`, en el lugar de `{{SECCIÓN DIA}}`:
+4. Al escribir su `CLAUDE.md` (ver «Orden» al principio del paso 4), pega esta sección en el lugar de `{{SECCIÓN DIA}}` solo si el paso 2 salió bien; si no, no la pongas y explícale qué falló:
 
 ````markdown
 ### Dia (panel de clase en vivo, `prueba-dia/`)
 
 - Dia 0.97.2 con el plugin propio del panel (`prueba-dia/plugin-dia/`, se carga solo al abrir el panel). Ver `prueba-dia/README.md`.
-- **Cursos de Dia con el panel:** cada curso va en su carpeta con `curso.json` y un JSON por módulo (plantilla: `prueba-dia/curso-ejemplo/`): pasos que se suman y cambian Dia en vivo (con el mismo vocabulario de cambios que usa el tutor, para cualquier tipo de diagrama), flechas encima de Dia («interfaz»), «Hazlo por mí» y un «Tu turno» con su solución y sus errores típicos.
+- **Cursos de Dia con el panel:** cada curso va en **su propia carpeta en la raíz** (una por tema, p. ej. `curso-uml/`; nunca dentro de `prueba-dia/`, que es del repositorio) con `curso.json` y un JSON por módulo (plantilla: `prueba-dia/curso-ejemplo/`): pasos que se suman y cambian Dia en vivo (con el mismo vocabulario de cambios que usa el tutor, para cualquier tipo de diagrama), flechas encima de Dia («interfaz»), «Hazlo por mí» y un «Tu turno» con su solución y sus errores típicos.
 - Antes de darle un módulo: `python prueba-dia/panel_dia.py <curso.json> --probar` hasta que termine en «Curso de Dia: todo bien».
 - Sus diagramas (`mi_diagrama.dia`, `mis_diagramas/`) y su progreso (`progreso.json`) son suyos: no se borran ni se sobrescriben. No cierres su Dia ni le mandes órdenes mientras tenga el panel abierto.
 ````
@@ -325,12 +354,13 @@ Antes de terminar, comprueba y arregla:
 - [ ] No queda ningún `{{...}}` ni texto de plantilla en ellos (búscalos).
 - [ ] No hay datos de otra persona: ningún correo, ruta de usuario ajena ni curso que la persona no haya mencionado.
 - [ ] Cada herramienta anotada en `CLAUDE.md` fue probada o está marcada como _pendiente de instalar_.
-- [ ] Si se instaló el panel de Excel: los archivos de `panel-excel/` están y `--probar` terminó con «Revisión automática: todo bien» y «Libro de prueba cerrado sin guardar».
+- [ ] Si se instaló el panel de Excel: los archivos de `panel-excel/` están, `--probar --rapido` terminó con «Revisión automática: todo bien» (o con «Lo básico del panel: todo bien» y cada bloque opcional que falló anotado como _pendiente_ en `CLAUDE.md` y en `contexto.md`) y con «Libro de prueba cerrado sin guardar», y Excel no quedó con libros de la prueba abiertos.
+- [ ] Sus temas y cursos (si ya hay alguno) están en carpetas propias en la raíz, no dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, y `git status` sale limpio.
 - [ ] Si se instaló el panel de Dia: los dos `--probar` de 4.7 terminaron en «todo bien» y su `CLAUDE.md` tiene la sección de Dia.
 
 ## Paso 7. Despedirte
 
 1. **No borres este archivo**: es parte del repositorio y `git pull` lo actualiza junto con las herramientas.
-2. Comprueba con `git status` que no cambiaste ningún archivo del repositorio (lo de la persona no aparece: está en `.gitignore`). Si algo del repositorio cambió, déjalo como estaba con su visto bueno (`git checkout -- <archivo>`).
+2. Comprueba con `git status` que no cambiaste ningún archivo del repositorio (lo de la persona no aparece: el `.gitignore` solo deja ver los archivos del tutor, así que tampoco avisaría de un curso guardado por error dentro de `panel-excel/` o `prueba-dia/`; eso se mira en el paso 6). Si algo del repositorio cambió, déjalo como estaba con su visto bueno (`git checkout -- <archivo>`).
 3. Dile, en pocas líneas: qué quedó creado, qué herramientas están listas y cuáles pendientes, que **debe abrir una sesión nueva en esta carpeta** para que el tutor cargue el `CLAUDE.md`, y que para actualizar las herramientas basta `git pull`.
 4. Si algún paso falló y la verificación del paso 6 no pasó, explica qué falta para que pueda retomarlo.

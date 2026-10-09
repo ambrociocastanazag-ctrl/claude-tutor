@@ -1,35 +1,71 @@
-# Solo se versiona lo del tutor; lo de cada persona (CLAUDE.md, contexto.md, README.md, sus temas y cursos) queda fuera.
+# Lista blanca: solo se versionan los archivos del tutor, uno por uno. Todo lo demás queda fuera, también dentro de
+# panel-excel/, prueba-dia/ y herramientas/: lo de cada persona (CLAUDE.md, contexto.md, README.md, preferencias.json,
+# sus carpetas de temas y cursos, sus diagramas), lo que se genera al usar los paneles (libros, progreso, pasos/, tutor/)
+# y lo que instala npm. Así `git status` sale limpio y `git pull` no choca con nada suyo.
+# Si se añade un archivo al repo, va también aquí: al sincronizar se comprueba que esta lista y la de archivos cuadren.
 /*
 !/.gitignore
 !/INSTALAR_TUTOR.md
 !/requirements.txt
+
+# Panel de Excel: el motor, la página, la lección de ejemplo y el curso de ejemplo avanzado (sin su libro ni su progreso)
 !/panel-excel/
+/panel-excel/*
+!/panel-excel/README.md
+!/panel-excel/motor.py
+!/panel-excel/avanzado.py
+!/panel-excel/vba.py
+!/panel-excel/panel_web.py
+!/panel-excel/panel.html
+!/panel-excel/ejemplo_leccion.json
+!/panel-excel/ejemplos/
+/panel-excel/ejemplos/*
+!/panel-excel/ejemplos/avanzado/
+/panel-excel/ejemplos/avanzado/*
+!/panel-excel/ejemplos/avanzado/README.md
+!/panel-excel/ejemplos/avanzado/curso.json
+!/panel-excel/ejemplos/avanzado/m1_matrices.json
+!/panel-excel/ejemplos/avanzado/m2_graficos.json
+!/panel-excel/ejemplos/avanzado/m3_power_query.json
+!/panel-excel/ejemplos/avanzado/m4_vba.json
+!/panel-excel/ejemplos/avanzado/datos/
+/panel-excel/ejemplos/avanzado/datos/*
+!/panel-excel/ejemplos/avanzado/datos/ventas.csv
+
+# Capturas con Chrome (sin node_modules/ ni las capturas que se hagan)
 !/herramientas/
+/herramientas/*
+!/herramientas/captura.js
+!/herramientas/package.json
+!/herramientas/package-lock.json
+
+# Panel de Dia: el código, el catálogo, la lección y el curso de ejemplo, y el plugin con su DLL
+# (sin mi_diagrama.dia, mis_diagramas/, pasos/, tutor/, progreso.json ni capturas)
 !/prueba-dia/
-panel-excel/preferencias.json
-# Lo que genera un curso de Excel al usarlo: su libro y su progreso
-panel-excel/**/*.xlsx
-panel-excel/**/*.xlsm
-panel-excel/**/progreso_panel.json
-__pycache__/
-*.pyc
-herramientas/node_modules/
-# Panel de Dia: solo el código, el plugin, el catálogo y los ejemplos. Lo que se genera (pasos/, tutor/, la demo, capturas)
-# y lo de la persona (mi_diagrama.dia, mis_diagramas/, progreso.json, sus cursos) queda fuera.
 /prueba-dia/*
-!/prueba-dia/*.py
 !/prueba-dia/README.md
-!/prueba-dia/leccion_clase.json
+!/prueba-dia/panel_dia.py
+!/prueba-dia/curso_dia.py
+!/prueba-dia/interfaz_dia.py
+!/prueba-dia/overlay_dia.py
+!/prueba-dia/cambios_dia.py
+!/prueba-dia/dia_uml.py
+!/prueba-dia/dia_objetos.py
+!/prueba-dia/dia_planes.py
 !/prueba-dia/catalogo_dia.json
-!/prueba-dia/plugin-dia/
-/prueba-dia/plugin-dia/*
-!/prueba-dia/plugin-dia/*.py
-!/prueba-dia/plugin-dia/*.c
-!/prueba-dia/plugin-dia/*.dll
-!/prueba-dia/plugin-dia/*.md
-/prueba-dia/plugin-dia/demo.py
+!/prueba-dia/leccion_clase.json
 !/prueba-dia/curso-ejemplo/
 /prueba-dia/curso-ejemplo/*
-!/prueba-dia/curso-ejemplo/*.json
 !/prueba-dia/curso-ejemplo/README.md
-/prueba-dia/curso-ejemplo/progreso.json
+!/prueba-dia/curso-ejemplo/curso.json
+!/prueba-dia/curso-ejemplo/m1_clases.json
+!/prueba-dia/curso-ejemplo/m2_casos.json
+!/prueba-dia/curso-ejemplo/m3_secuencia.json
+!/prueba-dia/plugin-dia/
+/prueba-dia/plugin-dia/*
+!/prueba-dia/plugin-dia/README.md
+!/prueba-dia/plugin-dia/dia-tutor.c
+!/prueba-dia/plugin-dia/dia-tutor.dll
+!/prueba-dia/plugin-dia/compilar.py
+!/prueba-dia/plugin-dia/tutor_dia.py
+!/prueba-dia/plugin-dia/catalogo.py

@@ -1716,12 +1716,13 @@ class Libro:
     También las propuestas del tutor (propuestas[id]) y el ejercicio que armó (ejercicio)."""
     def __init__(self, curso):
         self.curso, self.clases, self.nuevo = curso, {}, False
+        self.ya_abierto = False     # el libro del curso ya estaba abierto en Excel (de la persona): nunca se cierra
         self.propuestas, self.del_tutor, self.ejercicio, self.num_prop = {}, {}, None, 0
         self.hojas = {}             # las Hoja de las hojas aparte (en minúsculas), para que sus marcas no repitan nombre
         self.creadas = set()        # hojas que creó el tutor (con permiso) y siguen ahí, en minúsculas
         self.marcas = {}            # dónde están ahora las marcas del tutor: {hoja en minúsculas: (nombre, cuántas)}
         self.flechas = set()        # hojas donde el tutor mostró precedentes (ClearArrows al borrar)
-        self.marcas_vba = 0         # líneas del código VBA marcadas por el tutor (comentarios «' ← tutor:»)
+        self.marcas_vba = 0         # líneas del código VBA marcadas por el tutor (comentarios «' <- tutor:»)
         try: self.xl = w.GetActiveObject("Excel.Application")
         except Exception: self.xl = w.Dispatch("Excel.Application")
         self.xl.Visible = True
@@ -1738,13 +1739,15 @@ class Libro:
             # por tener una hoja con el mismo nombre: podría ser de la persona y se vaciaría.
             self.nuevo = True; return self.xl.Workbooks.Add()
         for wb in self.xl.Workbooks:
-            if wb.FullName.lower() == ruta.lower(): return wb
+            if wb.FullName.lower() == ruta.lower(): self.ya_abierto = True; return wb
         if os.path.exists(ruta): return self.xl.Workbooks.Open(ruta)
         formato = 52 if ruta.lower().endswith(".xlsm") else 51                  # 52 = .xlsm (con macros), 51 = .xlsx
         vieja = ruta[:-5] + ".xlsx" if formato == 52 else None
         if vieja and os.path.exists(vieja):
             # El curso pasó a tener macros: se sigue con una copia .xlsm del libro (el .xlsx se queda donde está, sin tocar)
-            wb = next((w_ for w_ in self.xl.Workbooks if w_.FullName.lower() == vieja.lower()), None) or self.xl.Workbooks.Open(vieja)
+            wb = next((w_ for w_ in self.xl.Workbooks if w_.FullName.lower() == vieja.lower()), None)
+            if wb is not None: self.ya_abierto = True
+            else: wb = self.xl.Workbooks.Open(vieja)
             wb.SaveAs(ruta, 52); return wb
         self.nuevo = True; wb = self.xl.Workbooks.Add(); wb.SaveAs(ruta, formato)
         return wb
@@ -1807,6 +1810,17 @@ class Libro:
         if self.nuevo and not self.curso.libro:
             self.wb.Close(False); return True
         return False
+
+    def cerrar_si_lo_abri(self):
+        """Al terminar --probar: cierra el libro que abrió la prueba y dice qué hizo. La lección suelta, sin guardar; el
+        libro de un curso, guardado (como al usar el panel) y cerrado, para que no quede abierto con su «~$»; si ya
+        estaba abierto antes de la prueba, se queda abierto. Nunca toca otros libros."""
+        if self.cerrar_si_temporal(): return "Libro de prueba cerrado sin guardar."
+        if not self.curso.libro: return ""
+        nombre = self.wb.Name
+        if self.ya_abierto: return f"El libro del curso ({nombre}) ya estaba abierto antes de la prueba: lo dejo abierto."
+        self.guardar(); self._alertas(lambda: self.wb.Close(False))
+        return f"Libro del curso ({nombre}) guardado y cerrado: lo había abierto la prueba."
 
     def probar_turno(self, i, turno, hoja=None):
         """Prueba la revisión de un «Tu turno»: escribe la solución y cada error típico (en la primera
@@ -2079,7 +2093,7 @@ class Libro:
             partes.append(linea)
         partes.append("Tus marcas de ahora: " + ", ".join(f"{n} en '{h}'" for h, n in self.marcas.values()) + "." if self.marcas
                       else "Ahora no hay marcas tuyas en el libro.")
-        if self.marcas_vba: partes.append(f"Además marcaste {_cuantas(self.marcas_vba, 'línea')} del código VBA (comentarios «' ← tutor:»).")
+        if self.marcas_vba: partes.append(f"Además marcaste {_cuantas(self.marcas_vba, 'línea')} del código VBA (comentarios «' <- tutor:»).")
         try: partes.append(self.linea_capacidades())
         except Exception: pass
         hojas = [ws.Name for ws in self.wb.Worksheets if ws.Visible == -1]
@@ -2675,7 +2689,7 @@ Al FINAL de tu respuesta añade un bloque así (JSON válido, una sola línea):
 <marcas>[{"tipo": "flecha", "desde": "E4", "hasta": "B1", "texto": "aquí falta el IVA", "color": "rojo"}]</marcas>
 Tipos: "flecha" (desde, hasta, texto opcional) · "nota" (celda, texto: globo al lado con flecha hacia la celda) ·
 "resaltar" (rango como "E4:E7", color) · "marco" (rango, color) · "precedentes" (celda: flechas azules de Excel hacia las celdas que usa) ·
-"linea" (modulo, linea, texto: en su código VBA, un comentario «' ← tutor: texto» encima de esa línea; los números son los del [Estado actual]).
+"linea" (modulo, linea, texto: en su código VBA, un comentario «' <- tutor: texto» encima de esa línea; los números son los del [Estado actual]).
 Colores: "rojo" = error, "verde" = bien, "amarillo" = fíjate aquí, "azul" = información. Textos de 2 a 8 palabras.
 En qué hoja caen: sin "hoja", en la que la persona tiene al frente si es la del módulo o una que creaste tú; si no, en la del módulo
 (el [Estado actual] te dice cuál tiene al frente y adónde irían). Para elegir, pon "hoja" en cada marca: {"tipo": "nota", "hoja": "Práctica 1", "celda": "C8", "texto": "..."};

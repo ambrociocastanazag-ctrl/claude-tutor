@@ -14,10 +14,6 @@ python panel-excel/panel_web.py panel-excel/ejemplos/avanzado/curso.json        
 python panel-excel/panel_web.py panel-excel/ejemplos/avanzado/curso.json --probar    # probarlo sin ventana
 ```
 
-## Historia y decisiones
-
-- **2026-10-08:** creado junto con lo avanzado del panel, para que sirva de plantilla. Usa `"macros": true` (libro `.xlsm`) y `"datos": "datos"` (la única carpeta de fuera del libro que pueden leer sus consultas). El módulo 4 pide «Confiar en el acceso al modelo de objetos de proyectos de VBA»: sin él, el panel lo explica en la pestaña Lección, el ejemplo de la macro no se pone y Comprobar no ejecuta nada.
-
 ## Archivos
 
 - `curso.json`: el curso (título, libro, macros, carpeta de datos y módulos).

@@ -1,4 +1,4 @@
-"""Flechas y notas ENCIMA de la ventana real de Dia («En Dia: dónde se hace», Fase 2 de plugin-dia/PROPUESTA.md).
+"""Flechas y notas ENCIMA de la ventana real de Dia («En Dia: dónde se hace»).
 
 Por cada ventana de Dia señalada (la principal, el diálogo Propiedades...) hay una ventana Win32 transparente
 (WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW) que:

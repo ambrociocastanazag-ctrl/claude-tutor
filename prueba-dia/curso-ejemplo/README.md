@@ -13,11 +13,6 @@ python prueba-dia/panel_dia.py prueba-dia/curso-ejemplo/curso.json --probar    #
 | 2. Casos de uso (`m2_casos.json`) | actor y caso, «include», «extend», Tu turno | el Tu turno empieza con los objetos dibujados (`inicial`) y la persona añade las relaciones; tres errores típicos (extend por include, include al revés, extend al revés) |
 | 3. Secuencia (`m3_secuencia.json`) | participantes, mensajes en orden, retorno, un mensaje en medio, Tu turno | mensajes que se meten entre dos (`despues_de`); errores típicos de orden y de retorno |
 
-## Historia y decisiones
-
-- **2026-10-08:** hecho junto con los cursos de Dia (ver «Historia y decisiones» de `../README.md`). Tres módulos cortos para que se pruebe todo en pocos minutos: cada uno con pasos que se suman, algo que señalar en Dia y un «Tu turno» con solución y errores típicos comprobados por `--probar`.
-- Comprobado: `--probar` (todo bien) y los tres módulos armados en un Dia aparte con una copia del curso.
-
 ## Archivos
 
 - `curso.json`: título, modelo del tutor y la lista de módulos.
