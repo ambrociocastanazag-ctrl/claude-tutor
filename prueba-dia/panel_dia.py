@@ -75,10 +75,32 @@ def _sin_tutor(t):
     return t.replace(" [la creaste tú, el tutor]", "").replace(" [lo creaste tú, el tutor]", "")
 
 
+def texto_convenciones(conv):
+    """Las convenciones del curso (curso.json) para el tutor: lo que dibuja él al crear cosas y lo que exige Comprobar. '' si no hay."""
+    if not conv: return ""
+    L = []
+    if conv.get("nombre_negrita") is False: L.append("el nombre de toda clase va SIN negrita (lo que creas ya sale así; Comprobar marca error si está en negrita)")
+    if conv.get("parametros") == "solo_tipo":
+        L.append("los parámetros van SOLO con el tipo: \"+setSku(String): Producto\" (en tus <acciones> escríbelos así; Dia los dibuja «(String)»)")
+    elif conv.get("parametros") == "nombre_tipo": L.append("los parámetros van con nombre y tipo: \"+setSku(sku: String): Producto\"")
+    if conv.get("estricto"):
+        L.append("Comprobar es ESTRICTO: distingue mayúsculas y minúsculas (clases, atributos, métodos, tipos, parámetros) y revisa el estilo "
+                 "(toString, multiplicidad, flecha de navegabilidad, verbo con triángulo de lectura, clases de biblioteca vacías, enumeradas, "
+                 "cada clase hija de su paquete); cada error dice su número de convención")
+    L.append("al dibujar: una asociación, agregación o composición lleva su verbo en \"nombre\" y \"lectura\": \"a\"|\"de\" (triángulo de lectura), "
+             "\"direccion\" (flecha de navegabilidad) y \"mult\" en los dos extremos; \"dentro_de\": \"capa\" deja la clase hija de verdad de su paquete; "
+             "\"biblioteca\": true (clase de Java, vacía) y \"enumerada\": [valores]")
+    return "Convenciones de este curso (síguelas siempre en lo que crees y en lo que expliques): " + "; ".join(L) + "."
+
+
 class TutorDia(motor.Tutor):
     def _intro(self):
         c = self.curso
         partes = [REGLAS_DIA, f"\nCurso: {c.titulo}. Módulos:"]
+        conv = texto_convenciones(getattr(c, "conv", None))
+        if conv: partes.insert(1, "\n" + conv)
+        for nombre, texto in getattr(c, "material", []):               # material_tutor del curso.json: conocimiento del curso
+            partes.insert(2 if conv else 1, f"\n[Material del curso: {nombre}]\n{texto}\n[Fin del material]")
         for k, m in enumerate(c.modulos):
             pasos = "; ".join(f"{i + 1}. {p.get('resumen') or p['texto']}" for i, p in enumerate(m.pasos))
             partes.append(f"\nMódulo {k + 1}: {m.titulo} (su diagrama: {m.mio.name}). Tema: {m.d.get('tema_tutor', '')}\n"
@@ -448,7 +470,7 @@ class Api:
     def _revisar(self):
         t = self._turno_modulo()
         if not t: self._rev = None; return True
-        try: self._rev = cu.revisar_turno(du.leer(self._mio()), t)
+        try: self._rev = cu.revisar_turno(du.leer(self._mio()), t, self._curso.conv)
         except Exception: return False            # a medio guardar: se reintenta en la próxima vuelta
         return True
 
@@ -711,7 +733,7 @@ class Api:
         except ValueError as e: return {"texto": str(e)}             # un adjunto que no se admite
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
         texto, marcas = motor.separar(resp)
-        texto, prop, error = cd.separar_acciones(texto)
+        texto, prop, error = cd.separar_acciones(texto, self._curso.conv)
         if marcas:
             self._marcas = marcas
             self._empujar(f"window.mostrarDiagrama({json.dumps(self._svg())})")
@@ -1264,6 +1286,254 @@ def probar_fase2():
     return all(todo)
 
 
+def probar_convenciones():
+    """--probar: las convenciones del curso (curso.json «convenciones» y «material_tutor»), sin Dia: parámetros solo con el tipo
+    (leer, escribir, revisar), nombre sin negrita, enumerada, biblioteca, verbo con triángulo de lectura (hacia donde toca, con rombo
+    y triángulo cuadrados), parentesco real con los paquetes y cada regla estricta (con su número) con un caso bien y uno mal."""
+    import copy, types
+    todo = []
+    def ver(c, texto): todo.append(bool(c)); print(texto, "✔" if c else "✘")
+    CONV = {"nombre_negrita": False, "parametros": "solo_tipo", "estricto": True}
+
+    # --- parámetros solo con el tipo: leer, escribir y volver a leer
+    m = du.miembro("+setSku(String): Producto"); m2 = du.miembro("+toInt(String, int): int"); m3 = du.miembro("+f(a: int, b: String[*]): void")
+    ver(m["params"] == [{"nombre": "", "tipo": "String"}] and du.linea_metodo(m) == "+setSku(String): Producto" and du.linea_metodo(m2) == "+toInt(String, int): int"
+        and [q["nombre"] for q in m3["params"]] == ["a", "b"] and du.miembro("+main(String[*]): void")["params"][0]["tipo"] == "String[*]"
+        and du.miembro("-lista: Producto[*]")["tipo"] == "Producto[*]", "Miembros con parámetros solo con el tipo («(String)») y con nombre, y colecciones con [*]: se leen:")
+    with tempfile.TemporaryDirectory() as tmp:
+        f = Path(tmp) / "p.dia"
+        du.escribir(f, [{"nombre": "Producto", "atributos": [], "metodos": [dict(m, es="metodo")]}])
+        leido = du.leer(f)["clases"][0]["metodos"][0]
+        ver(leido["params"] == [{"nombre": "", "tipo": "String"}] and 'name"><dia:string>##' in f.read_text(encoding="utf-8"),
+            "Se escriben con el nombre vacío y se vuelven a leer igual:")
+
+    # --- lo que dibuja el curso: sin negrita, enumerada, biblioteca, capas anidadas con parentesco real, verbo con triángulo
+    def cambios(lista, conv=CONV): return cd.validar_propuesta({"diagrama": "leccion", "cambios": lista}, conv)
+    BASE = [{"paquete": "java"}, {"paquete": "awt", "dentro_de": "java"}, {"paquete": "service"},
+            {"clase": "Producto", "dentro_de": "service", "atributos": ["-sku: String"],
+             "metodos": ["+setSku(sku: String): Producto", "+trim(String): String {static}", "+toString(): String"]},
+            {"clase": "Inventario", "dentro_de": "service", "metodos": ["+toString(): String"]},
+            {"clase": "JFrame", "biblioteca": True, "dentro_de": "awt"}, {"clase": "Show", "enumerada": ["ALWAYS", "NEVER"], "dentro_de": "awt"},
+            {"relacion": "asociacion", "de": "Inventario", "a": "Producto", "nombre": "tiene", "lectura": "a", "direccion": "a", "mult": ["1", "*"]},
+            {"relacion": "dependencia", "de": "Inventario", "a": "JFrame", "nombre": "crea"}]
+    d = cu.diagrama_de(cambios(BASE))
+    por = {c["nombre"]: c for c in d["clases"]}
+    paq = {o["texto"]: o for o in d["objetos"] if o["kind"] == "paquete"}
+    ver(por["Producto"]["metodos"][0]["params"] == [{"nombre": "", "tipo": "String"}] and not any(c["negrita"] for c in d["clases"]),
+        "Con el curso en «solo_tipo» y «nombre_negrita»: false, lo que se dibuja sale con parámetros solo con el tipo y los nombres sin negrita:")
+    ver(por["Show"]["enumerada"] == ["ALWAYS", "NEVER"] and not por["Show"]["estereotipo"] and not por["Show"]["ver"][1]
+        and not por["JFrame"]["atributos"] and not por["JFrame"]["metodos"], "Enumerada (sin estereotipo, valores sin visibilidad ni tipo, sin métodos) y clase de biblioteca vacía:")
+    ver(por["Producto"]["padre"] == "service" and por["JFrame"]["padre"] == "awt" and paq["awt"]["padre"] == "java" and paq["java"]["padre"] is None,
+        "Parentesco real de Dia (childnode): clases en sus capas y capa anidada en su capa:")
+    rel = next(r for r in d["relaciones"] if r["tipo"] == "asociacion")
+    dep = next(r for r in d["relaciones"] if r["tipo"] == "dependencia")
+    ver(rel["nombre"] == "tiene" and rel["ver_lectura"] and rel["lectura_hacia"] == "Producto" and rel["direccion"] == "a" and dep["nombre"] == "crea",
+        "Asociación con verbo, triángulo de lectura hacia Producto y flecha de navegabilidad; dependencia con verbo:")
+    # el triángulo apunta de verdad hacia donde toca, a la izquierda o a la derecha, y en la agregación el rombo queda en el todo
+    ok_lec = True
+    for pos_a, pos_b in (((2, 2), (22, 2)), ((22, 2), (2, 2))):
+        for tipo, extra in (("asociacion", {"de": "A", "a": "B"}), ("agregacion", {"parte": "A", "todo": "B"}), ("composicion", {"parte": "A", "todo": "B"})):
+            for lec in ("a", "de"):
+                dd = cu.diagrama_de(cambios([{"clase": "A", "pos": pos_a}, {"clase": "B", "pos": pos_b},
+                                             dict({"relacion": tipo, "nombre": "tiene", "lectura": lec, "mult": ["1", "*"]}, **extra)], None))
+                r = dd["relaciones"][0]
+                quiere = "B" if lec == "a" else "A"
+                ok_lec &= r["lectura_hacia"] == quiere and r["tipo"] == tipo and (tipo == "asociacion" or (r["a"] == "B" and r["de"] == "A")) and r["mult"] == ["1", "*"]
+    ver(ok_lec, "Triángulo de lectura hacia la clase pedida con las clases a un lado o al otro (asociación, agregación y composición, con rombo en el todo):")
+
+    # --- revisión con las convenciones: lo bueno da todo bien; cada regla, con su número, falla en un caso
+    spec = {"titulo": "t", "clases": [
+        {"nombre": "Producto", "dentro_de": "service", "atributos": ["-sku: String"],
+         "metodos": ["+setSku(sku: String): Producto", "+trim(String): String {static}", "+toString(): String"]},
+        {"nombre": "Inventario", "dentro_de": "service", "metodos": ["+toString(): String"]},
+        {"nombre": "JFrame", "biblioteca": True, "dentro_de": "awt"}, {"nombre": "Show", "enumerada": ["ALWAYS", "NEVER"], "dentro_de": "awt"}],
+        "relaciones": [{"tipo": "asociacion", "de": "Inventario", "a": "Producto", "nombre": "tiene", "lectura": "a", "direccion": "a", "mult": ["1", "*"]},
+                       {"tipo": "dependencia", "de": "Inventario", "a": "JFrame", "nombre": "crea"}],
+        "objetos": [{"tipo": "paquete", "nombre": "java"}, {"tipo": "paquete", "nombre": "awt", "dentro_de": "java"}, {"tipo": "paquete", "nombre": "service"}]}
+    ej = cd._v_ejercicio(spec, CONV)
+    bien = cu.revisar_turno(d, {"_ej": ej, "_errores": []}, CONV)
+    ver(bien["ok"] == bien["total"] and bien["estado"] in ("bien", "casi"), f"Revisión estricta de la solución: {bien['estado']} {bien['ok']}/{bien['total']}:")
+    ver(du.revisar_varios(d, ej)["ok"] >= 1 and cu.revisar_turno(d, {"_ej": ej, "_errores": []})["estado"] != "vacio",
+        "Sin convenciones, la misma revisión de siempre sigue funcionando:")
+
+    def cambia(f, conv=CONV):
+        """El BASE con un cambio (f recibe una copia de la lista y la modifica) -> diagrama."""
+        c = copy.deepcopy(BASE); f(c)
+        return cu.diagrama_de(cambios(c, conv))
+    def clase(c, nombre): return next(x for x in c if x.get("clase") == nombre)
+    def rel(c, i=7): return c[i]
+    def mal(nombre, d2, que, num, esp=None):
+        r = cu.revisar_turno(d2, {"_ej": esp or ej, "_errores": []}, CONV)
+        textos = [q["texto"] for q in r["puntos"] if not q["ok"]]
+        hay = next((t for t in textos if que in t), None)
+        ver(hay and num in hay and r["ok"] < r["total"], f"  {nombre}: «{(hay or ' | '.join(textos) or 'sin error')[:78]}…»:")
+    def reemplazar(c, nombre, nuevo):
+        c[next(i for i, x in enumerate(c) if x.get("clase") == nombre)] = nuevo
+    mal("atributo con mayúscula", cambia(lambda c: clase(c, "Producto").update(atributos=["-Sku: String"])), "debería ser «sku»", "convención 3")
+    mal("método con mayúscula", cambia(lambda c: clase(c, "Producto").update(metodos=["+SetSku(String): Producto", "+trim(String): String {static}", "+toString(): String"])),
+        "debería ser «setSku»", "convención 2")
+    def minuscula(c): clase(c, "Producto")["clase"] = "producto"; rel(c)["a"] = "producto"
+    mal("clase con minúscula", cambia(minuscula), "debería ser «Producto»", "convención 1")
+    mal("tipo en minúscula", cambia(lambda c: clase(c, "Producto").update(atributos=["-sku: string"])), "en Java los tipos van exactos", "tipos")
+    mal("parámetro con nombre (K1)", cambia(lambda c: clase(c, "Producto").update(parametros="nombre_tipo")), "Pusiste el parámetro con nombre", "K1")
+    mal("nombre en negrita", cambia(lambda c: None, {"parametros": "solo_tipo", "estricto": True}), "está en negrita", "convención 18")
+    mal("sin toString", cambia(lambda c: clase(c, "Inventario").update(metodos=[])), "Falta +toString(): String", "convención 17")
+    mal("biblioteca con miembros", cambia(lambda c: reemplazar(c, "JFrame", {"clase": "JFrame", "metodos": ["+x(): void"], "dentro_de": "awt"})), "va vacía", "K3")
+    mal("clase fuera de su capa", cambia(lambda c: clase(c, "Inventario").pop("dentro_de")), "debería estar en service, y no está dentro de ninguna capa", "Objetos → Padre (Ctrl+K)")
+    mal("clase en otra capa", cambia(lambda c: clase(c, "Inventario").update(dentro_de="awt")), "debería estar en service, y está en java › awt", "Orfandar")
+    mal("static sin subrayar", cambia(lambda c: clase(c, "Producto").update(metodos=["+setSku(String): Producto", "+trim(String): String", "+toString(): String"])),
+        "es static: va subrayado", "Vista de clase")
+    mal("enumerada con métodos visibles", cambia(lambda c: reemplazar(c, "Show", {"clase": "Show", "atributos": ["~ALWAYS", "~NEVER"], "dentro_de": "awt"})),
+        "compartimento de métodos", "convención 20")
+    mal("sin multiplicidad", cambia(lambda c: rel(c).update(mult=["1", ""])), "no tiene multiplicidad junto a «Producto»", "convención 23")
+    mal("sin flecha de navegabilidad", cambia(lambda c: rel(c).pop("direccion")), "no tiene flecha de navegabilidad", "convención 24")
+    mal("sin verbo ni triángulo", cambia(lambda c: [rel(c).pop("nombre"), rel(c).pop("lectura")]), "verbo", "convención 25")
+    mal("triángulo hacia el otro lado", cambia(lambda c: rel(c).update(lectura="de")), "apunta hacia «Inventario»", "convención 25")
+    def capa_mayuscula(c):
+        c[2] = {"paquete": "Service"}
+        for x in c:
+            if x.get("dentro_de") == "service": x["dentro_de"] = "Service"
+    mal("capa mal escrita", cambia(capa_mayuscula), "debería ser «service»", "convención 5")
+    # los errores típicos del JSON (patron) siguen funcionando con las convenciones
+    pat = {"clases": [{"nombre": "Producto", "metodos": ["+setSku(sku: String): Producto"]}]}
+    t = {"_ej": ej, "_errores": [{"dice": "Eso es el PDF; el catedrático lo pide solo con el tipo.", "_patron": cd._v_ejercicio(dict(pat, titulo="e")), "consejo": False}]}
+    r = cu.revisar_turno(cambia(lambda c: clase(c, "Producto").update(parametros="nombre_tipo")), t, CONV)
+    ver(r.get("error_tipico") == 1 and "solo con el tipo" in r["mensaje"], "Un error típico del JSON (patron) sigue ganando con las convenciones puestas:")
+
+    # --- capas con el mismo nombre en sitios distintos (rutas), sobrecargas, «modificar» y «negrita»: true
+    HOMO = [{"paquete": "util"}, {"paquete": "java"}, {"paquete": "util", "dentro_de": "java"}, {"paquete": "function", "dentro_de": "java/util"},
+            {"paquete": "awt", "dentro_de": "java"}, {"paquete": "event", "dentro_de": "java/awt"}, {"paquete": "javax"},
+            {"paquete": "swing", "dentro_de": "javax"}, {"paquete": "event", "dentro_de": "javax/swing"},
+            {"clase": "MyUtil", "dentro_de": "/util", "metodos": ["+toInt(String): int", "+toString(): String"]}, {"clase": "Predicate", "dentro_de": "java/util/function", "metodos": ["+toString(): String"]},
+            {"clase": "ActionListener", "dentro_de": "java › awt › event", "metodos": ["+toString(): String"]}, {"clase": "DocumentListener", "dentro_de": "javax/swing/event", "metodos": ["+toString(): String"]}]
+    dh = cu.diagrama_de(cambios(HOMO))
+    rutas = sorted(du.mostrar_ruta(o["ruta"]) for o in dh["objetos"] if o["kind"] == "paquete")
+    rc = {c["nombre"]: du.mostrar_ruta(c["ruta_padre"]) for c in dh["clases"]}
+    ver(rutas.count("java › util") == 1 and "util" in rutas and rutas.count("java › awt › event") == 1 and "javax › swing › event" in rutas
+        and rc == {"MyUtil": "util", "Predicate": "java › util › function", "ActionListener": "java › awt › event", "DocumentListener": "javax › swing › event"},
+        "Capas con el mismo nombre si su padre es distinto (util / java › util, event en dos sitios) y «dentro_de» con ruta («java/util/function», «/util», «java › awt › event»):")
+    errs = []
+    for malo in ([{"clase": "Z", "dentro_de": "util"}], [{"paquete": "x", "dentro_de": "event"}], [{"paquete": "util", "dentro_de": "java"}], [{"clase": "Z", "dentro_de": "java/nada"}]):
+        try: cu.diagrama_de(cambios(HOMO + malo)); errs.append("(no falló)")
+        except ValueError as e: errs.append(str(e))
+    ver("escribe la ruta" in errs[0] and "escribe la ruta" in errs[1] and "ya hay una capa «java › util»" in errs[2] and errs[3] != "(no falló)",
+        "Un nombre ambiguo da un error que pide la ruta; una capa repetida o una ruta que no existe, también: (" + " | ".join(x[:60] for x in errs) + "):")
+    espec = {"titulo": "h", "objetos": [{"tipo": "paquete", "nombre": "util"}, {"tipo": "paquete", "nombre": "java"}, {"tipo": "paquete", "nombre": "util", "dentro_de": "java"},
+                                       {"tipo": "paquete", "nombre": "function", "dentro_de": "java/util"}],
+             "clases": [{"nombre": "MyUtil", "dentro_de": "/util", "metodos": ["+toInt(String): int", "+toString(): String"]}, {"nombre": "Predicate", "dentro_de": "java/util/function", "metodos": ["+toString(): String"]}]}
+    eh = cd._v_ejercicio(espec, CONV)
+    ver(cu.revisar_turno(dh, {"_ej": eh, "_errores": []}, CONV)["ok"] == cu.revisar_turno(dh, {"_ej": eh, "_errores": []}, CONV)["total"], "La revisión distingue las capas homónimas por su padre (solución bien):")
+    for nombre, mutar, que in (("clase en la capa homónima", lambda c: c[9].update(dentro_de="java/util"), "MyUtil» debería estar en util, y está en java › util"),
+                               ("Predicate en java › util", lambda c: c[10].update(dentro_de="java/util"), "Predicate» debería estar en java › util › function"),
+                               ("falta java › util", lambda c: (c.__setitem__(2, {"paquete": "otra", "dentro_de": "java"}), c.__setitem__(3, {"paquete": "function", "dentro_de": "java/otra"}),
+                                                              c[10].update(dentro_de="java/otra/function")), "Falta la capa «java › util»")):
+        c2 = copy.deepcopy(HOMO); mutar(c2)
+        mal(nombre, cu.diagrama_de(cambios(c2)), que, "", eh)
+    try: cd._v_ejercicio({"titulo": "h", "objetos": [{"tipo": "paquete", "nombre": "util"}, {"tipo": "paquete", "nombre": "java"}, {"tipo": "paquete", "nombre": "util", "dentro_de": "java"}],
+                          "clases": [{"nombre": "X", "dentro_de": "util"}]}, CONV); ambiguo = False
+    except ValueError as e: ambiguo = "escribe la ruta" in str(e)
+    ver(ambiguo, "En el «Tu turno», un «dentro_de» ambiguo también pide la ruta:")
+    # sobrecargas: se emparejan por firma
+    SOB = [{"clase": "TextPrompt", "metodos": ["+changeAlpha(float): void", "+changeAlpha(int): void", "+toString(): String"]}]
+    espec = {"titulo": "s", "clases": SOB[0:1] and [{"nombre": "TextPrompt", "metodos": ["+changeAlpha(float): void", "+changeAlpha(int): void", "+toString(): String"]}]}
+    es = cd._v_ejercicio(espec, CONV)
+    rev = lambda cs: cu.revisar_turno(cu.diagrama_de(cambios(cs)), {"_ej": es, "_errores": []}, CONV)
+    r1 = rev(SOB); r2 = rev([{"clase": "TextPrompt", "metodos": ["+changeAlpha(int): void", "+changeAlpha(float): void", "+toString(): String"]}])
+    r3 = rev([{"clase": "TextPrompt", "metodos": ["+changeAlpha(float): void", "+toString(): String"]}])
+    r4 = rev([{"clase": "TextPrompt", "metodos": ["+changeAlpha(float): void", "+changeAlpha(double): void", "+toString(): String"]}])
+    ver(r1["ok"] == r1["total"] and r2["ok"] == r2["total"] and "Falta la versión «changeAlpha(int)»" in r3["mensaje"] and "Falta la versión «changeAlpha(int)»" in r4["mensaje"]
+        and "tienes «changeAlpha(double)»" in r4["mensaje"],
+        f"Sobrecargas: se emparejan por firma, en cualquier orden; si falta una, lo dice claro («{r3['mensaje'][:60]}…»):")
+    # «modificar» conserva la capa (childnode); «negrita»: true la planta aunque el curso diga lo contrario
+    with tempfile.TemporaryDirectory() as tmp:
+        a1, a2, a3 = Path(tmp) / "1.dia", Path(tmp) / "2.dia", Path(tmp) / "3.dia"
+        du.escribir(a1, [])
+        cu.aplicar_offline(a1, cu._plan(None, cambios([{"paquete": "java"}, {"paquete": "util", "dentro_de": "java"}, {"clase": "A", "dentro_de": "java/util", "metodos": ["+f(): void"]}]), du.leer(a1), "x1", False), a2)
+        cu.aplicar_offline(a2, cu._plan(None, cambios([{"modificar": "A", "agregar": ["+g(String): int"], "negrita": True}]), du.leer(a2), "x2", False), a3)
+        d3 = du.leer(a3); A = d3["clases"][0]
+        ver(A["ruta_padre"] == ("java", "util") and [m["nombre"] for m in A["metodos"]] == ["f", "g"] and A["negrita"], "«modificar» conserva la capa de la clase (y «negrita»: true la dibuja en negrita):")
+    dn = cu.diagrama_de(cambios([{"clase": "X", "negrita": True}, {"clase": "Y"}]))
+    ver({c["nombre"]: c["negrita"] for c in dn["clases"]} == {"X": True, "Y": False}, "«negrita»: true planta la negrita aunque el curso diga «nombre_negrita»: false (ejercicios «corrige el diagrama»):")
+
+    # --- la navegabilidad, el rombo y el triángulo cuentan por la CLASE donde están, no por qué punta se trazó la línea
+    EJ2 = cd._v_ejercicio({"titulo": "n", "clases": [{"nombre": "Inventario"}, {"nombre": "Controller"}],
+                           "relaciones": [{"tipo": "asociacion", "de": "Inventario", "a": "Controller", "nombre": "tiene", "lectura": "de", "direccion": "de", "mult": ["1", "*"]}]})
+    def nav(de, a, **kw):
+        return cu.diagrama_de(cambios([{"clase": "Inventario", "pos": (2, 2)}, {"clase": "Controller", "pos": (22, 2)},
+                                       dict({"relacion": "asociacion", "de": de, "a": a, "nombre": "tiene"}, **kw)], None))
+    def rv(dd): return cu.revisar_turno(dd, {"_ej": EJ2, "_errores": []})
+    bien1 = rv(nav("Inventario", "Controller", lectura="de", direccion="de", mult=["1", "*"]))      # trazada desde Inventario
+    bien2 = rv(nav("Controller", "Inventario", lectura="a", direccion="a", mult=["*", "1"]))        # la misma, trazada desde el otro lado
+    mal1 = rv(nav("Controller", "Inventario", lectura="a", direccion="de", mult=["*", "1"]))        # flecha en la clase equivocada
+    mal2 = rv(nav("Inventario", "Controller", lectura="a", direccion="a", mult=["1", "*"]))         # flecha y triángulo hacia Controller
+    ver(bien1["ok"] == bien1["total"] and bien2["ok"] == bien2["total"] and mal1["ok"] < mal1["total"] and mal2["ok"] < mal2["total"]
+        and "navegabilidad" in mal1["mensaje"] and "apunta hacia" in mal2["mensaje"] + " ".join(q["texto"] for q in mal2["puntos"]),
+        f"La revisión no depende de por qué punta se trazó la línea (flecha, triángulo y multiplicidades; bien {bien1['ok']}/{bien1['total']} y {bien2['ok']}/{bien2['total']}, mal {mal1['ok']}/{mal1['total']} y {mal2['ok']}/{mal2['total']}):")
+    # rombo: la agregación bien trazada desde cualquier clase es la misma; con el rombo en la otra clase es un error
+    EJ3 = cd._v_ejercicio({"titulo": "r", "clases": [{"nombre": "Inventario"}, {"nombre": "Producto"}],
+                           "relaciones": [{"tipo": "agregacion", "de": "Producto", "a": "Inventario", "mult": ["*", "1"]}]})
+    ag = lambda **kw: cu.revisar_turno(cu.diagrama_de(cambios([{"clase": "Inventario", "pos": (2, 2)}, {"clase": "Producto", "pos": (22, 2)}, dict({"relacion": "agregacion", "mult": ["*", "1"]}, **kw)], None)),
+                                       {"_ej": EJ3, "_errores": []})
+    a1, a2 = ag(parte="Producto", todo="Inventario"), ag(parte="Inventario", todo="Producto", mult=["1", "*"])
+    ver(a1["ok"] == a1["total"] and a2["ok"] < a2["total"], "Rombo: bien en el todo (Inventario) y mal en la otra clase:")
+
+    # --- un diagrama de entrega grande (25 clases, 13 capas anidadas, 35 relaciones): límites de curso y tiempo
+    t0 = time.time()
+    capas = [{"paquete": f"capa{i}", **({"dentro_de": f"capa{i // 3}"} if i >= 3 and i % 3 else {})} for i in range(13)]
+    grandes = [{"clase": f"Clase{i}", "dentro_de": f"capa{i % 13}", "atributos": [f"-valor{i}: String"], "metodos": [f"+setValor{i}(String): Clase{i}", "+toString(): String"]} for i in range(25)]
+    rels = [{"relacion": "asociacion", "de": f"Clase{i}", "a": f"Clase{(i + 1) % 25}", "nombre": "tiene", "lectura": "a", "direccion": "a", "mult": ["1", "*"]} for i in range(25)]
+    rels += [{"relacion": "dependencia", "de": f"Clase{i}", "a": f"Clase{(i + 7) % 25}", "nombre": "usa"} for i in range(10)]
+    GRANDE = capas + grandes + rels
+    try: cd.validar_propuesta({"cambios": GRANDE}); tutor_rechaza = False
+    except ValueError: tutor_rechaza = True
+    prop = cd.validar_propuesta({"diagrama": "leccion", "cambios": GRANDE}, CONV, curso=True)
+    dg = cu.diagrama_de(prop)
+    t1 = time.time()
+    espec = {"titulo": "grande", "clases": [{"nombre": f"Clase{i}", "dentro_de": f"capa{i % 13}", "atributos": [f"-valor{i}: String"],
+             "metodos": [f"+setValor{i}(String): Clase{i}", "+toString(): String"]} for i in range(25)],
+             "relaciones": [{"tipo": "asociacion", "de": f"Clase{i}", "a": f"Clase{(i + 1) % 25}", "nombre": "tiene", "lectura": "a", "direccion": "a", "mult": ["1", "*"]} for i in range(25)]
+             + [{"tipo": "dependencia", "de": f"Clase{i}", "a": f"Clase{(i + 7) % 25}", "nombre": "usa"} for i in range(10)],
+             "objetos": [{"tipo": "paquete", "nombre": f"capa{i}", **({"dentro_de": f"capa{i // 3}"} if i >= 3 and i % 3 else {})} for i in range(13)]}
+    rg = cu.revisar_turno(dg, {"_ej": cd._v_ejercicio(espec, CONV), "_errores": []}, CONV)
+    t2 = time.time()
+    ver(tutor_rechaza and len(dg["clases"]) == 25 and len(dg["relaciones"]) == 35 and sum(1 for o in dg["objetos"] if o["kind"] == "paquete") == 13
+        and rg["ok"] == rg["total"] and t2 - t0 < 20,
+        f"Diagrama de entrega grande (25 clases, 13 capas, 35 relaciones): el curso lo acepta y el tutor no; armar {t1 - t0:.1f} s, revisar {t2 - t1:.1f} s, {rg['ok']}/{rg['total']}:")
+
+    # --- curso.json: convenciones y material_tutor
+    with tempfile.TemporaryDirectory() as tmp:
+        carpeta = Path(tmp); (carpeta / "m1.json").write_text(json.dumps({"titulo": "M", "pasos": [{"texto": "x", "cambios": [
+            {"clase": "A", "metodos": ["+f(x: int): void"]}]}]}), encoding="utf-8")
+        (carpeta / "mat.md").write_text("Las clases del curso se llaman así.", encoding="utf-8")
+        def curso(extra): (carpeta / "curso.json").write_text(json.dumps(dict({"titulo": "C", "modulos": ["m1.json"]}, **extra)), encoding="utf-8"); return carpeta / "curso.json"
+        c = cu.Curso(curso({"convenciones": CONV, "material_tutor": ["mat.md"]}))
+        ver(c.conv == CONV and c.material == [("mat.md", "Las clases del curso se llaman así.")]
+            and c.modulos[0].pasos[0]["_cambios"]["cambios"][0]["metodos"][0]["params"] == [{"nombre": "", "tipo": "int"}]
+            and c.modulos[0].pasos[0]["_cambios"]["cambios"][0]["negrita"] is False,
+            "curso.json: «convenciones» y «material_tutor» se leen y las convenciones se aplican a los pasos:")
+        sin = cu.Curso(curso({}))
+        ver(sin.conv == {} and sin.material == [] and "negrita" not in sin.modulos[0].pasos[0]["_cambios"]["cambios"][0]
+            and sin.modulos[0].pasos[0]["_cambios"]["cambios"][0]["metodos"][0]["params"][0]["nombre"] == "x", "Sin esos campos, todo igual que antes:")
+        intro = TutorDia._intro(types.SimpleNamespace(curso=c))
+        ver("Las clases del curso se llaman así." in intro and "SIN negrita" in intro and "SOLO con el tipo" in intro and "ESTRICTO" in intro,
+            "El tutor recibe el material y las convenciones del curso:")
+        malos = [{"convenciones": {"raro": 1}}, {"convenciones": {"parametros": "x"}}, {"convenciones": []}, {"material_tutor": ["no_existe.md"]}, {"material_tutor": ["../x.md"]}]
+        msgs = []
+        for extra in malos:
+            try: cu.Curso(curso(extra)); msgs.append("(no falló)")
+            except ValueError as e: msgs.append(str(e))
+        ver(all("(no falló)" not in x for x in msgs), "Convenciones o material mal escritos: errores claros (" + " | ".join(x[:40] for x in msgs) + "):")
+    # lo que crea el tutor lleva las convenciones (sin negrita, parámetros solo con el tipo, verbo con triángulo, dentro de su capa)
+    _, prop, err = cd.separar_acciones('<acciones>' + json.dumps({"diagrama": "nuevo", "cambios": [
+        {"paquete": "capa"}, {"clase": "Cuenta", "dentro_de": "capa", "metodos": ["+depositar(monto: double): void"]}, {"clase": "Banco"},
+        {"relacion": "asociacion", "de": "Banco", "a": "Cuenta", "nombre": "tiene", "lectura": "a"}]}) + '</acciones>', CONV)
+    dt = cu.diagrama_de(prop) if prop else {"clases": [], "relaciones": []}
+    cu_ = next((x for x in dt["clases"] if x["nombre"] == "Cuenta"), {})
+    ver(prop and not err and cu_.get("padre") == "capa" and not cu_.get("negrita", True) and cu_["metodos"][0]["params"][0]["nombre"] == ""
+        and dt["relaciones"][0]["ver_lectura"], "Lo que crea el tutor lleva las convenciones del curso:")
+    print("Convenciones del curso:", "todo bien" if all(todo) else "HAY FALLOS")
+
+
 class _SinDia:
     """Para las pruebas: un panel sin Dia (modo de respaldo) o con un Dia de mentira (modo plugin, anota las órdenes)."""
     def __init__(self, modo="ventanas"):
@@ -1289,6 +1559,10 @@ def probar_curso(curso):
         shutil.copytree(curso.carpeta, copia, ignore=shutil.ignore_patterns("pasos", "mis_diagramas", "tutor", "progreso.json", "__pycache__"))
         c = cu.Curso(copia / curso.ruta.name)
         print(f"Curso «{c.titulo}»: {len(c.modulos)} módulos")
+        if c.conv or c.material:
+            intro = TutorDia._intro(type("T", (), {"curso": c})())
+            ver(all(t in intro for _, t in c.material) and (not c.conv or "Convenciones de este curso" in intro),
+                f"Convenciones ({', '.join(f'{k}: {v}' for k, v in c.conv.items()) or 'ninguna'}) y material del tutor ({', '.join(n for n, _ in c.material) or 'ninguno'}) que recibe el tutor:")
         for k, m in enumerate(c.modulos, 1):
             ind = cu.construir(m)
             print(f"== Módulo {k}: {m.titulo} ({m.id}, su diagrama: {m.mio.name}; {len(m.pasos)} pasos)")
@@ -1310,11 +1584,11 @@ def probar_curso(curso):
                 base = m.mio if t.get("_inicial") else None
                 if t.get("_inicial"): print(f"       su diagrama empieza con: {', '.join(du.texto(du.leer(m.mio)).split(chr(10))[:6])}")
                 if t.get("_solucion"):
-                    r = cu.revisar_turno(cu.diagrama_de(t["_solucion"], base), t)
+                    r = cu.revisar_turno(cu.diagrama_de(t["_solucion"], base), t, c.conv)
                     ver(r["ok"] == r["total"] and r["estado"] in ("bien", "casi"), f"  Tu turno, la solución: {r['estado']} {r['ok']}/{r['total']} «{r['mensaje'][:60]}»:")
                 for i, e in enumerate(t["_errores"], 1):
                     if not e.get("_prueba"): print(f"  Error típico {i}: sin «prueba», no se comprueba"); continue
-                    r = cu.revisar_turno(cu.diagrama_de(e["_prueba"], base), t)
+                    r = cu.revisar_turno(cu.diagrama_de(e["_prueba"], base), t, c.conv)
                     ver(r.get("error_tipico") == i and r["mensaje"] == e["dice"], f"  Error típico {i}: «{r['mensaje'][:70]}…»:")
                 # Comprobar en el panel: antes «sin comprobar», con la solución «bien»
                 api = Api(c, None, _SinDia()); api._m, api._n = k - 1, n; api._cambios.rutas["mio"] = m.mio
@@ -1328,14 +1602,27 @@ def probar_curso(curso):
         # el menú de módulos, los botones del paso y el progreso
         api = Api(c, None, _SinDia("plugin")); api.recordar = True
         e = api._estado()
-        e2 = api.modulo(1)
-        p1 = cu.leer_json(c.progreso_ruta)
-        e3 = api.ir(3)
-        api2 = Api(c, None, _SinDia()); api2.restaurar(*c.progreso())
         bot = {b["id"] for b in api.modulo(0)["botones"]}
-        ver(len(e["modulos"]) == len(c.modulos) and e["m"] == 0 and e2["m"] == 1 and e2["n"] == 0 and p1 == {**p1, "m": 1, "n": 0}
-            and (api2._m, api2._n) == (1, 3) and api2._mio().name == c.modulos[1].mio.name and {"paso", "senalar", "hazlo"} <= bot,
-            f"Menú de módulos, «Siguiente módulo», progreso (vuelve al módulo 2, paso 4) y botones del paso ({', '.join(sorted(bot))}):")
+        if len(c.modulos) > 1:
+            e2 = api.modulo(1)
+            p1 = cu.leer_json(c.progreso_ruta)
+            e3 = api.ir(min(3, len(c.modulos[1].pasos) - 1))
+            api2 = Api(c, None, _SinDia()); api2.restaurar(*c.progreso())
+            api.modulo(0)
+            bot = set()                # los botones de todos los pasos del módulo: solo se exigen los que algún paso declara
+            for n in range(len(c.modulos[0].pasos)):
+                api._n = n; bot |= {b["id"] for b in api._botones()}
+            pasos0 = c.modulos[0].pasos
+            exigidos = ({"paso"} if any(api._mod.archivo_paso(n).exists() and (p.get("_cambios") or p.get("diagrama") or n > 0) and not p.get("_turno") for n, p in enumerate(pasos0)) else set())                 | ({"senalar"} if any(p.get("_interfaz") for p in pasos0) else set()) | ({"hazlo"} if any(p.get("_hazlo") for p in pasos0) else set())
+            ver(len(e["modulos"]) == len(c.modulos) and e["m"] == 0 and e2["m"] == 1 and e2["n"] == 0 and p1 == {**p1, "m": 1, "n": 0}
+                and (api2._m, api2._n) == (1, e3["n"]) and api2._mio().name == c.modulos[1].mio.name and exigidos <= bot,
+                f"Menú de módulos, «Siguiente módulo», progreso (vuelve al módulo 2, paso {e3['n'] + 1}) y botones de los pasos ({', '.join(sorted(bot)) or 'ninguno'}):")
+        else:                      # un solo módulo: no hay menú; se prueba el progreso dentro del módulo y los botones
+            e3 = api.ir(min(2, len(c.modulos[0].pasos) - 1))
+            p1 = cu.leer_json(c.progreso_ruta)
+            api2 = Api(c, None, _SinDia()); api2.restaurar(*c.progreso())
+            ver(e["modulos"] == [] and e["m"] == 0 and p1 and (api2._m, api2._n) == (0, e3["n"]) and api2._mio().name == c.modulos[0].mio.name,
+                f"Curso de un solo módulo (sin menú): progreso (vuelve al paso {e3['n'] + 1}) y botones del paso ({', '.join(sorted(bot)) or 'ninguno'}):")
         # errores claros para quien escribe un curso
         malos = {"pasos": [{"texto": "x", "cambios": [{"clase": "A"}], "diagrama": []}]}, {"pasos": [{"texto": "x", "raro": 1}]}, \
                 {"pasos": [{"texto": "x", "turno": {"conexiones": [{"tipo": "include", "de": "A", "a": "B"}], "errores": [{"dice": "y"}]}}]}, \
@@ -1373,6 +1660,7 @@ if __name__ == "__main__":
             probar_cambios(leccion)
             probar_diagramas(leccion)
             probar_fase2()
+            probar_convenciones()
     else:
         import webview
         preparar(curso)

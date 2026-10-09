@@ -41,6 +41,9 @@
  *   anadir RUTA            anade (sin borrar nada) los objetos de RUTA.dia y pega cada relacion a sus clases:
  *                          meta "conecta_inicio"/"conecta_fin" = REF o REF#PUNTO (punto de conexion; si no, automatico).
  *                          Responde "nuevo<TAB>ETIQUETA<TAB>TIPO" por objeto y "ok anadidos N". Si una REF no existe, no anade nada.
+ *                          Version 6: meta "hijo_de" = REF de un paquete que YA estaba en el diagrama: el objeto nuevo queda hijo
+ *                          suyo de verdad (parentesco de Dia, con Deshacer). Los hijos de un paquete que viene en el mismo archivo
+ *                          ya vienen con su <dia:childnode parent=...>.
  *   quitar REF [REF...]    quita esos objetos; lo que estaba pegado a ellos queda suelto ("falta<TAB>REF" si no esta)
  *   reemplazar REF RUTA    el objeto toma las propiedades (nombre, atributos, metodos...) del objeto del mismo tipo de RUTA,
  *                          sin moverse ni soltar sus relaciones
@@ -52,7 +55,7 @@
  *   guardar                guarda el diagrama en su archivo (lo usa el panel solo con los diagramas del tutor)
  *   cerrar [forzar]        cierra la pestana sin dialogo (si tiene cambios sin guardar, solo con forzar)
  *   mover REF DX DY        mueve un objeto (cm) arrastrando lo que tiene pegado (para pruebas; no pasa por Deshacer)
- *   version                "ok version 5" (el panel la usa para saber si el plugin sabe aplicar cambios)
+ *   version                "ok version 6" (el panel la usa para saber si el plugin sabe aplicar cambios)
  *
  * Version 4: cualquier tipo de diagrama (casos de uso, secuencia, actividades, estados, componentes... y el modo libre)
  *   REF tambien puede ser nombre:TEXTO (cualquier objeto por su nombre, su texto o su meta "nombre"), y en
@@ -971,6 +974,14 @@ static void ins_revert(Change *ch, Diagram *dia)
 static void ins_free(Change *ch)
 { CInsertar *c = (CInsertar *) ch; if (!c->aplicado) destruir(c->objs); else g_list_free(c->objs); }
 
+/* -- cambio: parentesco (version 6): `hijo` pasa a ser hijo de `padre` (un paquete) y se mueve con el -- */
+typedef struct { Change c; DiaObject *hijo, *padre; } CPadre;
+static void pad_apply(Change *ch, Diagram *dia)
+{ CPadre *c = (CPadre *) ch; c->hijo->parent = c->padre; if (!g_list_find(c->padre->children, c->hijo)) c->padre->children = g_list_append(c->padre->children, c->hijo); }
+static void pad_revert(Change *ch, Diagram *dia)
+{ CPadre *c = (CPadre *) ch; c->padre->children = g_list_remove(c->padre->children, c->hijo); c->hijo->parent = NULL; }
+static void pad_free(Change *ch) { }
+
 /* -- cambio: quitar objetos (de una capa) -- */
 typedef struct { Change c; Layer *capa; GList *objs; GList *originales; int aplicado; } CQuitar;
 static void qui_apply(Change *ch, Diagram *dia)
@@ -1208,7 +1219,7 @@ static gboolean leer_pendiente(Diagram *dia, GList *nuevos, DiaObject *o, const 
 static void cmd_anadir(Diagram *dia, const char *ruta, GString *resp)
 {
   Diagram *tmp = importar(ruta, resp);
-  DiagramData *td; GList *nuevos = NULL, *l; GArray *pend; guint i; gboolean ok = TRUE;
+  DiagramData *td; GList *nuevos = NULL, *l, *hijos = NULL; GArray *pend; guint i; gboolean ok = TRUE;
   CInsertar *c;
   if (!tmp) return;
   td = (DiagramData *) tmp;
@@ -1223,8 +1234,27 @@ static void cmd_anadir(Diagram *dia, const char *ruta, GString *resp)
     ok = leer_pendiente(dia, nuevos, l->data, "conecta_inicio", 0, pend, resp)
       && leer_pendiente(dia, nuevos, l->data, "conecta_fin", 1, pend, resp);
   }
+  /* version 6: "hijo_de" = REF de un paquete que ya esta en el diagrama (se resuelve antes de insertar nada) */
+  for (l = nuevos; l && ok; l = l->next) {
+    DiaObject *o = l->data; gchar *v = dia_object_get_meta(o, "hijo_de");
+    if (!v) continue;
+    {
+      DiaObject *padre = por_ref(dia, v, NULL);
+      if (!padre) { g_string_append_printf(resp, "error no encuentro %s para emparentar\n", v); ok = FALSE; }
+      else if (!object_flags_set(padre, DIA_OBJECT_CAN_PARENT)) { g_string_append_printf(resp, "error %s no puede tener hijos\n", v); ok = FALSE; }
+      else if (!o->parent) {
+        CPadre *c = g_new0(CPadre, 1);
+        c->c.apply = pad_apply; c->c.revert = pad_revert; c->c.free = pad_free;
+        c->hijo = o; c->padre = padre;
+        hijos = g_list_append(hijos, c);
+      }
+    }
+    g_free(v);
+  }
   if (!ok || !nuevos) {
     if (!nuevos && ok) g_string_append(resp, "error el archivo no trae objetos\n");
+    for (l = hijos; l; l = l->next) g_free(l->data);
+    g_list_free(hijos);
     destruir(nuevos); g_array_free(pend, TRUE); g_object_unref(tmp);
     return;
   }
@@ -1234,6 +1264,14 @@ static void cmd_anadir(Diagram *dia, const char *ruta, GString *resp)
   c->capa = capa_usuario(dia); c->objs = nuevos;
   apilar(dia, (Change *) c);
   ins_apply((Change *) c, dia);
+  /* 1b) parentesco con paquetes que ya estaban (version 6; cada uno, un cambio en Deshacer) */
+  for (l = hijos; l; l = l->next) {
+    CPadre *p = l->data;
+    dia_object_set_meta(p->hijo, "hijo_de", NULL);
+    apilar(dia, (Change *) p);
+    pad_apply((Change *) p, dia);
+  }
+  g_list_free(hijos);
   /* 2) conectar los extremos (cada uno, un cambio en Deshacer); el punto automatico mira al otro extremo */
   for (i = 0; i < pend->len; i++) {
     Pend *p = &g_array_index(pend, Pend, i);
@@ -1903,7 +1941,7 @@ static void ejecutar_linea(const char *linea, GString *resp)
   if (g_strcmp0(argv[0], "widgets") == 0) { cmd_widgets(resp); g_strfreev(argv); return; }
   if (g_strcmp0(argv[0], "pulsar") == 0 && argc >= 2) { cmd_pulsar(argv[1], resp); g_strfreev(argv); return; }
   if (g_strcmp0(argv[0], "abrir") == 0 && argc >= 2) { cmd_abrir(argv[1], resp); g_strfreev(argv); return; }
-  if (g_strcmp0(argv[0], "version") == 0) { g_string_append(resp, "ok version 5\n"); g_strfreev(argv); return; }
+  if (g_strcmp0(argv[0], "version") == 0) { g_string_append(resp, "ok version 6\n"); g_strfreev(argv); return; }
   if (g_strcmp0(argv[0], "hoja") == 0 && argc >= 2) { cmd_hoja(argv[1], resp); g_strfreev(argv); return; }
   if (g_strcmp0(argv[0], "tipos") == 0) { cmd_tipos(resp); g_strfreev(argv); return; }
   if (g_strcmp0(argv[0], "plantilla") == 0 && argc >= 3) { cmd_plantilla(argv[1], argv[2], resp); g_strfreev(argv); return; }

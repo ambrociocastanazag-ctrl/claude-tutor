@@ -18,9 +18,10 @@ import dia_uml as du
 import dia_objetos as do
 import dia_planes as dp
 
-MAX_CAMBIOS, MAX_CLASES, MAX_MIEMBROS = 60, 12, 20
+MAX_CAMBIOS, MAX_CLASES, MAX_MIEMBROS = 60, 12, 20          # propuestas del tutor
+MAX_CAMBIOS_CURSO, MAX_CLASES_CURSO, MAX_OBJETOS_CURSO = 300, 40, 100   # lo que viene de un curso (pasos, inicial, solucion, prueba)
 NOMBRE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ_][\wÁÉÍÓÚÜÑáéíóúüñ]{0,40}$")
-VERSION_PLUGIN = 4                                   # la orden «version» del plugin que sabe aplicar todos estos cambios
+VERSION_PLUGIN = 6                                   # la orden «version» del plugin que sabe aplicar todos estos cambios
 
 
 # ---------- Validación del bloque (sin tocar Dia) ----------
@@ -39,13 +40,19 @@ def _nombre_clase(v, donde):
     return v
 
 
-def _miembros(lista, donde, es=None):
+def _solo_tipo(conv, parametros=None):
+    """¿Los parámetros se dibujan solo con el tipo (K1)? `parametros` es el de este cambio (si lo trae) o el del curso."""
+    return (parametros or (conv or {}).get("parametros")) == "solo_tipo"
+
+
+def _miembros(lista, donde, es=None, conv=None, parametros=None):
     if lista is None: return None
     if not isinstance(lista, list): raise ValueError(f"{donde}: tiene que ser una lista [...]")
     if len(lista) > MAX_MIEMBROS: raise ValueError(f"{donde}: demasiados (máximo {MAX_MIEMBROS})")
     out = []
     for s in lista:
         m = du.miembro(s)
+        if m["es"] == "metodo" and _solo_tipo(conv, parametros): m = du.sin_nombres_de_parametros(m)    # convención K1
         if es and m["es"] != es:
             raise ValueError(f"{donde}: «{du.linea_metodo(m) if m['es'] == 'metodo' else du.linea_atributo(m)}» es un "
                              f"{'método' if m['es'] == 'metodo' else 'atributo'}" + (" (lleva paréntesis)" if m["es"] == "metodo" else " (sin paréntesis)"))
@@ -65,14 +72,29 @@ def _pos(v, k):
     return (float(v[0]), float(v[1]))
 
 
-def _v_clase(a, k, interfaz=False):
+def _v_clase(a, k, interfaz=False, conv=None):
     clave = "interfaz" if interfaz else "clase"
-    _campos(a, {clave, "atributos", "metodos", "abstracta", "estereotipo", "pos", "dentro_de"}, k)
+    _campos(a, {clave, "atributos", "metodos", "abstracta", "estereotipo", "pos", "dentro_de", "biblioteca", "enumerada", "parametros", "negrita"}, k)
+    if a.get("parametros") not in (None, "solo_tipo", "nombre_tipo"): raise ValueError(f"cambio {k}: «parametros» es \"solo_tipo\" o \"nombre_tipo\"")
+    par = a.get("parametros")
     c = {"accion": "clase", "nombre": _nombre_clase(a[clave], f"cambio {k}"),
-         "atributos": _miembros(a.get("atributos"), f"cambio {k}, atributos", "atributo") or [],
-         "metodos": _miembros(a.get("metodos"), f"cambio {k}, métodos", "metodo") or [],
+         "atributos": _miembros(a.get("atributos"), f"cambio {k}, atributos", "atributo", conv, par) or [],
+         "metodos": _miembros(a.get("metodos"), f"cambio {k}, métodos", "metodo", conv, par) or [],
          "abstracta": bool(a.get("abstracta", False)), "estereotipo": _texto(a.get("estereotipo"), f"cambio {k}, estereotipo", 30),
-         "pos": _pos(a.get("pos"), k), "dentro_de": _texto(a.get("dentro_de"), f"cambio {k}, dentro_de", 80)}
+         "pos": _pos(a.get("pos"), k), "dentro_de": _texto(a.get("dentro_de"), f"cambio {k}, dentro_de", 80),
+         "biblioteca": bool(a.get("biblioteca", False)), "enumerada": None}
+    if (conv or {}).get("nombre_negrita") is False: c["negrita"] = False        # convención 18
+    if "negrita" in a:                                                           # «negrita»: true la planta a propósito (ejercicios «corrige el diagrama»)
+        if not isinstance(a["negrita"], bool): raise ValueError(f"cambio {k}: «negrita» es true o false")
+        c["negrita"] = a["negrita"]
+    if c["biblioteca"] and (c["atributos"] or c["metodos"]): raise ValueError(f"cambio {k}: una clase «biblioteca» va vacía (sin atributos ni métodos)")
+    if a.get("enumerada") is not None:
+        vals = a["enumerada"]
+        if not isinstance(vals, list) or not vals or len(vals) > MAX_MIEMBROS or not all(isinstance(v, str) and NOMBRE.match(v.strip()) for v in vals):
+            raise ValueError(f"cambio {k}: «enumerada» es la lista de sus valores, como [\"ALWAYS\", \"NEVER\"]")
+        if c["atributos"] or c["metodos"] or c["estereotipo"] or c["abstracta"] or interfaz:
+            raise ValueError(f"cambio {k}: una enumerada solo lleva sus valores (sin atributos, métodos ni estereotipo)")
+        c["enumerada"] = [v.strip() for v in vals]
     if interfaz:
         c["estereotipo"] = "interface"
         for m in c["metodos"]: m["abstracto"] = True
@@ -80,15 +102,17 @@ def _v_clase(a, k, interfaz=False):
     return c
 
 
-def _v_modificar(a, k):
-    _campos(a, {"modificar", "nombre", "abstracta", "estereotipo", "atributos", "metodos", "agregar", "quitar"}, k)
+def _v_modificar(a, k, conv=None):
+    _campos(a, {"modificar", "nombre", "abstracta", "estereotipo", "atributos", "metodos", "agregar", "quitar", "negrita"}, k)
+    if "negrita" in a and not isinstance(a["negrita"], bool): raise ValueError(f"cambio {k}: «negrita» es true o false")
     c = {"accion": "modificar", "clase": _nombre_clase(a["modificar"], f"cambio {k}")}
     if "nombre" in a: c["nombre"] = _nombre_clase(a["nombre"], f"cambio {k}, nombre")
     if "abstracta" in a: c["abstracta"] = bool(a["abstracta"])
+    if "negrita" in a: c["negrita"] = a["negrita"]
     if "estereotipo" in a: c["estereotipo"] = _texto(a["estereotipo"], f"cambio {k}, estereotipo", 30)
-    if "atributos" in a: c["atributos"] = _miembros(a["atributos"], f"cambio {k}, atributos", "atributo")
-    if "metodos" in a: c["metodos"] = _miembros(a["metodos"], f"cambio {k}, métodos", "metodo")
-    if "agregar" in a: c["agregar"] = _miembros(a["agregar"], f"cambio {k}, agregar")
+    if "atributos" in a: c["atributos"] = _miembros(a["atributos"], f"cambio {k}, atributos", "atributo", conv)
+    if "metodos" in a: c["metodos"] = _miembros(a["metodos"], f"cambio {k}, métodos", "metodo", conv)
+    if "agregar" in a: c["agregar"] = _miembros(a["agregar"], f"cambio {k}, agregar", None, conv)
     if "quitar" in a:
         if not isinstance(a["quitar"], list): raise ValueError(f"cambio {k}: «quitar» es una lista de nombres de atributos o métodos")
         c["quitar"] = [re.split(r"[:(]", _texto(x, f"cambio {k}, quitar", 60, False))[0].strip().lstrip("+-#~") for x in a["quitar"]]
@@ -108,7 +132,7 @@ def _ref_objeto(v, donde):
 
 
 def _v_relacion(a, k):
-    _campos(a, {"relacion", "de", "a", "todo", "parte", "nombre", "mult", "roles", "direccion", "estereotipo"}, k)
+    _campos(a, {"relacion", "de", "a", "todo", "parte", "nombre", "mult", "roles", "direccion", "estereotipo", "lectura"}, k)
     tipo = _texto(a["relacion"], f"cambio {k}, relacion", 20).lower()
     tipo = {"generalizacion": "herencia", "generalización": "herencia", "realización": "realizacion", "implementacion": "realizacion",
             "asociación": "asociacion", "agregación": "agregacion", "composición": "composicion", "inclusion": "include",
@@ -133,8 +157,15 @@ def _v_relacion(a, k):
     if "direccion" in a:
         d = _texto(a["direccion"], f"cambio {k}, direccion", 10).lower()
         if d not in ("", "a", "de", "ambas", "ninguna"): raise ValueError(f"cambio {k}: «direccion» es \"a\", \"de\", \"ambas\" o \"ninguna\"")
-        if d and d != "ninguna" and tipo != "asociacion": raise ValueError(f"cambio {k}: «direccion» es solo para asociaciones")
+        if d and d != "ninguna" and tipo not in ("asociacion", "agregacion", "composicion"):
+            raise ValueError(f"cambio {k}: «direccion» es solo para asociaciones, agregaciones y composiciones")
         r["direccion"] = "" if d == "ninguna" else d
+    if "lectura" in a:      # el triángulo de lectura (convención 25) hacia «a» o hacia «de»; hace falta el verbo en «nombre»
+        lec = _texto(a["lectura"], f"cambio {k}, lectura", 10).lower()
+        if lec not in ("", "a", "de"): raise ValueError(f"cambio {k}: «lectura» es \"a\" o \"de\" (hacia qué clase apunta el triángulo)")
+        if lec and tipo not in ("asociacion", "agregacion", "composicion"): raise ValueError(f"cambio {k}: «lectura» es solo para asociaciones, agregaciones y composiciones")
+        if lec and not r["nombre"]: raise ValueError(f"cambio {k}: «lectura» necesita el verbo en «nombre» (p. ej. \"tiene\")")
+        r["lectura"] = lec
     return r
 
 
@@ -176,32 +207,40 @@ def _d_relacion(r):
 
 
 ACCIONES = {          # clave del JSON → (validar, describir); las de los otros diagramas, al final (dia_planes)
-    "clase": (lambda a, k: _v_clase(a, k), _d_clase),
-    "interfaz": (lambda a, k: _v_clase(a, k, interfaz=True), _d_clase),
+    "clase": (lambda a, k, conv=None: _v_clase(a, k, conv=conv), _d_clase),
+    "interfaz": (lambda a, k, conv=None: _v_clase(a, k, interfaz=True, conv=conv), _d_clase),
     "modificar": (_v_modificar, _d_modificar),
-    "quitar_clase": (_v_quitar, lambda c: f"Quitar la clase «{c['clase']}» (y las relaciones que tiene)"),
-    "relacion": (_v_relacion, _d_relacion),
-    "quitar_relacion": (_v_quitar_relacion, lambda c: f"Quitar la relación {c['tipo'] if c['tipo'] != 'cualquiera' else ''} entre «{c['de']}» y «{c['a']}»".replace("  ", " ")),
-    "nota": (_v_nota, lambda c: f"Nota: «{c['texto'][:60]}»" + (f" junto a «{c['junto_a']}»" if c["junto_a"] else "")),
+    "quitar_clase": (lambda a, k, conv=None: _v_quitar(a, k), lambda c: f"Quitar la clase «{c['clase']}» (y las relaciones que tiene)"),
+    "relacion": (lambda a, k, conv=None: _v_relacion(a, k), _d_relacion),
+    "quitar_relacion": (lambda a, k, conv=None: _v_quitar_relacion(a, k), lambda c: f"Quitar la relación {c['tipo'] if c['tipo'] != 'cualquiera' else ''} entre «{c['de']}» y «{c['a']}»".replace("  ", " ")),
+    "nota": (lambda a, k, conv=None: _v_nota(a, k), lambda c: f"Nota: «{c['texto'][:60]}»" + (f" junto a «{c['junto_a']}»" if c["junto_a"] else "")),
 }
 for _clave in sorted(dp.claves()):           # casos de uso, secuencia, actividades, estados, componentes... y modo libre
-    ACCIONES[_clave] = ((lambda c: lambda a, k: dp.validar(c, a, k))(_clave), dp.describir)
+    ACCIONES[_clave] = ((lambda c: lambda a, k, conv=None: dp.validar(c, a, k))(_clave), dp.describir)
 
 
-def _v_ejercicio(e):
+def _v_ejercicio(e, conv=None):
     if not isinstance(e, dict): raise ValueError("«ejercicio» tiene que ser un objeto {...}")
     sobra = set(e) - {"titulo", "clases", "relaciones", "al_empezar", "al_terminar", "sinonimos", "objetos", "conexiones", "mensajes"}
     if sobra: raise ValueError(f"ejercicio: campos que no conozco: {', '.join(sorted(sobra))}")
     clases = []
     for i, c in enumerate(e.get("clases") or [], 1):
         if not isinstance(c, dict): raise ValueError(f"ejercicio, clase {i}: tiene que ser un objeto")
-        s = set(c) - {"nombre", "atributos", "metodos", "abstracta", "interfaz"}
+        s = set(c) - {"nombre", "atributos", "metodos", "abstracta", "interfaz", "dentro_de", "biblioteca", "enumerada"}
         if s: raise ValueError(f"ejercicio, clase {i}: campos que no conozco: {', '.join(sorted(s))}")
         x = {"nombre": _nombre_clase(c.get("nombre"), f"ejercicio, clase {i}")}
-        if c.get("atributos") is not None: x["atributos"] = _miembros(c["atributos"], f"ejercicio, {x['nombre']}, atributos", "atributo")
-        if c.get("metodos") is not None: x["metodos"] = _miembros(c["metodos"], f"ejercicio, {x['nombre']}, métodos", "metodo")
+        if c.get("atributos") is not None: x["atributos"] = _miembros(c["atributos"], f"ejercicio, {x['nombre']}, atributos", "atributo", conv)
+        if c.get("metodos") is not None: x["metodos"] = _miembros(c["metodos"], f"ejercicio, {x['nombre']}, métodos", "metodo", conv)
         if "abstracta" in c: x["abstracta"] = bool(c["abstracta"])
         if c.get("interfaz"): x["interfaz"] = True
+        if c.get("dentro_de"): x["dentro_de"] = _texto(c["dentro_de"], f"ejercicio, {x['nombre']}, dentro_de", 80)     # su paquete (parentesco real)
+        if c.get("biblioteca"):                                       # clase de la biblioteca de Java: va vacía (K3)
+            if c.get("atributos") or c.get("metodos") or c.get("enumerada"): raise ValueError(f"ejercicio, {x['nombre']}: una clase «biblioteca» va vacía")
+            x["biblioteca"] = True
+        if c.get("enumerada") is not None:
+            if not isinstance(c["enumerada"], list) or not c["enumerada"] or not all(isinstance(v, str) and NOMBRE.match(v.strip()) for v in c["enumerada"]):
+                raise ValueError(f"ejercicio, {x['nombre']}: «enumerada» es la lista de sus valores")
+            x["enumerada"] = [v.strip() for v in c["enumerada"]]
         clases.append(x)
     rels = []
     for i, r in enumerate(e.get("relaciones") or [], 1):
@@ -209,20 +248,28 @@ def _v_ejercicio(e):
         r = dict(r)
         if "tipo" in r and "relacion" not in r: r["relacion"] = r.pop("tipo")
         v = _v_relacion(r, f"del ejercicio {i}")
-        rels.append({"tipo": v["tipo"], "de": v["de"], "a": v["a"], "mult": v["mult"] if any(v["mult"]) else None})
+        rels.append({"tipo": v["tipo"], "de": v["de"], "a": v["a"], "mult": v["mult"] if any(v["mult"]) else None,
+                     **{k2: v[k2] for k2 in ("nombre", "lectura", "direccion") if v.get(k2)}})
     sin = e.get("sinonimos") or {}
     if not isinstance(sin, dict): raise ValueError("ejercicio: «sinonimos» es {\"String\": [\"string\", \"texto\"]}")
     ej = {"titulo": _texto(e.get("titulo"), "ejercicio, titulo", 60) or "Ejercicio", "clases": clases, "relaciones": rels,
           "al_empezar": _texto(e.get("al_empezar"), "ejercicio, al_empezar", 300) or "Hazlo en Dia, guarda (Ctrl+S) y pulsa Comprobar.",
           "al_terminar": _texto(e.get("al_terminar"), "ejercicio, al_terminar", 300) or "¡Todo bien!", "sinonimos": sin}
     dp.validar_ejercicio(e, ej)                  # objetos, conexiones y mensajes (casos de uso, secuencia, actividades, estados...)
+    rutas = [o["ruta"] for o in ej["objetos"] if o.get("ruta")]
+    for x in clases:                             # «dentro_de» de cada clase: nombre o ruta de su capa (ambiguo = error que pide la ruta)
+        if x.get("dentro_de") and rutas:
+            try: r = du.resolver_ruta(x["dentro_de"], rutas)
+            except ValueError as err: raise ValueError(f"ejercicio, {x['nombre']}, dentro_de: {err}")
+            if r is not None: x["dentro_ruta"] = r
     if not clases and not rels and not ej["objetos"] and not ej["conexiones"] and not ej["mensajes"]:
         raise ValueError("el ejercicio no dice qué se espera (clases, relaciones, objetos, conexiones o mensajes)")
     return ej
 
 
-def validar_propuesta(d):
-    """Revisa el bloque <acciones> sin tocar Dia. Devuelve la propuesta limpia o lanza ValueError con el motivo."""
+def validar_propuesta(d, conv=None, curso=False):
+    """Revisa el bloque <acciones> sin tocar Dia. Devuelve la propuesta limpia o lanza ValueError con el motivo.
+    `conv` son las convenciones del curso (nombre_negrita, parametros): lo que se crea las lleva (sin negrita, parámetros solo con el tipo...)."""
     if not isinstance(d, dict): raise ValueError("el bloque tiene que ser un objeto JSON {...}")
     sobra = set(d) - {"para", "resumen", "diagrama", "titulo", "cambios", "ejercicio"}
     if sobra: raise ValueError(f"campos que no conozco: {', '.join(sorted(sobra))}")
@@ -234,23 +281,24 @@ def validar_propuesta(d):
     elif diag != "nuevo" and not diag.endswith(".dia"): diag += ".dia"
     cambios = d.get("cambios", [])
     if not isinstance(cambios, list): raise ValueError("«cambios» tiene que ser una lista [...]")
-    if len(cambios) > MAX_CAMBIOS: raise ValueError(f"demasiados cambios (máximo {MAX_CAMBIOS})")
+    max_c, max_cl, max_o = (MAX_CAMBIOS_CURSO, MAX_CLASES_CURSO, MAX_OBJETOS_CURSO) if curso else (MAX_CAMBIOS, MAX_CLASES, 40)
+    if len(cambios) > max_c: raise ValueError(f"demasiados cambios (máximo {max_c})")
     limpios = []
     for k, a in enumerate(cambios, 1):
         if not isinstance(a, dict): raise ValueError(f"cambio {k}: tiene que ser un objeto {{...}}")
         claves = [c for c in a if c in ACCIONES]
         if len(claves) != 1: raise ValueError(f"cambio {k}: tiene que tener UNA de estas claves: {', '.join(ACCIONES)}")
-        limpios.append(ACCIONES[claves[0]][0](a, k))
-    if sum(c["accion"] == "clase" for c in limpios) > MAX_CLASES: raise ValueError(f"demasiadas clases (máximo {MAX_CLASES})")
-    if sum(c["accion"] in dp.ELEMENTOS for c in limpios) > 40: raise ValueError("demasiados objetos (máximo 40)")
-    ej = _v_ejercicio(d["ejercicio"]) if d.get("ejercicio") else None
+        limpios.append(ACCIONES[claves[0]][0](a, k, conv))
+    if sum(c["accion"] == "clase" for c in limpios) > max_cl: raise ValueError(f"demasiadas clases (máximo {max_cl})")
+    if sum(c["accion"] in dp.ELEMENTOS for c in limpios) > max_o: raise ValueError(f"demasiados objetos (máximo {max_o})")
+    ej = _v_ejercicio(d["ejercicio"], conv) if d.get("ejercicio") else None
     if not limpios and not ej: raise ValueError("no trae ningún cambio")
     if not limpios and diag != "nuevo": raise ValueError("un ejercicio sin cambios va en un diagrama nuevo")
     return {"para": _texto(d.get("para") or d.get("resumen"), "para", 200), "diagrama": diag,
-            "titulo": _texto(d.get("titulo"), "titulo", 60), "cambios": limpios, "ejercicio": ej}
+            "titulo": _texto(d.get("titulo"), "titulo", 60), "cambios": limpios, "ejercicio": ej, "conv": dict(conv or {})}
 
 
-def separar_acciones(resp):
+def separar_acciones(resp, conv=None):
     """Saca de la respuesta el bloque <acciones>{...}</acciones>: (texto, propuesta o None, error o None)."""
     m = re.search(r"<acciones>(.*?)</acciones>", resp, re.S)
     if not m:
@@ -261,7 +309,7 @@ def separar_acciones(resp):
     if re.search(r"<acciones>", texto): return texto, None, "trae más de un bloque <acciones>: junta todo en uno"
     try: d = json.loads(m.group(1))
     except Exception as e: return texto, None, f"el JSON no es válido ({e})"
-    try: return texto, validar_propuesta(d), None
+    try: return texto, validar_propuesta(d, conv), None
     except ValueError as e: return texto, None, str(e)
 
 
@@ -314,6 +362,7 @@ def planear(prop, d, pid, medidas=None):
         return x
 
     ctx = dp.Contexto(d, plan, etiqueta, clases)       # actores, casos, mensajes, estados, nodos... y el modo libre
+    plan["conv"] = dict(prop.get("conv") or {})
 
     def extremo(nombre, k):
         """Un extremo de relación: una clase (como antes) o cualquier otro objeto (dia_planes)."""
@@ -329,6 +378,8 @@ def planear(prop, d, pid, medidas=None):
             if du._norm(a["nombre"]) in clases: raise ValueError(f"cambio {k}: ya hay una clase «{a['nombre']}» (para cambiarla, usa «modificar»)")
             c = {"nombre": a["nombre"], "atributos": a["atributos"], "metodos": a["metodos"], "abstracta": a["abstracta"],
                  "estereotipo": a["estereotipo"], "tag": etiqueta(), "pos": a.get("pos"), "dentro_de": a.get("dentro_de", "")}
+            if "negrita" in a: c["negrita"] = a["negrita"]
+            if a.get("enumerada") is not None: c["enumerada"] = a["enumerada"]
             clases[du._norm(c["nombre"])] = {"c": c, "nueva": True, "id": None}
             plan["nuevas"].append(c); plan["cuenta"]["clases"] += 1
         elif acc == "modificar":
@@ -337,7 +388,7 @@ def planear(prop, d, pid, medidas=None):
             m = plan["modificar"].get(x["id"])
             vieja = x["c"]; nueva = dict(m[1] if m else vieja)
             nueva["atributos"], nueva["metodos"] = list(nueva["atributos"]), list(nueva["metodos"])
-            for campo in ("abstracta", "estereotipo", "atributos", "metodos"):
+            for campo in ("abstracta", "negrita", "estereotipo", "atributos", "metodos"):
                 if campo in a: nueva[campo] = a[campo]
             if a.get("quitar"):
                 faltan = [q for q in a["quitar"] if not any(du._norm(x2["nombre"]) == du._norm(q) for x2 in nueva["atributos"] + nueva["metodos"])]
@@ -383,7 +434,9 @@ def planear(prop, d, pid, medidas=None):
         else:
             ctx.cambio(a, k)                           # los demás diagramas y el modo libre
         plan["detalle"].append(ACCIONES["interfaz" if acc == "clase" and a.get("estereotipo") == "interface" else acc][1](a))
+    ctx.resolver_clases(plan["nuevas"])                # «dentro_de» de las clases: nombre o ruta de su capa (error claro si es ambiguo)
     ej = prop.get("ejercicio") or {}
+    ctx.dentro_de_existentes()                         # clases que van dentro de un paquete que ya estaba: su sitio dentro de él
     _colocar(plan, d, ej.get("relaciones") or [])
     ctx.cerrar(medidas, list(ej.get("conexiones") or []) + list(ej.get("relaciones") or []))
     plan["medir"] = ctx.xml_medir()
@@ -391,6 +444,8 @@ def planear(prop, d, pid, medidas=None):
     # las de otros objetos que ya estaban, por su id (descontando lo que se quita antes)
     for r in plan["relaciones"]:
         inicio_es_a = du.TIPOS_REL[r["tipo"]]["inicio_es_a"]
+        r["_cx"] = tuple(_centro_x(r["_" + lado]) for lado in ("de", "a"))     # dónde queda cada extremo: para el triángulo de lectura
+        if r.get("lectura") in ("a", "de"): inicio_es_a = du.orientacion(r)[0]   # y qué extremo es el inicio (A) de la línea
         for lado in ("de", "a"):
             x = r.pop("_" + lado)
             h = r.get("_hint_ini" if (lado == "a") == inicio_es_a else "_hint_fin")
@@ -400,6 +455,18 @@ def planear(prop, d, pid, medidas=None):
             else:
                 r["ref_" + lado] = ctx.ref(x, punto or None)
     return plan
+
+
+def _centro_x(x):
+    """Centro horizontal (cm) de un extremo de relación: una clase nueva (por su sitio), una que ya estaba o cualquier otro objeto."""
+    if "c" in x:
+        c = x["c"]
+        if x["nueva"] or not c.get("caja"):
+            w, _ = caja_estimada(c); p = c.get("pos") or (0, 0)
+            return p[0] + w / 2
+        return c["caja"][0] + c["caja"][2] / 2
+    o = x["o"]
+    return o["caja"][0] + o["caja"][2] / 2 if o.get("caja") else 0.0
 
 
 def _colocar(plan, d, pistas=()):
@@ -878,6 +945,10 @@ Al final (después de <marcas> si lo hay), UN solo bloque en una línea:
   (el rombo va en el todo; también vale {"relacion": "composicion", "todo": "Casa", "parte": "Habitacion"}). Solo asociación,
   agregación y composición llevan "mult". Miembros en notación UML: "-nombre: String", "+metodo(x: int): void", con " {abstract}" o " {static}".
   Máximo 30 cambios y 12 clases. Si la clase ya existe, usa "modificar".
+  Para cursos con convenciones: "dentro_de": "capa" (con {"paquete": "capa"} antes; {"paquete": "awt", "dentro_de": "java"} los anida) deja la clase hija de
+  verdad de su paquete · {"clase": "JFrame", "biblioteca": true} (vacía) · {"clase": "Show", "enumerada": ["A", "B"]} · en asociacion, agregacion y composicion,
+  "nombre": "tiene" es el verbo y "lectura": "a"|"de" el triángulo de lectura hacia esa clase ("direccion" = flecha de navegabilidad). Si el curso lo pide,
+  los parámetros van solo con el tipo ("+f(String, int): void") y los nombres de clase sin negrita: el panel lo aplica solo.
 - "ejercicio" (opcional, con su solución ESCONDIDA para que lo revise Comprobar sin IA; normalmente en "diagrama": "nuevo", donde
   "cambios" pone lo que le das hecho): {"titulo": "Herencia de animales", "clases": [{"nombre": "Perro", "atributos": ["-raza: String"],
   "metodos": ["+ladrar(): void"]}, {"nombre": "Animal", "abstracta": true}], "relaciones": [{"tipo": "herencia", "de": "Perro", "a": "Animal"},

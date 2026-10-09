@@ -24,6 +24,7 @@ de forma legible según el tipo de diagrama (secuencia: participantes en fila y 
 y modo libre: de arriba abajo por capas; casos de uso: actores a los lados y casos dentro del límite; contenedores con lo
 de dentro) y escribe el XML desde las plantillas de Dia. `revisar(d, ej)` revisa los ejercicios sin IA."""
 import itertools, re
+import xml.etree.ElementTree as ET
 
 import dia_uml as du
 import dia_objetos as do
@@ -216,6 +217,17 @@ def describir(c):
 def _n(s): return du._norm(s or "")
 
 
+def _clave_e(e):
+    """Cómo se distingue un elemento en los diccionarios por nombre: las capas (paquetes) por su ruta («java/util»: dos capas pueden
+    llamarse igual si su padre es distinto); todo lo demás, por su nombre."""
+    return e.get("_clave") or _n(e.get("nombre"))
+
+
+def _dd(e):
+    """A qué contenedor va un elemento («dentro_de»): la clave de su capa si ya se resolvió (ruta), si no el nombre tal cual."""
+    return e.get("_dentro") or _n(e.get("dentro_de"))
+
+
 class Contexto:
     """Los cambios de este vocabulario dentro de un plan de cambios_dia.planear (que hace las clases)."""
 
@@ -228,6 +240,10 @@ class Contexto:
             if o["kind"] in ("rotulo", "linea_vida"): continue
             self._registrar(o, o.get("texto")); self._registrar(o, o.get("nombre")); self._registrar(o, "#" + o["id"], unico=True)
         for l in d.get("lineas", []) + d.get("relaciones", []): self._registrar(l, "#" + l["id"], unico=True)
+        self.rutas_paq = []                              # rutas de las capas (paquetes) que hay y las que se crean, en orden
+        for o in d.get("objetos", []):
+            if o["kind"] == "paquete" and o.get("ruta"):
+                o["_clave"] = du.clave_ruta(o["ruta"]); self.rutas_paq.append(tuple(o["ruta"]))
         for c in d["clases"]: self._registrar(c, "#" + c["id"], unico=True)
         for nt in d.get("notas", []): self._registrar(nt, "#" + nt["id"], unico=True)
 
@@ -247,13 +263,42 @@ class Contexto:
         if c: return {"o": c["c"], "nueva": c["nueva"], "clase": True, "reg_clase": c}
         raise ValueError(f"cambio {k}: no hay ningún «{nombre}» en el diagrama")
 
+    # ----- capas con ruta: «java/util/function» -----
+    def _ruta_de_capa(self, e, k):
+        """La ruta de una capa nueva (su padre + su nombre), resolviendo su «dentro_de» (nombre o ruta) entre las capas que ya hay."""
+        padre = ()
+        if e.get("dentro_de"):
+            try: padre = du.resolver_ruta(e["dentro_de"], self.rutas_paq)
+            except ValueError as x: raise ValueError(f"cambio {k}, dentro_de: {x}")
+            if padre is None: raise ValueError(f"cambio {k}: no hay una capa «{e['dentro_de']}» para meter «{e['nombre']}» (créala antes)")
+            e["_dentro"] = du.clave_ruta(padre)
+        ruta = tuple(padre) + (e["nombre"],)
+        if any(du.clave_ruta(r) == du.clave_ruta(ruta) for r in self.rutas_paq):
+            raise ValueError(f"cambio {k}: ya hay una capa «{du.mostrar_ruta(ruta)}»")
+        e["_ruta"], e["_clave"] = ruta, du.clave_ruta(ruta)
+        self.rutas_paq.append(ruta)
+
+    def resolver_clases(self, clases):
+        """«dentro_de» de las clases nuevas: si nombra una capa (nombre o ruta), se guarda su clave; si no existe ninguna capa así, se deja
+        como estaba (puede ser otro contenedor). ValueError claro si el nombre es ambiguo."""
+        for c in clases:
+            if not c.get("dentro_de"): continue
+            try: r = du.resolver_ruta(c["dentro_de"], self.rutas_paq)
+            except ValueError as x: raise ValueError(f"clase «{c['nombre']}», dentro_de: {x}")
+            if r is not None: c["_dentro"] = du.clave_ruta(r)
+            elif re.search(r"[/›]", c["dentro_de"]): raise ValueError(f"clase «{c['nombre']}», dentro_de: no hay una capa con la ruta «{c['dentro_de']}» (créala antes)")
+
     # ----- cada cambio -----
     def cambio(self, a, k):
         acc = a["accion"]
         if acc in ELEMENTOS:
-            if _n(a["nombre"]) in self.reg or _n(a["nombre"]) in self.clases:
+            previo = self.reg.get(_n(a["nombre"]))
+            solo_capas = acc == "paquete" and previo and (previo["o"].get("kind") == "paquete" or previo["o"].get("accion") == "paquete") \
+                and _n(a["nombre"]) not in self.clases           # dos capas pueden llamarse igual si su padre es distinto
+            if (_n(a["nombre"]) in self.reg or _n(a["nombre"]) in self.clases) and not solo_capas:
                 raise ValueError(f"cambio {k}: ya hay algo llamado «{a['nombre']}» (usa otro nombre, o «cambiar»)")
             e = dict(a, tag=self.etiqueta(), k=k)
+            if acc == "paquete": self._ruta_de_capa(e, k)
             self.elems.append(e); self._registrar(e, e["nombre"], nueva=True)
             if e.get("texto") and _n(e["texto"]) != _n(e["nombre"]): self._registrar(e, e["texto"], nueva=True)
             self.plan["cuenta"].setdefault("nuevos", {}).setdefault(acc, 0); self.plan["cuenta"]["nuevos"][acc] += 1
@@ -347,10 +392,60 @@ class Contexto:
             return (e.get("ancho") or max(bb[2], 0.45 * n + 1.2 if n else 0), e.get("alto") or bb[3])
         return (4.0, 2.0)
 
+    # ----- parentesco real (paquetes que contienen clases y paquetes) -----
+    def _paquetes_existentes(self):
+        return {o.get("_clave") or _n(o.get("texto") or o.get("nombre")): o for o in self.d.get("objetos", [])
+                if o["kind"] == "paquete" and o["id"] not in self.plan["quitar"]}
+
+    def dentro_de_existentes(self):
+        """Las clases nuevas con «dentro_de» un paquete que YA está en el diagrama: se colocan dentro de él (debajo de lo que tiene,
+        o donde diga su «pos») y el paquete se agranda para contenerlas. Quedan hijas suyas de verdad (parentesco de Dia)."""
+        existentes = self._paquetes_existentes()
+        por_paquete = {}
+        for c in self.plan["nuevas"]:
+            p = _dd(c)
+            if p in existentes and not any(_clave_e(e) == p for e in self.elems if e["accion"] == "paquete"):
+                por_paquete.setdefault(p, []).append(c)
+        for p, hijas in por_paquete.items():
+            o = existentes[p]; sx, sy, sw, sh = o["caja"]
+            def contiene(q): return q["caja"][0] <= sx and q["caja"][1] <= sy and q["caja"][0] + q["caja"][2] >= sx + sw and q["caja"][1] + q["caja"][3] >= sy + sh
+            dentro = [q["caja"] for q in self.d.get("objetos", []) + self.d["clases"] if q is not o and q["id"] not in self.plan["quitar"] and q["id"] != o.get("padre_id")
+                      and not contiene(q) and (q.get("padre_id") == o["id"] or (sx <= q["caja"][0] + q["caja"][2] / 2 <= sx + sw
+                                                                              and sy <= q["caja"][1] + q["caja"][3] / 2 <= sy + sh))]
+            y = max([b[1] + b[3] for b in dentro] + [sy + 2.0]) + 1.0
+            x = min([b[0] for b in dentro] + [sx + 1.2]) if dentro else sx + 1.2
+            ancho, alto = sw, sh
+            for c in hijas:
+                w, h = _caja_clase(c)
+                if not c.get("pos"): c["pos"] = (round(x, 2), round(y, 2)); y += h + 1.0
+                ancho = max(ancho, c["pos"][0] + w + 1.2 - sx); alto = max(alto, c["pos"][1] + h + 0.6 - sy)
+            cur, q = (sx, sy, ancho, alto), o
+            while True:                                      # el paquete (y los que lo contienen, si lo cambia) crece para contener lo nuevo
+                pares = []
+                if cur[3] > q["caja"][3] + 1e-6: pares.append(("elem_height", repr(round(cur[3], 2))))
+                if cur[2] > q["caja"][2] + 1e-6: pares.append(("elem_width", repr(round(cur[2], 2))))
+                if not pares: break
+                self.cambiar.append({"id": q["id"], "pares": pares, "nombre": nombre_de(q), "tag": q.get("tag"), "auto": True})
+                q = self.d.get("_por_id", {}).get(q.get("padre_id"))
+                if not q: break
+                cur = (q["caja"][0], q["caja"][1], max(q["caja"][2], cur[0] + cur[2] + 1.2 - q["caja"][0]), max(q["caja"][3], cur[1] + cur[3] + 0.6 - q["caja"][1]))
+
+    def _parentesco(self):
+        """Marca a cada clase y paquete nuevo con «dentro_de»: _padre_id (el paquete es nuevo y va en el mismo archivo) o _hijo_de
+        (el paquete ya estaba: el plugin la hace hija suya al añadirla)."""
+        nuevos = {_clave_e(e): e for e in self.elems if e["accion"] == "paquete"}
+        existentes = self._paquetes_existentes()
+        for x in [e for e in self.elems if e["accion"] == "paquete"] + list(self.plan["nuevas"]):
+            p = _dd(x)
+            if not p: continue
+            if p in nuevos and nuevos[p] is not x: x["_padre_id"] = f"E{nuevos[p]['tag'].replace('.', '_')}"
+            elif p in existentes: x["_hijo_de"] = self.ref({"o": existentes[p], "nueva": False})
+
     # ----- cerrar: colocar y escribir -----
     def cerrar(self, medidas=None, pistas=()):
         """Coloca lo nuevo (sin encimar lo que hay) y deja en el plan: extra (XML de objetos y líneas), fondo (contenedores,
         que van detrás), poner (propiedades del modo libre y cambios con la orden «poner»), y los puntos de las relaciones."""
+        self._parentesco()
         if not (self.elems or self.lineas or self.cambiar): return
         self._insertar_mensajes()
         Colocador(self, medidas, pistas).colocar()
@@ -792,15 +887,15 @@ class Colocador:
     # ----- capas con contenedores (actividades, estados, componentes, despliegue, paquetes, modo libre) -----
     def capas_con_contenedores(self, es, familia):
         hijos, raiz = {}, []
-        nombres = {_n(e["nombre"]): e for e in es}
-        clases_dentro = [c for c in self.ctx.plan["nuevas"] if c.get("dentro_de") and _n(c["dentro_de"]) in nombres]
+        nombres = {_clave_e(e): e for e in es}
+        clases_dentro = [c for c in self.ctx.plan["nuevas"] if c.get("dentro_de") and _dd(c) in nombres]
         for c in clases_dentro:
             c["accion"], c["familia"], c["es_clase"] = "_clase", familia, True
-            c["_tam"] = _caja_clase(c); nombres.setdefault(_n(c["nombre"]), c)
+            c["_tam"] = _caja_clase(c); nombres.setdefault(_clave_e(c), c)
         todos = es + clases_dentro
-        existentes = {_n(o.get("texto") or o.get("nombre")): o for o in self.ctx.d.get("objetos", []) if o["kind"] in ("paquete", "nodo", "compuesto", "sistema")}
+        existentes = {o.get("_clave") or _n(o.get("texto") or o.get("nombre")): o for o in self.ctx.d.get("objetos", []) if o["kind"] in ("paquete", "nodo", "compuesto", "sistema")}
         for e in todos:
-            p = _n(e.get("dentro_de"))
+            p = _dd(e)
             if p and p in nombres and nombres[p] is not e: hijos.setdefault(id(nombres[p]), []).append(e)
             elif p and p in existentes: e["_en_existente"] = existentes[p]
             else: raiz.append(e)
@@ -809,7 +904,7 @@ class Colocador:
             for r in self.ctx.plan["relaciones"]: pass
         def antepasado(e, nivel):
             while e is not None and e not in nivel:
-                p = _n(e.get("dentro_de")); e = nombres.get(p) if p else None
+                p = _dd(e); e = nombres.get(p) if p else None
             return e
         def resolver(nivel):
             """Posiciones relativas de los elementos de `nivel` (y de lo que tienen dentro)."""
@@ -1103,6 +1198,7 @@ def _objeto_base(e):
     if acc in SIN_TEXTO or acc in ("crear",) and not e.get("texto"): meta["nombre"] = e["nombre"]
     if acc in ("sistema", "calle", "compuesto"): meta.update(rol=acc, nombre=e["nombre"])
     if acc == "crear" and e.get("texto") and _n(e["nombre"]) != _n(e["texto"]): meta["nombre"] = e["nombre"]
+    if e.get("_hijo_de"): meta["hijo_de"] = e["_hijo_de"]
     do.poner_meta(o, meta)
     texto = e.get("texto") or ""
     if acc == "nodo" and e.get("estereotipo"): texto = f"«{e['estereotipo']}»\n{texto}"
@@ -1164,6 +1260,7 @@ def xml_elemento(e):
     x, y = e["xy"]
     m = e.get("_medida")
     do.trasladar(o, x - (m[0] if m else bb[0]), y - (m[1] if m else bb[1]))
+    if e.get("_padre_id"): ET.SubElement(o, do.Q + "childnode", {"parent": e["_padre_id"]})      # parentesco real: hijo de su paquete
     out = [do.a_texto(o, f"E{e['tag'].replace('.', '_')}")]
     e["_tags_extra"] = []
     w, h = e.get("_tam") or (bb[2], bb[3])
@@ -1267,12 +1364,23 @@ def validar_ejercicio(e, ej):
     """Valida "objetos", "conexiones" y "mensajes" del ejercicio (además de clases y relaciones)."""
     objs = []
     for i, o in enumerate(e.get("objetos") or [], 1):
-        if not isinstance(o, dict) or set(o) - {"tipo", "nombre"}: raise ValueError(f"ejercicio, objeto {i}: es {{\"tipo\": ..., \"nombre\": ...}}")
+        if not isinstance(o, dict) or set(o) - {"tipo", "nombre", "dentro_de"}: raise ValueError(f"ejercicio, objeto {i}: es {{\"tipo\": ..., \"nombre\": ...}}")
         t = _txt(o.get("tipo"), f"ejercicio, objeto {i}, tipo", 60)
         if t not in ELEMENTOS or t == "crear": t = do.tipo_dia(t, f"ejercicio, objeto {i}")
         n = _txt(o.get("nombre"), f"ejercicio, objeto {i}, nombre", 80, t in SIN_TEXTO)
         if not n and t not in SIN_TEXTO: raise ValueError(f"ejercicio, objeto {i}: falta «nombre»")
-        objs.append({"tipo": t, "nombre": n})
+        x = {"tipo": t, "nombre": n}
+        if t == "paquete":                       # su ruta completa («java › util»): dos capas pueden llamarse igual si su padre es distinto
+            padre = ()
+            if o.get("dentro_de"):
+                x["dentro_de"] = _txt(o["dentro_de"], f"ejercicio, objeto {i}, dentro_de")
+                try: padre = du.resolver_ruta(x["dentro_de"], [q["ruta"] for q in objs if q.get("ruta")])
+                except ValueError as err: raise ValueError(f"ejercicio, capa «{n}», dentro_de: {err}")
+                if padre is None: raise ValueError(f"ejercicio, capa «{n}»: no hay una capa «{x['dentro_de']}» antes de ella (declara primero la de fuera)")
+            x["ruta"] = tuple(padre) + (n,)
+            if any(du.clave_ruta(q["ruta"]) == du.clave_ruta(x["ruta"]) for q in objs if q.get("ruta")): raise ValueError(f"ejercicio: la capa «{du.mostrar_ruta(x['ruta'])}» está dos veces")
+        elif o.get("dentro_de"): x["dentro_de"] = _txt(o["dentro_de"], f"ejercicio, objeto {i}, dentro_de")
+        objs.append(x)
     cons = []
     for i, c in enumerate(e.get("conexiones") or [], 1):
         if not isinstance(c, dict) or set(c) - {"tipo", "de", "a", "guarda", "evento", "efecto", "texto", "mult"}: raise ValueError(f"ejercicio, conexión {i}: campos que no conozco")
@@ -1331,6 +1439,7 @@ def revisar(d, ej):
         t = e["tipo"]
         if t in FAMILIA_SIN_NOMBRE and not e["nombre"]:
             sin_nombre_esp.setdefault(t, []).append(e); continue
+        if t == "paquete": continue                 # las capas se revisan por su ruta en reglas_uml (dos pueden llamarse igual)
         total += 1
         kinds = {t} | ({"participante", "objeto"} if t in ("participante", "objeto") else set()) | ({"decision", "fusion"} if t in ("decision", "fusion") else set())
         o = buscar(e["nombre"], kinds)

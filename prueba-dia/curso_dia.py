@@ -17,6 +17,8 @@ Un módulo (formato completo en el README de prueba-dia):
        "conexiones"/"mensajes" (la solución escondida, como los ejercicios del tutor), "sinonimos", "inicial": [cambios],
        "solucion": [cambios], "errores": [{"dice", "patron": {...}, "prueba": [cambios], "consejo": false}]}}]}
 Los pasos SE SUMAN como en Excel: el paso 3 es el diagrama vacío más los cambios de los pasos 1, 2 y 3.
+En curso.json, además de «modulos»: «convenciones» ({"nombre_negrita": false, "parametros": "solo_tipo"|"nombre_tipo", "estricto": true}: cómo
+se dibuja lo del curso y qué exige Comprobar) y «material_tutor» (archivos de texto, junto al curso.json, que el tutor lee como conocimiento del curso).
 También vale el formato del prototipo («diagrama» con la lista de clases de ese paso, y «turno» con «clase»)."""
 import hashlib, json, re, shlex, shutil, time
 import xml.etree.ElementTree as ET
@@ -27,31 +29,63 @@ import dia_objetos as do
 import cambios_dia as cd
 import interfaz_dia as ui
 
-VERSION_PASOS = "5.3"            # súbela si cambia cómo se arman los pasos: así se vuelven a armar
+VERSION_PASOS = "5.4"            # súbela si cambia cómo se arman los pasos: así se vuelven a armar
 CAMPOS_PASO = {"titulo", "texto", "en_dia", "donde", "diagrama", "cambios", "senalar", "interfaz", "hazlo", "turno", "resumen"}
 CAMPOS_TURNO = {"titulo", "al_empezar", "al_terminar", "clase", "clases", "relaciones", "objetos", "conexiones", "mensajes",
                 "sinonimos", "inicial", "solucion", "errores", "archivo"}
 NS = du.NS["dia"]
+CAMPOS_CONV = {"nombre_negrita", "parametros", "estricto", "numeros", "codigos"}
+MAX_MATERIAL = 300_000                 # bytes por archivo de material_tutor
+
+
+def validar_conv(c, donde="curso.json"):
+    """Las convenciones del curso: {"nombre_negrita": bool, "parametros": "solo_tipo"|"nombre_tipo", "estricto": bool}. Sin ellas, {}."""
+    if c is None: return {}
+    if not isinstance(c, dict): raise ValueError(f"{donde}: «convenciones» es un objeto {{...}}")
+    sobra = set(c) - CAMPOS_CONV
+    if sobra: raise ValueError(f"{donde}, convenciones: campos que no conozco: {', '.join(sorted(sobra))} (son {', '.join(sorted(CAMPOS_CONV))})")
+    for k in ("nombre_negrita", "estricto"):
+        if k in c and not isinstance(c[k], bool): raise ValueError(f"{donde}, convenciones, {k}: es true o false")
+    if c.get("parametros") not in (None, "solo_tipo", "nombre_tipo"): raise ValueError(f"{donde}, convenciones, parametros: es \"solo_tipo\" o \"nombre_tipo\"")
+    for k in ("numeros", "codigos"):
+        if k in c and not (isinstance(c[k], dict) and all(isinstance(v, (int, str)) for v in c[k].values())):
+            raise ValueError(f"{donde}, convenciones, {k}: es un objeto {{\"clave\": valor}} (ver reglas_uml.py)")
+    return dict(c)
+
+
+def leer_material(lista, carpeta, donde="curso.json"):
+    """«material_tutor»: archivos de texto (rutas relativas al curso.json) → [(nombre, texto)]. Errores claros si no existen."""
+    if lista is None: return []
+    if not isinstance(lista, list) or not all(isinstance(x, str) for x in lista): raise ValueError(f"{donde}: «material_tutor» es una lista de archivos [\"material.md\"]")
+    out = []
+    for nombre in lista:
+        ruta = (Path(carpeta) / nombre).resolve()
+        if Path(carpeta).resolve() not in ruta.parents: raise ValueError(f"{donde}, material_tutor: «{nombre}» tiene que estar dentro de la carpeta del curso")
+        if not ruta.is_file(): raise ValueError(f"{donde}, material_tutor: no encuentro «{nombre}»")
+        if ruta.stat().st_size > MAX_MATERIAL: raise ValueError(f"{donde}, material_tutor: «{nombre}» es demasiado grande (máximo {MAX_MATERIAL // 1000} KB)")
+        try: out.append((nombre, ruta.read_text(encoding="utf-8")))
+        except UnicodeDecodeError: raise ValueError(f"{donde}, material_tutor: «{nombre}» no es un archivo de texto UTF-8")
+    return out
 
 
 # ---------- Validación (sin Dia): errores claros para quien escribe el curso ----------
-def _cambios(lista, donde):
+def _cambios(lista, donde, conv=None):
     if lista is None: return None
-    try: return cd.validar_propuesta({"diagrama": "leccion", "cambios": lista})
+    try: return cd.validar_propuesta({"diagrama": "leccion", "cambios": lista}, conv, curso=True)
     except ValueError as e: raise ValueError(f"{donde}: {e}")
 
 
-def validar_turno(t, donde):
+def validar_turno(t, donde, conv=None):
     if not isinstance(t, dict): raise ValueError(f"{donde}: «turno» es un objeto")
     sobra = set(t) - CAMPOS_TURNO
     if sobra: raise ValueError(f"{donde}, turno: campos que no conozco: {', '.join(sorted(sobra))}")
     out = dict(t)
     if "clase" not in t:                              # formato de los ejercicios del tutor: cualquier tipo de diagrama
         spec = {k: t[k] for k in ("titulo", "clases", "relaciones", "objetos", "conexiones", "mensajes", "sinonimos", "al_empezar", "al_terminar") if k in t}
-        try: out["_ej"] = cd._v_ejercicio(spec)
+        try: out["_ej"] = cd._v_ejercicio(spec, conv)
         except ValueError as e: raise ValueError(f"{donde}, turno: {e}")
-    out["_inicial"] = _cambios(t.get("inicial"), f"{donde}, turno, inicial")
-    out["_solucion"] = _cambios(t.get("solucion"), f"{donde}, turno, solucion")
+    out["_inicial"] = _cambios(t.get("inicial"), f"{donde}, turno, inicial", conv)
+    out["_solucion"] = _cambios(t.get("solucion"), f"{donde}, turno, solucion", conv)
     errores = []
     for i, e in enumerate(t.get("errores") or [], 1):
         if not isinstance(e, dict) or not isinstance(e.get("dice"), str) or not e["dice"].strip():
@@ -62,12 +96,12 @@ def validar_turno(t, donde):
         try: patron = cd._v_ejercicio(dict(e["patron"], titulo="error"))
         except ValueError as x: raise ValueError(f"{donde}, error típico {i}, patron: {x}")
         errores.append({"dice": e["dice"].strip(), "_patron": patron, "consejo": bool(e.get("consejo")),
-                        "_prueba": _cambios(e.get("prueba"), f"{donde}, error típico {i}, prueba")})
+                        "_prueba": _cambios(e.get("prueba"), f"{donde}, error típico {i}, prueba", conv)})
     out["_errores"] = errores
     return out
 
 
-def validar_modulo(d, nombre="módulo"):
+def validar_modulo(d, nombre="módulo", conv=None):
     """Revisa un módulo entero y devuelve sus pasos limpios (con _cambios, _interfaz, _hazlo, _turno). ValueError si algo falla."""
     if not isinstance(d, dict) or not isinstance(d.get("pasos"), list) or not d["pasos"]: raise ValueError(f"{nombre}: falta «pasos» (una lista)")
     if not d.get("titulo"): raise ValueError(f"{nombre}: falta «titulo»")
@@ -79,28 +113,28 @@ def validar_modulo(d, nombre="módulo"):
         if sobra: raise ValueError(f"{donde}: campos que no conozco: {', '.join(sorted(sobra))}")
         if p.get("cambios") and "diagrama" in p: raise ValueError(f"{donde}: usa «cambios» (se suman) o «diagrama» (el del prototipo), no los dos")
         q = dict(p)
-        q["_cambios"] = _cambios(p.get("cambios"), donde) if p.get("cambios") else None
+        q["_cambios"] = _cambios(p.get("cambios"), donde, conv) if p.get("cambios") else None
         q["_interfaz"] = ui.validar_interfaz(p.get("interfaz"), donde)
         q["_hazlo"] = ui.validar_hazlo(p.get("hazlo"), donde)
         if p.get("senalar") is not None and not isinstance(p["senalar"], (str, list)): raise ValueError(f"{donde}: «senalar» es un nombre o una lista")
-        q["_turno"] = validar_turno(p["turno"], donde) if p.get("turno") else None
+        q["_turno"] = validar_turno(p["turno"], donde, conv) if p.get("turno") else None
         pasos.append(q)
     return pasos
 
 
 # ---------- Curso y módulos ----------
 class Modulo:
-    def __init__(self, ruta, carpeta, ejemplo=False):
+    def __init__(self, ruta, carpeta, ejemplo=False, conv=None):
         self.ruta = Path(ruta)
         self.d = json.loads(self.ruta.read_text(encoding="utf-8"))
         self.id = re.sub(r"[^\w]+", "_", str(self.d.get("id") or re.sub(r"^m\d+_", "", self.ruta.stem))).strip("_").lower() or "modulo"
         self.titulo, self.codigo = self.d["titulo"] if self.d.get("titulo") else self.ruta.stem, self.d.get("titulo_codigo", "")
-        self.pasos = validar_modulo(self.d, self.ruta.name)
+        self.pasos = validar_modulo(self.d, self.ruta.name, conv)
         if ejemplo:                                  # el prototipo de siempre: mi_diagrama.dia y pasos/ en prueba-dia
             self.mio, self.carpeta_pasos = carpeta / "mi_diagrama.dia", carpeta / "pasos"
         else:
             self.mio, self.carpeta_pasos = carpeta / "mis_diagramas" / f"mi_{self.id}.dia", carpeta / "pasos" / self.id
-        self.huella = hashlib.sha1((json.dumps(self.d, sort_keys=True, ensure_ascii=False) + VERSION_PASOS).encode("utf-8")).hexdigest()[:16]
+        self.huella = hashlib.sha1((json.dumps([self.d, conv or {}], sort_keys=True, ensure_ascii=False) + VERSION_PASOS).encode("utf-8")).hexdigest()[:16]
 
     def archivo_paso(self, n): return self.carpeta_pasos / f"paso_{n + 1}.dia"
     def indice(self): return leer_json(self.carpeta_pasos / "indice.json") or {}
@@ -114,6 +148,7 @@ class Curso:
         ruta = Path(ruta).resolve()
         d = json.loads(ruta.read_text(encoding="utf-8"))
         self.carpeta, self.ruta = ruta.parent, ruta
+        self.conv, self.material = {}, []              # convenciones del curso y su material_tutor [(archivo, texto)]
         if "pasos" in d:                             # lección suelta
             self.d, self.titulo = {"modelo_tutor": d.get("modelo_tutor", "sonnet")}, d.get("curso", d.get("titulo", ""))
             self.modulos = [Modulo(ruta, self.carpeta, ejemplo=True)]
@@ -121,7 +156,9 @@ class Curso:
         else:
             if not isinstance(d.get("modulos"), list) or not d["modulos"]: raise ValueError(f"{ruta.name}: falta «modulos» (la lista de lecciones)")
             self.d, self.titulo = d, d.get("titulo", "Curso de Dia")
-            self.modulos = [Modulo(self.carpeta / m, self.carpeta) for m in d["modulos"]]
+            self.conv = validar_conv(d.get("convenciones"), ruta.name)
+            self.material = leer_material(d.get("material_tutor"), self.carpeta, ruta.name)
+            self.modulos = [Modulo(self.carpeta / m, self.carpeta, conv=self.conv) for m in d["modulos"]]
             ids = [m.id for m in self.modulos]
             if len(set(ids)) != len(ids): raise ValueError(f"{ruta.name}: dos módulos con el mismo «id» ({ids})")
             self.pasos_dir = self.carpeta / "pasos"
@@ -150,11 +187,11 @@ def leer_json(ruta):
 
 
 # ---------- Revisión del «Tu turno» (sin IA), con errores típicos ----------
-def revisar_turno(d, turno):
+def revisar_turno(d, turno, conv=None):
     """La revisión de siempre (una clase con «clase»; si no, la de los ejercicios del tutor: objetos, conexiones, mensajes en
     orden, guardas...) y, encima, los errores típicos del JSON: si el diagrama cumple el «patron» de uno, su «dice» pasa a ser el
     mensaje (con "consejo": true, solo cuando lo demás ya está bien)."""
-    res = du.revisar(d, turno) if "clase" in turno else du.revisar_varios(d, turno["_ej"])
+    res = du.revisar(d, turno) if "clase" in turno else du.revisar_varios(d, turno["_ej"], conv)
     if res["estado"] == "vacio": return res
     todo_bien = res["ok"] == res["total"]
     for i, e in enumerate(turno.get("_errores") or []):
@@ -329,7 +366,7 @@ def aplicar_offline(origen, plan, destino, con_conexiones=True):
     for oid, (vieja, nueva) in plan["modificar"].items():
         o = next((x for x in objs() if x.get("id") == oid), None)
         if o is None: continue
-        x = ET.fromstring(f'<r xmlns:dia="http://www.lysator.liu.se/~alla/dia/">{du._clase_xml(dict(nueva, pos=vieja["caja"][:2], tag=vieja.get("tag")), 0, oid)}</r>')[0]
+        x = ET.fromstring(f'<r xmlns:dia="http://www.lysator.liu.se/~alla/dia/">{du._clase_xml(dict(nueva, pos=vieja["caja"][:2], tag=vieja.get("tag"), _padre_id=vieja.get("padre_id")), 0, oid)}</r>')[0]
         i = list(capa).index(o); capa.remove(o); capa.insert(i, x)
     # 2) poner (cambios de propiedades de lo que ya estaba), por id
     for orden in plan.get("poner_antes", []): _poner_offline(capa, orden)
@@ -345,7 +382,11 @@ def aplicar_offline(origen, plan, destino, con_conexiones=True):
             du.escribir_para_anadir(f, plan["nuevas"], plan["relaciones"], plan["notas"], extra=plan.get("extra", []), fondo=plan.get("fondo", []))
             nuevos = [o for c in ET.fromstring(f.read_bytes()).findall("dia:layer", du.NS) for o in c if o.tag == _q("object")]
         n0 = len(objs())
-        for k, o in enumerate(nuevos): o.set("id", f"N{k}"); capa.append(o)
+        ids_nuevos = {}
+        for k, o in enumerate(nuevos): ids_nuevos[o.get("id")] = f"N{k}"; o.set("id", f"N{k}"); capa.append(o)
+        for o in nuevos:                               # parentesco con paquetes del mismo archivo: sus ids nuevos
+            for h in o.findall("dia:childnode", du.NS):
+                if h.get("parent") in ids_nuevos: h.set("parent", ids_nuevos[h.get("parent")])
         todos = objs()
         def destino_de(ref):
             ref = re.sub(r"@-?[\d.]+,-?[\d.]+$", "", ref or ""); punto = 0
@@ -358,6 +399,11 @@ def aplicar_offline(origen, plan, destino, con_conexiones=True):
             elif ref.startswith("nombre:"): o = next((x for x in todos if _nombre_obj(x) == ref[7:]), None)
             else: o = None
             return (o.get("id"), punto) if o is not None else (None, 0)
+        for o in nuevos:                               # hijas de un paquete que ya estaba (lo que hace el plugin con la meta hijo_de)
+            ref = _meta(o, "hijo_de")
+            if ref and o.find("dia:childnode", du.NS) is None:
+                oid, _ = destino_de(ref)
+                if oid: ET.SubElement(o, _q("childnode"), {"parent": oid})
         for o in nuevos:
             ini, fin = _meta(o, "conecta_inicio"), _meta(o, "conecta_fin")
             con = o.find("dia:connections", du.NS)
@@ -383,6 +429,8 @@ def _renumerar(raiz):
             mapa[o.get("id")] = f"O{n}"; o.set("id", f"O{n}"); n += 1
     for c in raiz.iter(_q("connection")):
         if c.get("to") in mapa: c.set("to", mapa[c.get("to")])
+    for c in raiz.iter(_q("childnode")):
+        if c.get("parent") in mapa: c.set("parent", mapa[c.get("parent")])
 
 
 _CLASES_XML = {"string": "string", "multistring": "string", "text": "text", "real": "real", "length": "real", "fontsize": "real",

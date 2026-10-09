@@ -23,6 +23,36 @@ def _num(nodo, nombre, etiqueta="enum", defecto=0):
     return float(s.get("val")) if s is not None else defecto
 
 
+# ---------- Rutas de paquetes: «java/util/function» (dos capas pueden llamarse igual si su padre es distinto) ----------
+def partir_ruta(ref):
+    """«java/util», «java › util» o «/util» → (["java", "util"], absoluta?). Una ruta que empieza por «/» es la completa desde la raíz."""
+    ref = str(ref or "").strip()
+    return [x.strip() for x in re.split(r"[/›>]", ref) if x.strip()], ref.startswith(("/", "›"))
+
+
+def mostrar_ruta(ruta): return " › ".join(ruta)
+
+
+def clave_ruta(ruta): return "/".join(_norm(x) for x in ruta)
+
+
+def resolver_ruta(ref, rutas):
+    """La ruta (tupla de nombres) del paquete que nombra `ref` entre `rutas` (tuplas de las capas que hay). `ref` es un nombre a secas
+    («util»: vale solo si hay una capa con ese nombre) o el final de una ruta («java/util»; con «/» delante, la ruta completa).
+    None si no hay ninguna. ValueError, pidiendo la ruta, si la referencia es ambigua."""
+    partes, absoluta = partir_ruta(ref)
+    if not partes: return None
+    n = [_norm(x) for x in partes]
+    cands = []
+    for r in rutas:
+        rn = [_norm(x) for x in r]
+        if (len(rn) == len(n) if absoluta else len(rn) >= len(n)) and rn[len(rn) - len(n):] == n and tuple(r) not in cands: cands.append(tuple(r))
+    if len(cands) > 1:
+        ej = " o ".join("«" + ("/" + c[0] if len(c) == 1 else "/".join(c)) + "»" for c in cands[:4])
+        raise ValueError(f"«{ref}» puede ser {' o '.join('«' + mostrar_ruta(c) + '»' for c in cands[:4])}: escribe la ruta ({ej}; con «/» delante es desde la raíz)")
+    return cands[0] if cands else None
+
+
 CAPA_TUTOR = "Tutor"          # la capa de las marcas del tutor (plugin-dia): no es parte del diagrama
 
 
@@ -38,6 +68,22 @@ def _meta(nodo, clave="tutor"):
     s = nodo.find(f"dia:attribute[@name='meta']/dia:composite/dia:attribute[@name='{clave}']/dia:string", NS)
     t = (s.text or "") if s is not None else ""
     return t[1:-1] if t.startswith("#") and t.endswith("#") else t
+
+
+def _estilo_fuente(nodo, nombre):
+    """El estilo (número de Dia) de una fuente del objeto, p. ej. classname_font; 0 si no está."""
+    f = nodo.find(f"dia:attribute[@name='{nombre}']/dia:font", NS)
+    try: return int(f.get("style")) if f is not None else 0
+    except (TypeError, ValueError): return 0
+
+
+def en_negrita(estilo): return (estilo >> 4) & 7 >= 4          # peso de Dia: 4 = seminegrita, 5 = negrita...
+
+
+def _padre_id(o):
+    """El id del objeto padre en Dia (<dia:childnode parent="O6"/>: un paquete que contiene a este objeto), o None."""
+    h = o.find("dia:childnode", NS)
+    return h.get("parent") if h is not None else None
 
 
 def _cajas_xml(o):
@@ -76,16 +122,19 @@ def _leer_relacion(o):
         tipo_ag, sentido = int(_num(o, "assoc_type")), int(_num(o, "direction"))
         ma, mb = _cadena(o, "multipicity_a"), _cadena(o, "multipicity_b")
         ra, rb = _cadena(o, "role_a"), _cadena(o, "role_b")
+        fa, fb = _bool(o, "show_arrow_a", False), _bool(o, "show_arrow_b", False)
+        r["ver_lectura"] = _bool(o, "show_direction", False) and sentido in (1, 2)      # ¿se dibuja el triángulo ▶/◀ junto al nombre?
+        r["glifo"] = sentido if r["ver_lectura"] else 0                                  # 1 = ▶ (apunta a la derecha), 2 = ◀
         if tipo_ag in (1, 2) and sentido in (1, 2):
             r["tipo"] = "agregacion" if tipo_ag == 1 else "composicion"
             if sentido == 1:   # rombo en el inicio (A): A es el todo
-                r.update(a_id=ini[0], de_id=fin[0], mult=[mb, ma], roles=[rb, ra], punto_a=ini[1], punto_de=fin[1])
+                r.update(a_id=ini[0], de_id=fin[0], mult=[mb, ma], roles=[rb, ra], punto_a=ini[1], punto_de=fin[1], flecha=(fb, fa))
             else:
-                r.update(a_id=fin[0], de_id=ini[0], mult=[ma, mb], roles=[ra, rb], punto_a=fin[1], punto_de=ini[1])
+                r.update(a_id=fin[0], de_id=ini[0], mult=[ma, mb], roles=[ra, rb], punto_a=fin[1], punto_de=ini[1], flecha=(fa, fb))
         else:
-            fa, fb = _bool(o, "show_arrow_a", False), _bool(o, "show_arrow_b", False)
-            r.update(tipo="asociacion", de_id=ini[0], a_id=fin[0], mult=[ma, mb], roles=[ra, rb], punto_de=ini[1], punto_a=fin[1],
-                     direccion="ambas" if fa and fb else "a" if fb else "de" if fa else "")
+            r.update(tipo="asociacion", de_id=ini[0], a_id=fin[0], mult=[ma, mb], roles=[ra, rb], punto_de=ini[1], punto_a=fin[1], flecha=(fa, fb))
+        fde, fa_ = r.pop("flecha")      # flecha de navegabilidad junto a «de» y junto a «a»
+        r["direccion"] = "ambas" if fde and fa_ else "a" if fa_ else "de" if fde else ""
     else:
         r["tipo"] = {"UML - Generalization": "herencia", "UML - Realizes": "realizacion", "UML - Dependency": "dependencia"}[t]
         r["estereotipo"] = _cadena(o, "stereotype")
@@ -125,17 +174,53 @@ def leer(ruta):
             metodos.append({"nombre": _cadena(m, "name"), "tipo": _cadena(m, "type"),
                             "vis": VIS.get(int(_num(m, "visibility")), "+"), "params": params,
                             "abstracto": _bool(m, "abstract", False), "estatico": _bool(m, "class_scope", False)})
-        clases.append({"id": o.get("id"), "nombre": _cadena(o, "name"), "estereotipo": _cadena(o, "stereotype"), "tag": _meta(o),
-                       "abstracta": _bool(o, "abstract", False),
+        abstracta = _bool(o, "abstract", False)
+        ver = tuple(_bool(o, n, d) for n, d in (("visible_attributes", True), ("visible_operations", True),
+                                                ("suppress_attributes", False), ("suppress_operations", False)))
+        estereo = _cadena(o, "stereotype")
+        clases.append({"id": o.get("id"), "nombre": _cadena(o, "name"), "estereotipo": estereo, "tag": _meta(o),
+                       "abstracta": abstracta,
                        "atributos": atributos, "metodos": metodos, "caja": _cajas_xml(o),
                        "fila_alto": _num(o, "normal_font_height", "real", 0.8),
-                       "ver": tuple(_bool(o, n, d) for n, d in (("visible_attributes", True), ("visible_operations", True),
-                                                                ("suppress_attributes", False), ("suppress_operations", False)))})
+                       # la negrita del nombre (la fuente que Dia usa: la de abstracta si lo es) y el padre (un paquete) en Dia
+                       "negrita": en_negrita(_estilo_fuente(o, "abstract_classname_font" if abstracta else "classname_font")),
+                       "enumerada": [a["nombre"] for a in atributos] if (not ver[1] and not estereo and atributos and not metodos
+                                                                       and all(not a["tipo"] and a["vis"] == "~" for a in atributos)) else None,
+                       "padre_id": _padre_id(o), "ver": ver})
     por_id = {c["id"]: c["nombre"] for c in clases}
     for r in relaciones: r["de"], r["a"] = por_id.get(r.get("de_id")), por_id.get(r.get("a_id"))
     d = {"clases": clases, "relaciones": relaciones, "notas": notas, "otros": otros}
     import dia_objetos
-    return dia_objetos.completar(d, resto)       # objetos y líneas de cualquier otro tipo (y nombres en las relaciones)
+    d = dia_objetos.completar(d, resto)          # objetos y líneas de cualquier otro tipo (y nombres en las relaciones)
+    # padres: el nombre del paquete (o de lo que contiene) de cada clase y de cada objeto, y a quién apunta el triángulo de lectura
+    nombres = {c["id"]: c["nombre"] for c in clases}
+    nombres.update({x["id"]: x.get("texto") or x.get("nombre") for x in d.get("objetos", [])})
+    for o in resto:
+        x = next((x for x in d.get("objetos", []) if x["id"] == o.get("id")), None)
+        if x is not None: x["padre_id"] = _padre_id(o)
+    for x in clases + d.get("objetos", []):
+        x["padre"] = nombres.get(x.get("padre_id")) if x.get("padre_id") else None
+    por_obj = {x["id"]: x for x in d.get("objetos", [])}
+    def ruta_de(x, k=0):                            # nombres de sus paquetes, de fuera hacia dentro (con él, si es un paquete)
+        padre = por_obj.get(x.get("padre_id")) if k < 20 else None
+        return (ruta_de(padre, k + 1) if padre else ()) + ((x.get("texto") or x.get("nombre") or "",) if x.get("kind") == "paquete" else ())
+    for x in d.get("objetos", []):
+        if x.get("kind") == "paquete": x["ruta"] = ruta_de(x)
+    for c in clases:
+        pa = por_obj.get(c.get("padre_id"))
+        c["ruta_padre"] = ruta_de(pa) if pa is not None and pa.get("kind") == "paquete" else None
+    cajas = {c["id"]: c["caja"] for c in clases}
+    cajas.update({x["id"]: x["caja"] for x in d.get("objetos", [])})
+    for r in relaciones:                          # ▶ apunta al extremo que queda más a la derecha, ◀ al de más a la izquierda
+        r["lectura_hacia"] = None
+        if not r.get("glifo"): continue
+        ca, cd_ = cajas.get(r.get("a_id")), cajas.get(r.get("de_id"))
+        if not (ca and cd_): continue
+        xa, xd = ca[0] + ca[2] / 2, cd_[0] + cd_[2] / 2
+        if abs(xa - xd) < 0.05: continue
+        derecha_es_a = xa > xd
+        r["lectura_hacia"] = r.get("a") if (derecha_es_a == (r["glifo"] == 1)) else r.get("de")
+    return d
 
 
 def es_interfaz(c): return _norm(c.get("estereotipo", "")).strip("«»<>") in ("interface", "interfaz")
@@ -194,14 +279,16 @@ def frase_relacion(r):
     m = r.get("mult") or ["", ""]
     mult = f" (multiplicidad {m[0] or '?'} en {de}, {m[1] or '?'} en {a})" if any(m) else ""
     nombre = f" «{r['nombre']}»" if r.get("nombre") else ""
+    hacia = r.get("lectura_hacia") or ({"a": a, "de": de}.get(r.get("lectura")) if r.get("lectura") in ("a", "de") else None)
+    nombre += f" (triángulo de lectura hacia {hacia})" if nombre and hacia else ""
     t = r["tipo"]
     if t == "herencia": return f"{de} hereda de {a}"
     if t == "realizacion": return f"{de} implementa la interfaz {a}"
-    if t == "dependencia": return f"{de} depende de {a} (la usa)" + (f" «{r['estereotipo']}»" if r.get("estereotipo") else "")
+    if t == "dependencia": return f"{de} depende de {a} (la usa)" + (f" «{r['estereotipo']}»" if r.get("estereotipo") else "") + (f", verbo «{r['nombre']}»" if r.get("nombre") else "")
     if t == "include": return f"«{de}» incluye a «{a}» («include»)"
     if t == "extend": return f"«{de}» extiende a «{a}» («extend»)"
-    if t == "agregacion": return f"agregación: {a} (todo, rombo vacío) tiene {de} (parte){mult}"
-    if t == "composicion": return f"composición: {a} (todo, rombo lleno) se compone de {de} (parte){mult}"
+    if t == "agregacion": return f"agregación{nombre}: {a} (todo, rombo vacío) tiene {de} (parte){mult}"
+    if t == "composicion": return f"composición{nombre}: {a} (todo, rombo lleno) se compone de {de} (parte){mult}"
     flecha = {"a": f", navegable hacia {a}", "de": f", navegable hacia {de}", "ambas": ", navegable en los dos sentidos"}.get(r.get("direccion"), "")
     return f"asociación{nombre} entre {de} y {a}{mult}{flecha}"
 
@@ -214,6 +301,10 @@ def texto(d):
     for c in d["clases"]:
         extra = (" (abstracta)" if c["abstracta"] else "") + (f" «{c['estereotipo']}»" if c.get("estereotipo") else "") \
             + (" [la creaste tú, el tutor]" if c.get("tag") else "")
+        extra += " (nombre en negrita)" if c.get("negrita") else " (nombre sin negrita)" if "negrita" in c else ""
+        extra += f" (dentro de «{c['padre']}»)" if c.get("padre") else ""
+        if c.get("enumerada"):
+            lineas.append(f"Enumerada «{c['nombre']}»{extra}: " + ", ".join(c["enumerada"])); continue
         lineas.append(f"Clase «{c['nombre']}»{extra}")
         lineas += [f"  atributo: {linea_atributo(a)}" for a in c["atributos"]] or ["  (sin atributos)"]
         lineas += [f"  método: {linea_metodo(m)}" for m in c["metodos"]] or ["  (sin métodos)"]
@@ -228,8 +319,14 @@ def texto(d):
 def linea_atributo(a): return f"{a.get('vis', '+')}{a['nombre']}" + (f": {a['tipo']}" if a.get("tipo") else "")
 
 
+def linea_param(p):
+    """Un parámetro como se escribe: «sku: String», o solo «String» si no tiene nombre (parámetros solo con el tipo)."""
+    if not p.get("nombre"): return p.get("tipo", "")
+    return p["nombre"] + (f": {p['tipo']}" if p.get("tipo") else "")
+
+
 def linea_metodo(m):
-    ps = ", ".join(p["nombre"] + (f": {p['tipo']}" if p.get("tipo") else "") for p in m.get("params", []))
+    ps = ", ".join(linea_param(p) for p in m.get("params", []))
     return f"{m.get('vis', '+')}{m['nombre']}({ps})" + (f": {m['tipo']}" if m.get("tipo") else "")
 
 
@@ -261,13 +358,26 @@ def miembro(s):
     return d
 
 
+TIPO_PARAM = re.compile(r"^\s*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ_][\wÁÉÍÓÚÜÑáéíóúüñ.]*(\s*<[^<>]*>)?(\[[*\d.]*\])*\s*$")
+
+
 def miembro_param(p):
+    """Un parámetro: «nombre: Tipo» o, sin «:», solo el tipo («String»: parámetros solo con el tipo; Dia lo dibuja «(String)»)."""
     if isinstance(p, dict):
         if not isinstance(p.get("nombre"), str): raise ValueError(f"parámetro no válido: {p!r}")
         return {"nombre": p["nombre"].strip(), "tipo": str(p.get("tipo", "")).strip()}
+    if ":" not in str(p):
+        if not TIPO_PARAM.match(str(p)): raise ValueError(f"parámetro no válido: «{p}»")
+        return {"nombre": "", "tipo": str(p).strip()}
     nombre, _, tipo = str(p).partition(":")
     if not re.match(r"^\s*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ_][\wÁÉÍÓÚÜÑáéíóúüñ]*\s*$", nombre): raise ValueError(f"parámetro no válido: «{p}»")
     return {"nombre": nombre.strip(), "tipo": tipo.strip()}
+
+
+def sin_nombres_de_parametros(m):
+    """Un método (dict de miembro()) con los parámetros solo con el tipo (convención K1)."""
+    if m.get("es") != "metodo" and "params" not in m: return m
+    return dict(m, params=[{"nombre": "", "tipo": p.get("tipo") or p.get("nombre", "")} for p in m.get("params", [])])
 
 
 # ---------- Escribir ----------
@@ -328,9 +438,32 @@ def _meta_xml(meta):
             + '</dia:composite></dia:attribute>')
 
 
+def valores_enumerada(c):
+    """Los valores de una enumerada como atributos de Dia: sin tipo y con visibilidad «implementación» (Dia no dibuja ningún signo)."""
+    return [{"nombre": v, "tipo": "", "vis": "~", "estatico": False} for v in c["enumerada"]]
+
+
+def _hijo_xml(padre_id):
+    """Parentesco de Dia: el objeto es hijo de otro (un paquete) y se mueve con él."""
+    return f'<dia:childnode parent="{padre_id}"/>' if padre_id else ""
+
+
 def _clase_xml(c, i, oid=None):
     """Una clase UML. c: {"nombre", "pos": (x, y), "atributos", "metodos", "abstracta", "estereotipo", "tag"}.
-    Atributos {"nombre", "tipo", "vis", "estatico"}; métodos {"nombre", "tipo", "vis", "params", "abstracto", "estatico"}."""
+    Atributos {"nombre", "tipo", "vis", "estatico"}; métodos {"nombre", "tipo", "vis", "params", "abstracto", "estatico"}.
+    Opcionales: "negrita" (False = nombre sin negrita, convención 18; por defecto True), "enumerada" (lista de valores:
+    sin métodos visibles, convención 20), "ver" (visible_attributes, visible_operations, suppress_attributes, suppress_operations),
+    "_padre_id" (id de su paquete en este mismo archivo: parentesco real) y "_hijo_de" (REF de un paquete que ya está en el
+    diagrama: el plugin la hace hija suya al añadirla)."""
+    if c.get("enumerada") is not None:
+        c = dict(c, atributos=valores_enumerada(c), metodos=[], ver=(True, False, False, False), estereotipo="")
+    ver = c.get("ver") or (True, True, False, False)
+    negrita = c.get("negrita", True)
+    fuente_nombre = _f("classname_font", "sans", 80, "Helvetica-Bold") if negrita else _f("classname_font", "sans", 0, "Helvetica")
+    fuente_abstracta = (_f("abstract_classname_font", "sans", 88, "Helvetica-BoldOblique") if negrita
+                        else _f("abstract_classname_font", "sans", 8, "Helvetica-Oblique"))
+    fuente_miembro_abstracto = (_f("abstract_font", "monospace", 88, "Courier-BoldOblique") if negrita
+                                else _f("abstract_font", "monospace", 8, "Courier-Oblique"))
     x, y = c.get("pos", (2 + 12 * i, 2))
     ancho, alto = medidas(c)
     ats = "".join(f'<dia:composite type="umlattribute">{_s("name", a["nombre"])}{_s("type", a.get("tipo", ""))}{_s("value", "")}'
@@ -347,25 +480,25 @@ def _clase_xml(c, i, oid=None):
     return (f'<dia:object type="UML - Class" version="0" id="{oid or f"O{i}"}">'
             f'<dia:attribute name="obj_pos"><dia:point val="{x},{y}"/></dia:attribute>'
             f'<dia:attribute name="obj_bb"><dia:rectangle val="{x - 0.05},{y - 0.05};{x + ancho + 0.05},{y + alto + 0.05}"/></dia:attribute>'
-            f'{_meta_xml({"tutor": c.get("tag")})}'
+            f'{_meta_xml({"tutor": c.get("tag"), "hijo_de": c.get("_hijo_de")})}'
             f'<dia:attribute name="elem_corner"><dia:point val="{x},{y}"/></dia:attribute>'
             f'{_r("elem_width", ancho)}{_r("elem_height", alto)}'
             f'{_s("name", c["nombre"])}{_s("stereotype", c.get("estereotipo", ""))}{_s("comment", "")}{_b("abstract", c.get("abstracta", False))}'
-            f'{_b("suppress_attributes", False)}{_b("suppress_operations", False)}{_b("visible_attributes", True)}'
-            f'{_b("visible_operations", True)}{_b("visible_comments", False)}{_b("wrap_operations", False)}'
+            f'{_b("suppress_attributes", ver[2])}{_b("suppress_operations", ver[3])}{_b("visible_attributes", ver[0])}'
+            f'{_b("visible_operations", ver[1])}{_b("visible_comments", False)}{_b("wrap_operations", False)}'
             f'<dia:attribute name="wrap_after_char"><dia:int val="40"/></dia:attribute>'
             f'<dia:attribute name="comment_line_length"><dia:int val="40"/></dia:attribute>{_b("comment_tagging", False)}'
             f'{_r("line_width", 0.1)}<dia:attribute name="line_color"><dia:color val="#000000"/></dia:attribute>'
             f'<dia:attribute name="fill_color"><dia:color val="#ffffff"/></dia:attribute>'
             f'<dia:attribute name="text_color"><dia:color val="#000000"/></dia:attribute>'
-            f'{_f("normal_font", "monospace", 0, "Courier")}{_f("abstract_font", "monospace", 88, "Courier-BoldOblique")}'
-            f'{_f("polymorphic_font", "monospace", 8, "Courier-Oblique")}{_f("classname_font", "sans", 80, "Helvetica-Bold")}'
-            f'{_f("abstract_classname_font", "sans", 88, "Helvetica-BoldOblique")}{_f("comment_font", "sans", 8, "Helvetica-Oblique")}'
+            f'{_f("normal_font", "monospace", 0, "Courier")}{fuente_miembro_abstracto}'
+            f'{_f("polymorphic_font", "monospace", 8, "Courier-Oblique")}{fuente_nombre}'
+            f'{fuente_abstracta}{_f("comment_font", "sans", 8, "Helvetica-Oblique")}'
             f'{_r("normal_font_height", 0.8)}{_r("polymorphic_font_height", 0.8)}{_r("abstract_font_height", 0.8)}'
             f'{_r("classname_font_height", 1)}{_r("abstract_classname_font_height", 1)}{_r("comment_font_height", 1)}'
             f'<dia:attribute name="attributes">{ats}</dia:attribute><dia:attribute name="operations">{ops}</dia:attribute>'
             f'{_b("template", False)}<dia:attribute name="templates"/>'
-            f'<dia:connections/></dia:object>\n')
+            f'<dia:connections/>{_hijo_xml(c.get("_padre_id"))}</dia:object>\n')
 
 
 def punto_conexion(caja, otra):
@@ -379,6 +512,23 @@ def punto_conexion(caja, otra):
     if sep_v and (not sep_h or abs(dy) * 1.3 >= abs(dx)):
         return (6, (x + w / 2, y + h)) if dy > 0 else (1, (x + w / 2, y))
     return (4, (x + w, y + 0.7)) if dx > 0 else (3, (x, y + 0.7))
+
+
+def orientacion(r):
+    """(inicio_es_a, sentido) de una asociación, agregación o composición. `sentido` es la propiedad «direction» de Dia:
+    1 dibuja el triángulo de lectura ▶ y 2 lo dibuja ◀; en agregación y composición decide también dónde va el rombo
+    (1 → en el extremo A, 2 → en el B). El triángulo es siempre horizontal: para que apunte de verdad hacia la clase de
+    r["lectura"] ("a" o "de"), se mira dónde queda cada clase (r["_cx"] = (centro x de «de», centro x de «a»)) y, en la
+    agregación y la composición, se elige qué extremo es A para que rombo y triángulo cuadren."""
+    t = TIPOS_REL[r["tipo"]]
+    inicio_es_a = t["inicio_es_a"]
+    sentido = 1 if inicio_es_a else 0
+    if t["dia"] == "UML - Association" and r.get("lectura") in ("a", "de"):
+        cde, ca = r.get("_cx") or (0.0, 0.0)
+        hacia, otro = (ca, cde) if r["lectura"] == "a" else (cde, ca)
+        sentido = 1 if hacia >= otro else 2
+        if t.get("assoc_type"): inicio_es_a = sentido == 1
+    return inicio_es_a, sentido
 
 
 def _relacion_xml(r, oid, p0, p1, meta=None, conexiones=""):
@@ -404,14 +554,17 @@ def _relacion_xml(r, oid, p0, p1, meta=None, conexiones=""):
     nombre = r.get("nombre", "") or ""
     if t["dia"] == "UML - Association":
         mult, roles = list(r.get("mult") or ["", ""]), list(r.get("roles") or ["", ""])
-        if t["inicio_es_a"]:          # agregación / composición: A (inicio, rombo) es «a», el todo
+        inicio_es_a, sentido = orientacion(r)
+        if inicio_es_a:               # el extremo A (inicio) es «a» (el todo, en agregación y composición)
             ma, mb, ra, rb = mult[1], mult[0], roles[1], roles[0]
-            props = _e("direction", 1) + _e("assoc_type", t["assoc_type"]); fa = fb = False
         else:
             ma, mb, ra, rb = mult[0], mult[1], roles[0], roles[1]
-            d = r.get("direccion") or ""
-            props = _e("direction", 0) + _e("assoc_type", 0); fa, fb = d in ("de", "ambas"), d in ("a", "ambas")
-        cuerpo = (_s("name", nombre) + props + _b("show_direction", False)
+        d = r.get("direccion") or ""
+        flecha_de, flecha_a = d in ("de", "ambas"), d in ("a", "ambas")
+        fa, fb = (flecha_a, flecha_de) if inicio_es_a else (flecha_de, flecha_a)
+        props = _e("direction", sentido) + _e("assoc_type", t.get("assoc_type", 0))
+        ver_lectura = r.get("lectura") in ("a", "de") and bool(nombre)           # el triángulo ▶/◀ junto al verbo (convención 25)
+        cuerpo = (_s("name", nombre) + props + _b("show_direction", ver_lectura)
                   + _s("role_a", ra) + _s("multipicity_a", ma) + _e("visibility_a", 3) + _b("show_arrow_a", fa)
                   + _s("role_b", rb) + _s("multipicity_b", mb) + _e("visibility_b", 3) + _b("show_arrow_b", fb) + geo)
         version = 2
@@ -458,8 +611,8 @@ def escribir(ruta, clases, relaciones=(), notas=()):
     cajas = {c["nombre"]: caja_estimada(dict(c, pos=c.get("pos", (2 + 12 * i, 2)))) for i, c in enumerate(clases)}
     partes = [_clase_xml(c, i) for i, c in enumerate(clases)]
     for k, r in enumerate(relaciones):
-        t = TIPOS_REL[r["tipo"]]
-        ini, fin = (r["a"], r["de"]) if t["inicio_es_a"] else (r["de"], r["a"])
+        r = dict(r, _cx=((cajas[r["de"]][0] + cajas[r["de"]][2] / 2), (cajas[r["a"]][0] + cajas[r["a"]][2] / 2)))
+        ini, fin = (r["a"], r["de"]) if orientacion(r)[0] else (r["de"], r["a"])
         (ci, p0), (cf, p1) = punto_conexion(cajas[ini], cajas[fin]), punto_conexion(cajas[fin], cajas[ini])
         con = (f'<dia:connection handle="0" to="{ids[ini]}" connection="{ci}"/>'
                f'<dia:connection handle="1" to="{ids[fin]}" connection="{cf}"/>')
@@ -478,9 +631,13 @@ def escribir_para_anadir(ruta, clases=(), relaciones=(), notas=(), extra=(), fon
     partes += list(extra)                            # objetos de cualquier otro tipo, ya en XML (dia_objetos / dia_planes)
     for k, r in enumerate(relaciones):               # las relaciones encima: sus rótulos («include», nombres) no quedan tapados
         t = TIPOS_REL[r["tipo"]]
-        ini, fin = (r["ref_a"], r["ref_de"]) if t["inicio_es_a"] else (r["ref_de"], r["ref_a"])
+        inicio_es_a, _ = orientacion(r)
+        ini, fin = (r["ref_a"], r["ref_de"]) if inicio_es_a else (r["ref_de"], r["ref_a"])
         pts = r.get("puntos") or ((0, 0), (4, 4))          # del plan (inicio, fin) o de leer() (todos los puntos de la línea)
         p0, p1 = pts[0], pts[-1]
+        if inicio_es_a != t["inicio_es_a"]:                # el triángulo de lectura dio la vuelta a la línea: sus puntos también
+            p0, p1 = p1, p0
+            if r.get("_ruta"): r = dict(r, _ruta=(list(reversed(r["_ruta"][0])), tuple(reversed(r["_ruta"][1]))))
         partes.append(_relacion_xml(r, f"R{k}", p0, p1, meta={"conecta_inicio": ini, "conecta_fin": fin}))
     partes += [_nota_xml(n, f"N{k}") for k, n in enumerate(notas)]
     texto = CABECERA + "".join(partes) + PIE
@@ -502,7 +659,21 @@ def _tipo_ok(dado, esperado, sinonimos):
     return d == e or d in {_norm(x) for x in sinonimos.get(esperado, [])}
 
 
-def _revisar_miembros(c, esp, sin):
+def buscar_metodo(lista, m, esperados, sin, usados=None):
+    """El método de `lista` que corresponde al esperado `m`: por nombre, y por FIRMA (nombre y tipos de los parámetros) cuando hay
+    sobrecarga (varios con el mismo nombre, en lo esperado o en lo dibujado). Devuelve (método o None, ¿sobrecargado?)."""
+    usados = usados if usados is not None else set()
+    cands = [x for x in lista if _norm(x["nombre"]) == _norm(m["nombre"])]
+    sobre = len(cands) > 1 or sum(1 for q in esperados if _norm(q["nombre"]) == _norm(m["nombre"])) > 1
+    if not sobre: return (cands[0] if cands else None), False
+    pe = m.get("params", [])
+    for x in cands:
+        if id(x) in usados or len(x.get("params", [])) != len(pe): continue
+        if all(_tipo_ok(a.get("tipo", ""), b.get("tipo", ""), sin) for a, b in zip(x["params"], pe)): return x, True
+    return None, True
+
+
+def _revisar_miembros(c, esp, sin, conv=None):
     """Puntos de los atributos y métodos esperados (esp["atributos"], esp["metodos"]) en la clase c, y lo que sobra.
     Con esp["_varias"] (ejercicios de varias clases) los textos dicen también de qué clase es cada miembro."""
     puntos, nc = [], c["nombre"]
@@ -529,22 +700,35 @@ def _revisar_miembros(c, esp, sin):
         else:
             puntos.append({"ok": True, "objetivo": obj, "texto": f"Atributo {linea_atributo(dado)}{en}."})
 
+    usados = set()
     for m in esp.get("metodos") or []:
-        dado = buscar(c["metodos"], m["nombre"])
+        dado, sobrecargado = buscar_metodo(c["metodos"], m, esp.get("metodos") or [], sin, usados)
         pegado = next((x for x in c["metodos"] if "(" in x["nombre"] and _norm(x["nombre"].split("(")[0]) == _norm(m["nombre"])), None)
         obj = f"{nc}.{m['nombre']}"
         if pegado:
             puntos.append({"ok": False, "objetivo": obj, "texto": f"Escribiste «{pegado['nombre']}» en Nombre: los paréntesis y los parámetros no van ahí, van en la lista de Parámetros, y el tipo de retorno en Tipo."})
             continue
         if not dado:
-            puntos.append({"ok": False, "objetivo": nc, "texto": f"Falta el método «{m['nombre']}»{en}."}); continue
+            firma = linea_metodo(dict(m, tipo="", vis=""))
+            hay = [x for x in c["metodos"] if _norm(x["nombre"]) == _norm(m["nombre"]) and id(x) not in usados]
+            if sobrecargado:        # varios métodos con el mismo nombre (sobrecarga): se distinguen por los tipos de sus parámetros
+                puntos.append({"ok": False, "objetivo": nc, "texto": f"Falta la versión «{firma}» del método «{m['nombre']}»{en}"
+                               + (f" (tienes {', '.join('«' + linea_metodo(dict(x, tipo='', vis='')) + '»' for x in hay)})." if hay else " (es una sobrecarga: mismo nombre, otros parámetros).")})
+            else: puntos.append({"ok": False, "objetivo": nc, "texto": f"Falta el método «{m['nombre']}»{en}."})
+            continue
+        usados.add(id(dado))
         problema, params = None, m.get("params", [])
         if len(dado["params"]) != len(params):
             problema = f"«{m['nombre']}» debería tener {len(params)} parámetro(s) y tiene {len(dado['params'])}."
         else:
             for pe, pd in zip(params, dado["params"]):
-                if _norm(pe["nombre"]) != _norm(pd["nombre"]) or not _tipo_ok(pd["tipo"], pe["tipo"], sin):
-                    problema = f"En «{m['nombre']}» el parámetro debería ser {pe['nombre']}: {pe['tipo']}" + (f", no {pd['nombre']}: {pd['tipo'] or '(sin tipo)'}." if pd else "."); break
+                if not pe["nombre"] and pd["nombre"] and (conv or {}).get("parametros") == "solo_tipo":    # K1: los parámetros, solo con el tipo
+                    cod = ((conv.get("codigos") or {}).get("parametros")) or "K1"
+                    solo = f"{m['nombre']}(" + ", ".join(q["tipo"] for q in params) + ")"
+                    problema = (f"Pusiste el parámetro con nombre ({linea_param(pd)}) en «{m['nombre']}»; este curso lo pide solo con el tipo: {solo} ({cod}). "
+                                f"En Dia: doble clic en la clase → pestaña «Operaciones» → selecciona el método → en «Datos de parámetros» deja vacío el campo «Nombre» y escribe solo el «Tipo»."); break
+                if (pe["nombre"] and _norm(pe["nombre"]) != _norm(pd["nombre"])) or not _tipo_ok(pd["tipo"], pe["tipo"], sin):
+                    problema = f"En «{m['nombre']}» el parámetro debería ser {linea_param(pe)}" + (f", no {linea_param(pd) or '(vacío)'}." if pd else "."); break
         if not problema and not _tipo_ok(dado["tipo"], m.get("tipo", ""), sin):
             problema = f"«{m['nombre']}» debería devolver {m['tipo']}" + (f", no {dado['tipo']}." if dado["tipo"] else "; el campo Tipo está vacío.")
         if not problema and dado["vis"] != m.get("vis", "+"):
@@ -601,12 +785,15 @@ def _mult(s):
     return {"0..*": "*"}.get(s, s)
 
 
-def revisar_varios(d, ej):
+def revisar_varios(d, ej, conv=None):
     """Revisión sin IA de un ejercicio del tutor con varias clases y relaciones:
     ej = {"clases": [{"nombre", "atributos"?: [...], "metodos"?: [...], "abstracta"?: bool, "interfaz"?: bool}],
           "relaciones": [{"tipo", "de", "a", "mult"?: [de, a]}], "sinonimos"?, "al_empezar"?, "al_terminar"?}.
     Atributos y métodos como los del «Tu turno» (dicts de miembro()); si una clase no trae "atributos"
-    ni "metodos", solo se mira que exista. Devuelve lo mismo que revisar()."""
+    ni "metodos", solo se mira que exista. Devuelve lo mismo que revisar().
+    `conv` son las convenciones del curso (curso.json): si trae «nombre_negrita», «parametros» o «estricto», se suman las reglas de
+    reglas_uml (cada una, un punto más con el número de la convención). Además, cada clase esperada puede traer "dentro_de",
+    "biblioteca", "enumerada" y cada relación "nombre", "lectura" y "direccion" (se revisan siempre que estén)."""
     sin = ej.get("sinonimos", {})
     clases_esp, rels_esp = ej.get("clases", []), ej.get("relaciones", [])
     total = sum(1 + len(c.get("atributos") or []) + len(c.get("metodos") or []) + ("abstracta" in c) + bool(c.get("interfaz"))
@@ -636,10 +823,15 @@ def revisar_varios(d, ej):
             bien = es_interfaz(c)
             puntos.append({"ok": bien, "objetivo": c["nombre"], "texto": f"«{c['nombre']}» es una interfaz." if bien else
                            f"«{c['nombre']}» debería ser una interfaz: en Propiedades, Estereotipo «interface»."})
-        m, s = _revisar_miembros(c, dict(e, _varias=True), sin)
+        if e.get("enumerada") is not None or e.get("biblioteca"):       # sus miembros los revisa reglas_uml (valores; vacía)
+            if e.get("biblioteca") and (c["atributos"] or c["metodos"]) and not (conv or {}).get("estricto"):
+                sobran += [f"{c['nombre']}.{x['nombre']}" for x in c["atributos"] + c["metodos"]]
+            continue
+        m, s = _revisar_miembros(c, dict(e, _varias=True), sin, conv)
         puntos += m
         if (e.get("atributos") is not None or e.get("metodos") is not None) and s: sobran += [f"{c['nombre']}.{x}" for x in s]
     usadas = set()
+    pares = []                                                       # (esperada, leída) ya emparejadas: para reglas_uml
     rels = d.get("relaciones", [])
     for e in rels_esp:
         nombre_t = TIPOS_REL[e["tipo"]]["nombre"]
@@ -649,7 +841,7 @@ def revisar_varios(d, ej):
         igual = [r for r in entre if r["tipo"] == e["tipo"] and (orientada(r) or e["tipo"] == "asociacion")]
         frase = frase_relacion({"tipo": e["tipo"], "de": e["de"], "a": e["a"]})
         if igual:
-            r = igual[0]; usadas.add(id(r))
+            r = igual[0]; usadas.add(id(r)); pares.append((e, r))
             texto = None
             if e.get("mult"):
                 dado = r["mult"] if orientada(r) else list(reversed(r["mult"]))
@@ -684,6 +876,14 @@ def revisar_varios(d, ej):
         otras = [r for r in otras if r["tipo"] in TIPOS_REL and not ej.get("conexiones")]
     if sobran: consejos.append("Sobra: " + ", ".join(f"«{s}»" for s in sobran) + ".")
     if otras: consejos.append("Sobra: " + "; ".join(frase_relacion(r) for r in otras) + ".")
+    import reglas_uml                                                # convenciones del curso (negrita, estilo, parentesco...)
+    reglas = reglas_uml.revisar(d, ej, conv) + reglas_uml.relaciones(pares, conv)
+    if (conv or {}).get("estricto"):                                 # el toString que falta lo dice la convención 17, no el aviso genérico
+        faltan = {x["objetivo"] for x in reglas if x["texto"].startswith("Falta +toString()")}
+        antes = len(puntos)
+        puntos = [p for p in puntos if not (p["texto"].startswith("Falta el método «toString»") and p["objetivo"] in faltan)]
+        total -= antes - len(puntos)
+    puntos += reglas; total += len(reglas)
     return _resultado(puntos, total, consejos, ej)
 
 
