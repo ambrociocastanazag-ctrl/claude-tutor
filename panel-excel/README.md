@@ -55,6 +55,8 @@ Los cursos van en su propia carpeta (por ejemplo `curso-excel/`, con su README);
 - **2026-10-08:** tras pulsar Comprobar ya no dejaba escribir en la celda (alerta «Esta fórmula no tiene una referencia de rango o un nombre definido»). El marco era una **forma** encima de la celda: el clic la seleccionaba y lo escrito iba a la forma. Ahora los marcos de Comprobar y el «resaltar» y el «marco» del tutor son **formato condicional** (relleno suave y borde de color), que se ve igual y no se puede seleccionar. Las reglas propias se reconocen por su fórmula (`=1=1` las de Comprobar, `=2=2` las del tutor) y se borran sin tocar otras. Las notas y flechas del tutor siguen siendo formas, pero van fuera de la zona de trabajo.
 - **2026-10-08:** en la pestaña Lección el contenido no cabía y no dejaba bajar: los bloques se encogían en vez de desbordar. Ahora no se encogen, el cuerpo se desplaza y el diagrama (en Dia) se ve entero, sin una segunda barra dentro.
 
+- **2026-10-08 (noche): panel aprobado.** Probó el curso avanzado de ejemplo (`ejemplos/avanzado/`) con el panel real y dijo que «funciona de maravilla».
+
 ## Archivos
 
 - `panel_web.py`: abre el panel (pywebview, motor de Edge) y conecta la página con Excel y el tutor. Al cerrar, borra las copias ocultas del modo libre (`Libro.limpiar_copias`) y guarda.
