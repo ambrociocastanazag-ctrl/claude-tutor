@@ -79,6 +79,9 @@ h1{margin:0;font-size:21px;line-height:1.2;font-weight:700;letter-spacing:-.01em
 .donde .x{font-size:13.5px;line-height:1.75;text-wrap:pretty}
 .donde .x strong{padding:1px 6px;border-radius:5px;background:var(--surface);border:1px solid var(--line);box-shadow:0 1px 0 var(--line);font-weight:650;font-size:12.5px;white-space:nowrap}
 .aviso-error{padding:9px 12px;border-radius:10px;background:var(--bad-soft);border:1px solid var(--bad-line);color:var(--bad);font-size:13px}
+/* Lo que le falta a Excel para este módulo (acceso a VBA, Solver): no se cambia solo, se explica cómo */
+.requisito{display:grid;grid-template-columns:16px minmax(0,1fr);gap:6px;padding:9px 11px;border-radius:10px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:13px;line-height:1.45}
+.requisito .i{color:var(--warn);font-weight:800;text-align:center}
 
 /* Revisión automática del Tu turno */
 .turno{border-radius:12px;border:1px solid var(--line);background:var(--surface);transition:background .25s,border-color .25s,opacity .25s}
@@ -220,6 +223,7 @@ textarea:focus-visible{outline:none}
 .pm-det ol{margin:6px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.45;color:var(--ink2)}
 .pm-det code,.pm-res code,.pm-aviso code{white-space:normal;overflow-wrap:anywhere}
 .pm-det li::marker{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
+.pm-det .bloque-codigo{margin-top:8px} .pm-det .bloque-codigo pre{font-size:12.5px;font-weight:500;line-height:1.5;max-height:280px;overflow:auto}
 .pm-msg{margin:0;font-size:13.5px;font-weight:650;line-height:1.45;text-wrap:pretty}
 .pm-acc{display:flex;gap:8px;flex-wrap:wrap}
 .pm-acc button{height:34px;padding:0 14px;display:flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:650}
@@ -265,6 +269,7 @@ textarea:focus-visible{outline:none}
         <p class="texto-paso" id="pasoTxt"></p>
       </div>
       <div class="aviso-error" id="aviso" hidden></div>
+      <div class="requisito" id="requisito" hidden></div>
       <div class="donde" id="donde" hidden>
         <span class="icono" data-ic="cursor"></span><span class="r" id="dondeR">En Excel</span><div class="x" id="dondeX"></div>
       </div>
@@ -450,6 +455,7 @@ textarea:focus-visible{outline:none}
     $('pasoTit').textContent = e.paso_titulo || ''; $('pasoSep').hidden = !e.paso_titulo;
     $('pasoTxt').innerHTML = enLinea(codigoExcel(esc(e.texto)));
     $('aviso').hidden = !e.aviso; $('aviso').textContent = e.aviso || '';
+    $('requisito').hidden = !e.requisito; $('requisito').innerHTML = e.requisito ? '<span class="i">!</span><span>' + enLinea(esc(e.requisito)) + '</span>' : '';
     $('donde').hidden = !e.donde; $('dondeR').textContent = 'En ' + (e.app || 'Excel');
     $('dondeX').innerHTML = e.donde ? enLinea(esc(e.donde)) : '';
     $('turnoEj').textContent = e.ejercicio || '';
@@ -746,9 +752,12 @@ textarea:focus-visible{outline:none}
       (p.notas || []).forEach(function(a){ h += '<div class="pm-nota"><span class="i">i</span><span>' + esc(a) + '</span></div>'; });
     }
     if (p.mensaje && e !== 'pendiente') h += '<p class="pm-msg">' + enLinea(codigoExcel(esc(p.mensaje))) + '</p>';
+    var codigos = p.codigos || [];        // código VBA que propone el tutor: entero, para leerlo antes de aplicar
     if ((p.detalle || []).length && (e === 'pendiente' || e === 'aplicada'))
-      h += '<details class="pm-det"><summary>Ver ' + (p.detalle.length === 1 ? 'el cambio' : 'los ' + p.detalle.length + ' cambios') + '</summary><ol>'
-        + p.detalle.map(function(d){ return '<li>' + conCodigo(d) + '</li>'; }).join('') + '</ol></details>';
+      h += '<details class="pm-det"' + (codigos.length && e === 'pendiente' ? ' open' : '') + '><summary>Ver ' + (p.detalle.length === 1 ? 'el cambio' : 'los ' + p.detalle.length + ' cambios') + '</summary><ol>'
+        + p.detalle.map(function(d){ return '<li>' + conCodigo(d) + '</li>'; }).join('') + '</ol>'
+        + codigos.map(function(c){ return '<div class="bloque-codigo"><div class="bc"><span>' + esc(c.titulo) + '</span><button type="button" class="copiar">' + ic('copy') + '<b>Copiar</b></button></div><pre>' + esc(c.texto) + '</pre></div>'; }).join('')
+        + '</details>';
     var bs = {pendiente: '<button type="button" class="si" data-acc="aplicar">' + ic('check') + 'Aplicar</button><button type="button" data-acc="no">No</button>',
               aplicada: '<button type="button" data-acc="deshacer">' + ic('undo') + 'Deshacer</button>' + (p.ejercicio ? '<button type="button" data-acc="ejercicio">Ir al ejercicio' + ic('right') + '</button>' : ''),
               confirmar: '<button type="button" class="peligro" data-acc="forzar">' + esc(p.confirmar_boton || (OBJ === 'diagrama' ? 'Deshacer igual' : 'Borrar igual')) + '</button><button type="button" data-acc="cancelar">Cancelar</button>'}[e];
@@ -904,6 +913,13 @@ textarea:focus-visible{outline:none}
       resumen: 'escribir 1 celda (E4)', para: 'completar el primer precio del Tu turno', mensaje: '',
       avisos: ['Cambia 1 celda que escribiste tú: E4', 'Toca la zona de tu «Tu turno» (E4:E7): ahí van tus respuestas'],
       notas: [], ejercicio: '', detalle: ['Escribir en E4 la fórmula `=B4*(1-$E$1)*(1+$B$1)`']}));
+    agregarAlChat(msgYo('Escríbeme una macro que ponga en negrita los totales', []), 'yo');
+    t = agregarAlChat(msgTutor('Te propongo esta macro: recorre la columna A y pone en negrita cada fila que dice **Total**. Léela antes de aplicar; luego la ejecutas tú con **Alt+F8**.', '· 3,8 s'), 'tutor-m');
+    t.querySelector('.bloques').insertAdjacentHTML('beforeend', tarjetaPermiso({id: 'p3', estado: 'pendiente', nueva: false, hoja: 'Ventas',
+      resumen: 'poner código VBA en el módulo «Macros»', para: 'lo que pediste', mensaje: '', avisos: [],
+      notas: ['El panel no ejecuta este código: lo ejecutas tú si quieres (Alt+F8). Antes lo revisé: no abre archivos, internet ni otros programas.'], ejercicio: '',
+      detalle: ['Reemplazar el código del módulo de VBA «Macros» (7 líneas; míralo abajo)'],
+      codigos: [{titulo: 'Módulo «Macros»', texto: 'Sub NegritaTotales()\n    Dim c As Range\n    For Each c In Range("A2:A20")\n        If c.Value = "Total" Then c.EntireRow.Font.Bold = True\n    Next c\n    MsgBox "Listo"\nEnd Sub'}]}));
   }
 
   // ---- Arranque ----

@@ -5,7 +5,27 @@
 !/requirements.txt
 !/panel-excel/
 !/herramientas/
+!/prueba-dia/
 panel-excel/preferencias.json
 __pycache__/
 *.pyc
 herramientas/node_modules/
+# Panel de Dia: solo el código, el plugin, el catálogo y los ejemplos. Lo que se genera (pasos/, tutor/, la demo, capturas)
+# y lo de la persona (mi_diagrama.dia, mis_diagramas/, progreso.json, sus cursos) queda fuera.
+/prueba-dia/*
+!/prueba-dia/*.py
+!/prueba-dia/README.md
+!/prueba-dia/leccion_clase.json
+!/prueba-dia/catalogo_dia.json
+!/prueba-dia/plugin-dia/
+/prueba-dia/plugin-dia/*
+!/prueba-dia/plugin-dia/*.py
+!/prueba-dia/plugin-dia/*.c
+!/prueba-dia/plugin-dia/*.dll
+!/prueba-dia/plugin-dia/*.md
+/prueba-dia/plugin-dia/demo.py
+!/prueba-dia/curso-ejemplo/
+/prueba-dia/curso-ejemplo/*
+!/prueba-dia/curso-ejemplo/*.json
+!/prueba-dia/curso-ejemplo/README.md
+/prueba-dia/curso-ejemplo/progreso.json

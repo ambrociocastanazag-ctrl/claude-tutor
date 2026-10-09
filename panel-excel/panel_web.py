@@ -50,7 +50,26 @@ class Api:
         self._huella, self._revision = None, None
         self._huella_ej = None          # la zona del ejercicio del tutor, para saber si cambió después de comprobar
         self._notas = []                # lo que se le cuenta al tutor en la próxima pregunta (qué hizo la persona con su propuesta)
+        self._requisito = ""            # lo que le falta a Excel para este módulo (acceso a VBA, Solver), para avisar en Lección
+        self._m, self._n = self.progreso()      # vuelve al módulo y al paso donde se quedó (si es un curso)
         excel.vigia = self._vigilar_seguro
+
+    # ----- dónde se quedó: progreso_panel.json junto a curso.json (no va al repositorio) -----
+    def progreso(self):
+        ruta = getattr(self._curso, "progreso", None)
+        try:
+            d = json.loads(Path(ruta).read_text(encoding="utf-8"))
+            m = int(d.get("m", 0)); n = int(d.get("n", 0))
+            if 0 <= m < len(self._curso.modulos) and 0 <= n < len(self._curso.modulos[m]): return m, n
+        except Exception: pass
+        return 0, 0
+
+    def _guardar_progreso(self):
+        ruta = getattr(self._curso, "progreso", None)
+        if not ruta: return
+        try: Path(ruta).write_text(json.dumps({"curso": self._curso.titulo, "m": self._m, "n": self._n, "modulo": self._lec().titulo,
+                                               "cuando": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False), encoding="utf-8")
+        except Exception: pass
 
     # ----- estado -----
     def _lec(self): return self._curso.modulos[self._m]
@@ -63,16 +82,29 @@ class Api:
                 "titulo": lec.titulo, "titulo_codigo": lec.d.get("titulo_codigo", ""), "curso": self._curso.titulo,
                 "modulos": [{"titulo": l.titulo, "codigo": l.d.get("titulo_codigo", "")} for l in self._curso.modulos],
                 "paso_titulo": paso.get("titulo", ""), "donde": paso.get("donde", ""), "app": "Excel",
-                "hoja": lec.hoja + (f" · {t['rango']}" if t else ""), "ejercicio": (t.get("titulo") or t["rango"]) if t else "",
-                "revision": (self._revision or self._pendiente(t)) if t else None,
+                "hoja": lec.hoja + (f" · {t['rango']}" if t and t.get("rango") else ""),
+                "ejercicio": (t.get("titulo") or t.get("rango") or (f"macro {t['macro']}" if t.get("macro") else "")) if t else "",
+                "revision": (self._revision or self._pendiente(t)) if t else None, "requisito": self._requisito,
                 "tutor_ej": self._libro().estado_ejercicio() if self._libro() else None}
 
     def _libro(self): return getattr(self._x, "libro", None)
 
     def _pendiente(self, t):
         """Lo que muestra el «Tu turno» antes de pulsar Comprobar: nada de errores mientras trabaja."""
-        return {"estado": "pendiente", "ok": 0, "total": 0,
-                "mensaje": t.get("al_empezar", f"Escribe en {t['rango']} y, cuando termines, pulsa Comprobar.")}
+        que = f"Escribe en {t['rango']}" if t.get("solucion") else f"Escribe la macro «{t['macro']}» (Alt+F11)" if t.get("macro") else "Hazlo en Excel"
+        return {"estado": "pendiente", "ok": 0, "total": 0, "mensaje": t.get("al_empezar", f"{que} y, cuando termines, pulsa Comprobar.")}
+
+    def _requisitos(self, libro):
+        """Lo que le falta a este Excel para el módulo: acceso al código VBA o el complemento Solver (no se cambia solo)."""
+        lec = self._lec(); acciones = [a for p in lec.pasos for a in p.get("acciones", [])]; turnos = [p.get("turno") or {} for p in lec.pasos]
+        pide = set(lec.d.get("requiere", []))
+        if any("vba" in a for a in acciones) or any(t.get("macro") for t in turnos): pide.add("vba")
+        if any("solver" in a for a in acciones): pide.add("solver")
+        out = []
+        if "vba" in pide and not motor.vba.acceso(libro.wb): out.append(motor.vba.ACCESO)
+        if "solver" in pide and not motor.avanzado.solver_disponible(libro.xl):
+            out.append("Este módulo usa Solver: actívalo en Archivo → Opciones → Complementos → Administrar: Complementos de Excel → Ir… → ☑ Solver.")
+        return " ".join(out)
 
     def _empujar(self, js):
         """Ejecuta JS en la ventana del panel, si está abierta."""
@@ -82,8 +114,7 @@ class Api:
 
     # ----- revisión del «Tu turno»: solo al pulsar Comprobar (corre en el hilo de Excel) -----
     def _huella_turno(self, libro):
-        r = libro.clase(self._m).ws.Range(self._turno()["rango"])
-        return (r.Formula, r.Value)
+        return libro.clase(self._m).huella(self._turno())
 
     def _vigilar(self, libro):
         """Si cambia la zona después de comprobar, el panel avisa que el resultado ya no está al día."""
@@ -138,7 +169,9 @@ class Api:
             ej = libro.ejercicio            # si el ejercicio del tutor está en esta hoja, sus marcos se fueron al rehacerla
             if ej and ej["hoja"].lower() == clase.ws.Name.lower(): ej["revision"] = None
             self._revisar_ya(libro); libro.guardar()
-        try: self._x.hacer(hacer); return self._estado()
+            try: self._requisito = self._requisitos(libro)
+            except Exception: self._requisito = ""
+        try: self._x.hacer(hacer); self._guardar_progreso(); return self._estado()
         except Exception as e: return self._estado(f"No pude hacer este paso en Excel. {PISTA} ({e})")
 
     def modulo(self, m):
@@ -174,6 +207,7 @@ class Api:
             except Exception: texto += f"\n\n(No pude dibujar las marcas: {PISTA})"; r = None
             if r:
                 hechas = r["hechas"]
+                if r.get("vba"): texto += f"\n\n(Marqué {r['vba']} línea{'s' if r['vba'] > 1 else ''} de tu código con «' ← tutor:»: ábrelo con Alt+F11. Se quitan con «Borrar marcas».)"
                 if r["fallos"]:
                     texto += f"\n\n(No pude poner {len(r['fallos'])} de las marcas: {'; '.join(r['fallos'])}.)"
                     self._notas.append(f"De tus últimas marcas, estas no se dibujaron: {'; '.join(r['fallos'])}.")
@@ -741,6 +775,491 @@ def probar_modo_libre(x, api):
     return fallos
 
 
+class _Pruebas:
+    """Lo común de las pruebas nuevas: contar fallos, proponer como el tutor y fotos del libro."""
+    def __init__(self, x, api, titulo):
+        self.x, self.api, self.fallos = x, api, 0
+        print(f"== {titulo}")
+    def ver(self, ok, texto):
+        self.fallos += not ok; print(f"      {'✔' if ok else '✘'} {texto}")
+        return ok
+    def proponer(self, cuerpo, texto="Te propongo esto."):
+        _, prop, err = motor.separar_acciones(texto + " <acciones>" + json.dumps(cuerpo, ensure_ascii=False) + "</acciones>")
+        if err: raise ValueError(err)
+        return self.x.hacer(lambda l: l.preparar(prop, self.api._m))
+    def rechaza(self, cuerpo):
+        """¿Se rechaza la propuesta (al revisarla o al aplicarla, sin cambiar nada)? Devuelve el motivo o None."""
+        try: t = self.proponer(cuerpo)
+        except ValueError as e: return str(e)
+        r = self.api.aplicar(t["id"])["propuesta"]
+        if r["estado"] == "error": return r["mensaje"]
+        self.api.deshacer(t["id"], True); return None
+    def foto(self): return self.x.hacer(foto_libro)
+    def hoja(self, l, nombre): return l.buscar_hoja(nombre)
+
+
+def foto_pq(libro):
+    """Las consultas y conexiones del libro (para comprobar que Deshacer de Power Query las deja igual)."""
+    return sorted(motor.avanzado.consultas(libro.wb).items()), sorted(motor.avanzado.conexiones(libro.wb))
+
+
+def probar_matrices(x, api):
+    """Matrices dinámicas (sin IA): el motor escribe con Formula2 (se desbordan, sin @), Evaluate en inglés, el Comprobar
+    de una fórmula que se desborda (bien, error típico, #¡DESBORDAMIENTO!, a mano, con @), el [Estado actual] y que una
+    fórmula de la persona que se desborda sobreviva al cambio de paso."""
+    P = _Pruebas(x, api, "Matrices dinámicas (sin IA)")
+    lec = api._curso.modulos[0]; ult = len(lec) - 1; prac = "Práctica matrices"
+    api.modulo(0); api.ir(ult); inicio = P.foto()
+    datos = [["Producto", "Categoría", "Ventas"], ["Cuaderno", "Útiles", 30], ["Lápiz", "Útiles", 12], ["Mochila", "Bolsos", 45],
+             ["Regla", "Útiles", 20], ["Libro", "Lectura", 25]]
+    turno = {"titulo": "FILTRAR · E2", "rango": "E2", "solucion": "=FILTER(A2:C6,C2:C6>20)",
+             "errores": [{"formula": "=FILTER(A2:C6,C2:C6>=20)", "dice": "Con >= entra también la Regla."}]}
+    t = P.proponer({"para": "matrices", "hoja": prac, "cambios": [{"poner": "A1:C6", "valores": datos}, {"poner": "I1", "valor": "=SORT(UNIQUE(B2:B6))"}], "turno": turno})
+    a = api.aplicar(t["id"])
+    hoja = lambda l: l.buscar_hoja(prac)
+    sp = x.hacer(lambda l: (hoja(l).Range("I1").Formula2, motor.desborde(hoja(l).Range("I1"))))
+    P.ver(a["propuesta"]["estado"] == "aplicada" and sp == ("=SORT(UNIQUE(B2:B6))", "I1:I3"), f"lo que escribe el tutor se desborda, sin @ (Formula2): {sp}")
+    def escribir(*celdas):
+        def hacer(l):
+            ws = hoja(l); ws.Range("E2:G12").ClearContents()
+            for ref, f in celdas: motor.poner_formula(ws.Range(ref), f)
+        x.hacer(hacer)
+    def comprobar(): return api.comprobar_ejercicio()["tutor_ej"]["revision"]
+    e = comprobar(); P.ver(e["estado"] == "vacio", f"Comprobar sin escribir nada → {e['estado']}: {e['mensaje']}")
+    escribir(("E2", "=FILTER(A2:C6,C2:C6>20)")); e = comprobar()
+    P.ver(e["estado"] == "bien" and (e["ok"], e["total"]) == (9, 9), f"la solución (se desborda en E2:G4) → {e['estado']} {e['ok']}/{e['total']}")
+    escribir(("E2", "=FILTER(A2:C6,C2:C6>=20)")); e = comprobar()
+    P.ver(e["estado"] == "mal" and e["mensaje"] == turno["errores"][0]["dice"], f"error típico → {e['mensaje']}")
+    escribir(("E2", "=FILTER(A2:C6,C2:C6>20)"), ("F3", "estorbo")); e = comprobar()
+    P.ver(e["estado"] == "mal" and "DESBORDAMIENTO" in e["mensaje"], f"algo estorba (#¡DESBORDAMIENTO!) → {e['mensaje'][:90]}")
+    escribir(("E2", "=FILTER(A2:C6,C2:C6>20)"), ("E3", "=FILTER(A2:C6,C2:C6>20)")); e = comprobar()
+    P.ver(e["estado"] == "mal" and "DESBORDAMIENTO" in e["mensaje"], "la copió hacia abajo → también #¡DESBORDAMIENTO!")
+    escribir(("E2", "Cuaderno"), ("F2", "Útiles"), ("G2", 30)); e = comprobar()
+    P.ver(e["estado"] == "mal" and "a mano" in e["mensaje"], f"lo escribió a mano → {e['mensaje']}")
+    escribir(("E2", "=@FILTER(A2:C6,C2:C6>20)")); e = comprobar()
+    P.ver(e["estado"] == "mal" and "@" in e["mensaje"], f"con @ (no se desborda) → {e['mensaje'][:80]}")
+    formas = x.hacer(lambda l: hoja(l).Shapes.Count)
+    P.ver(formas == 0, f"las marcas de Comprobar son formato condicional, sin formas (formas: {formas})")
+    lineas = x.hacer(lambda l: l.hoja_de(prac).lineas())
+    P.ver("[se desborda en I1:I3: Bolsos, Lectura, Útiles]" in lineas, "el [Estado actual] muestra la fórmula desbordada y su rango")
+    res = x.hacer(lambda l: l.probar_turno(None, turno, hoja=l.hoja_de(prac)))
+    P.ver(all(ok for _, ok, _ in res), "probar_turno (lo que usa --probar en las lecciones) con una solución que se desborda: " + "; ".join(f"{n[:25]} → {d[:30]}" for n, _, d in res))
+    t2 = {"rango": "K2", "solucion": "=SUM(C2:C6)", "errores": [{"formula": "=SUM(C2:C5)", "dice": "Te falta la última fila."}]}
+    res = x.hacer(lambda l: l.probar_turno(None, t2, hoja=l.hoja_de(prac)))
+    P.ver(all(ok for _, ok, _ in res), "una solución con funciones (SUM) se revisa bien: Evaluate va en inglés (antes daba #¿NOMBRE? en este Excel)")
+    t3 = P.proponer({"hoja": prac, "cambios": [{"com": [{"ruta": "Range('M1').Formula", "valor": "=SEQUENCE(4)"}]}]}); api.aplicar(t3["id"])
+    z = x.hacer(lambda l: motor.desborde(hoja(l).Range("M1")))
+    P.ver(z == "M1:M4", f"el modo libre (Range.Formula) también escribe con Formula2: se desborda en {z}")
+    api.deshacer(t3["id"], True)
+    # una fórmula de la persona que se desborda, en la hoja del módulo, sigue igual al cambiar de paso
+    x.hacer(lambda l: motor.poner_formula(l.clase(0).ws.Range("K1"), "=SEQUENCE(3)"))
+    api.ir(ult - 1); api.ir(ult)
+    k = x.hacer(lambda l: (l.clase(0).ws.Range("K1").Formula2, motor.desborde(l.clase(0).ws.Range("K1"))))
+    P.ver(k == ("=SEQUENCE(3)", "K1:K3"), f"su fórmula que se desborda sigue igual al cambiar de paso (sin @): {k}")
+    x.hacer(lambda l: l.clase(0).ws.Range("K1").ClearContents()); api.ir(ult - 1); api.ir(ult)
+    api.deshacer(t["id"], True)
+    dif = diferencias(inicio, P.foto())
+    P.ver(not dif, f"al terminar, el libro está como al empezar {dif}")
+    print("Matrices dinámicas:", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
+def _leccion_temporal(d):
+    """Una lección escrita en un archivo temporal (para probar los pasos sin tocar las del curso)."""
+    import tempfile
+    ruta = os.path.join(tempfile.gettempdir(), f"leccion_prueba_{os.getpid()}.json")
+    Path(ruta).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    try: return motor.Leccion(ruta)
+    finally: os.remove(ruta)
+
+
+def probar_pasos(x, api):
+    """Pasos de lección con modo libre y limpieza (sin IA): al cambiar de paso se quita lo que no es del paso (gráficos,
+    dinámicas, formato condicional, nombres), no se duplica nada, y lo que hizo la persona (gráfico, tabla, formato
+    condicional, validación) se conserva; el Comprobar de objetos no cuenta el gráfico del ejemplo."""
+    P = _Pruebas(x, api, "Pasos con modo libre y limpieza (sin IA)")
+    m0, n0 = api._m, api._n; inicio = P.foto()
+    datos = [["Categoría", "Mes", "Ventas"], ["Útiles", "Ene", 10], ["Libros", "Ene", 25], ["Útiles", "Feb", 14], ["Arte", "Feb", 8],
+             ["Libros", "Mar", 30], ["Arte", "Mar", 12], ["Útiles", "Mar", 9], ["Libros", "Abr", 18]]
+    graf = [{"ruta": "ChartObjects.Add", "args": [420, 5, 260, 160], "guardar": "g"}, {"en": "$g", "ruta": "Chart.SetSourceData", "args": [{"rango": "B1:C9"}]},
+            {"en": "$g", "ruta": "Chart.ChartType", "valor": "xlColumnClustered"}]
+    din = [{"en": "libro", "ruta": "PivotCaches.Create", "args": ["xlDatabase", {"rango": "A1:C9"}], "guardar": "c"},
+           {"en": "$c", "ruta": "CreatePivotTable", "args": [{"rango": "E12"}, "DinPasos"], "guardar": "td"},
+           {"en": "$td", "ruta": "PivotFields('Categoría').Orientation", "valor": "xlRowField"},
+           {"en": "$td", "ruta": "PivotFields('Ventas')", "guardar": "v"}, {"en": "$td", "ruta": "AddDataField", "args": ["$v", "Suma", "xlSum"]}]
+    d = {"titulo": "Pasos libres", "hoja": "Pasos libres", "pasos": [
+        {"texto": "Datos", "acciones": [{"poner": "A1:C9", "valores": datos}]},
+        {"texto": "Gráfico, colores y un nombre", "acciones": [{"com": graf}, {"com": [{"ruta": "Range('C2:C9').FormatConditions.AddColorScale", "args": [3]}]},
+                                                               {"com": [{"en": "libro", "ruta": "Names.Add", "args": ["TotalPasos", "=SUM('Pasos libres'!$C$2:$C$9)"]}]}]},
+        {"texto": "Una dinámica", "acciones": [{"com": din}]},
+        {"texto": "Tu turno", "acciones": [], "turno": {"pide": [{"grafico": {"tipo": "columnas", "datos": "B1:C9"}}]}}]}
+    try: _leccion_temporal(dict(d, pasos=[{"texto": "x", "acciones": [{"com": [{"en": "libro", "ruta": "Workbooks.Open", "args": ["C:\\\\a.xlsx"]}]}]}])); malo = None
+    except ValueError as e: malo = str(e)
+    P.ver(bool(malo), f"una lección con modo libre peligroso no se abre: {(malo or '')[:90]}")
+    lec = _leccion_temporal(d); api._curso.modulos.append(lec); m = len(api._curso.modulos) - 1
+    cuenta = lambda l: (l.buscar_hoja("Pasos libres").ChartObjects().Count, l.buscar_hoja("Pasos libres").PivotTables().Count,
+                        any(n.Name == "TotalPasos" for n in l.wb.Names), sum(1 for _, dd in motor.avanzado.reglas_fc(l.buscar_hoja("Pasos libres")) if dd["tipo"] == 3))
+    try:
+        api.modulo(m); api.ir(3)
+        c = x.hacer(cuenta); P.ver(c == (1, 1, True, 1), f"paso 4: gráfico, dinámica, nombre y escala de colores del paso: {c}")
+        api.ir(0); c = x.hacer(cuenta)
+        P.ver(c == (0, 0, False, 0), f"al volver al paso 1 se quita lo que no es de ese paso (gráfico, dinámica, nombre, colores): {c}")
+        api.ir(3); api.ir(3); c = x.hacer(cuenta)
+        P.ver(c == (1, 1, True, 1), f"al volver al paso 4, una sola vez cada cosa (nada amontonado): {c}")
+        e = api.comprobar()["revision"]
+        P.ver(e["estado"] == "vacio", f"Comprobar de objetos: el gráfico del ejemplo no cuenta como suyo → {e['estado']}")
+        def persona(l):
+            ws = l.buscar_hoja("Pasos libres")
+            co = ws.ChartObjects().Add(700, 5, 220, 150); co.Chart.SetSourceData(ws.Range("B1:C9")); co.Chart.ChartType = 5       # circular
+            ws.Range("H1:I3").Value = [["Nota", "Valor"], ["a", 1], ["b", 2]]; lo = ws.ListObjects.Add(1, ws.Range("H1:I3"), pythoncom.Empty, 1); lo.Name = "MiTabla"
+            ws.Range("A2:A9").FormatConditions.Add(2, pythoncom.Empty, "=$C2>20")
+            ws.Range("J2:J4").Validation.Add(3, 1, 1, "Sí;No")
+            return co.Name
+        suyo = x.hacer(persona)
+        e = api.comprobar()["revision"]
+        P.ver(e["estado"] == "mal" and any(not p["ok"] and "circular" in p["texto"] for p in e.get("puntos", [])), f"su gráfico circular se revisa (✘ {next((p['texto'] for p in e.get('puntos', []) if not p['ok']), '')})")
+        ctx = x.hacer(lambda l: l.clase(m).contexto(3, "x", l.clase(m).revisar(lec.pasos[3]["turno"], dibujar=False)))
+        P.ver("✘ El gráfico es circular" in ctx, "el [Estado actual] trae los puntos de la revisión de objetos")
+        api.ir(2); api.ir(3)
+        def mirar(l):
+            ws = l.buscar_hoja("Pasos libres")
+            return (sorted(co.Chart.ChartType for co in ws.ChartObjects()), [lo.Name for lo in ws.ListObjects], ws.Range("I3").Value,
+                    sum(1 for _, dd in motor.avanzado.reglas_fc(ws) if dd["tipo"] == 2), _t(lambda: ws.Range("J3").Validation.Formula1), ws.PivotTables().Count)
+        v = x.hacer(mirar)
+        P.ver(v == ([5, 51], ["MiTabla"], 2.0, 1, "Sí;No", 1),
+              f"al cambiar de paso y volver se conserva lo suyo: su gráfico (sin tocar), su tabla, su formato condicional y su validación (se rehacen): {v}")
+        x.hacer(lambda l: setattr(l.buscar_hoja("Pasos libres").ChartObjects(suyo).Chart, "ChartType", 51))
+        e = api.comprobar()["revision"]
+        P.ver(e["estado"] == "bien", f"cambia su gráfico a columnas → {e['estado']}: {e['mensaje']}")
+        x.hacer(lambda l: l.buscar_hoja("Pasos libres").ChartObjects(suyo).Delete())
+        api.ir(2); api.ir(3); c = x.hacer(cuenta)
+        P.ver(c[0] == 1, f"si borra su gráfico, no vuelve a aparecer (gráficos: {c[0]})")
+    finally:
+        def limpiar(l):
+            l._borrar_hoja(l.buscar_hoja("Pasos libres"))
+            for n in list(l.wb.Names):
+                if n.Name in ("TotalPasos",): n.Delete()
+            l.clases.pop(m, None)
+        x.hacer(limpiar); api._curso.modulos.pop(); api.modulo(m0); api.ir(n0)
+    dif = diferencias(inicio, P.foto())
+    P.ver(not dif, f"al terminar, el libro está como al empezar {dif}")
+    print("Pasos con modo libre:", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
+def _t(f, d=None):
+    try: return f()
+    except Exception: return d
+
+
+def probar_objetos(x, api):
+    """Comprobar de ejercicios de objetos (sin IA): gráfico, tabla, dinámica, formato condicional, validación, nombre,
+    orden, filtro, inmovilizar y formato de número; vacío, todo bien y tres errores (uno típico, con su mensaje)."""
+    P = _Pruebas(x, api, "Comprobar de objetos (sin IA)")
+    api.modulo(0); inicio = P.foto(); prac = "Práctica objetos"
+    datos = [["Categoría", "Mes", "Ventas"], ["Útiles", "Ene", 10], ["Libros", "Ene", 25], ["Útiles", "Feb", 14], ["Arte", "Feb", 8],
+             ["Libros", "Mar", 30], ["Arte", "Mar", 12], ["Útiles", "Mar", 9], ["Libros", "Abr", 18]]
+    pide = [{"grafico": {"tipo": "columnas", "datos": "B1:C9", "titulo": "Ventas", "leyenda": False}},
+            {"tabla": {"rango": "H1:I5", "nombre": "Notas", "totales": True}},
+            {"dinamica": {"origen": "A1:C9", "filas": ["Categoría"], "valores": [{"campo": "Ventas", "funcion": "suma"}]}},
+            {"formato_condicional": {"rango": "C2:C9", "tipo": "valor", "operador": "mayor", "valor": 20}},
+            {"validacion": {"rango": "K2:K5", "tipo": "lista", "lista": ["Sí", "No"]}},
+            {"nombre": {"nombre": "IVAobj", "valor": 0.12}},
+            {"orden": {"rango": "M1:N6", "por": "N", "orden": "desc"}},
+            {"filtro": {"rango": "A1:C9", "columna": "Categoría", "igual_a": "Útiles"}},
+            {"inmovilizar": {"celda": "A2"}},
+            {"formato_numero": {"rango": "C2:C9", "es": "moneda"}}]
+    turno = {"titulo": "Todo junto", "pide": pide, "errores": [{"si": {"grafico": {"tipo": "circular"}}, "dice": "Un circular no compara meses: usa columnas."}]}
+    malos = [{"pide": [{"pastel": {}}]}, {"pide": [{"grafico": {"color": "rojo"}}]}, {"pide": []}, {"pide": [{"tabla": {"rango": "ZZZ9999"}}]}]
+    rech = sum(1 for tt in malos if P.rechaza({"hoja": prac, "cambios": [{"poner": "A1", "valor": 1}], "turno": tt}))
+    P.ver(rech == len(malos), f"rechaza {rech} de {len(malos)} ejercicios de objetos mal escritos")
+    t = P.proponer({"hoja": prac, "cambios": [{"poner": "A1:C9", "valores": datos}, {"poner": "H1:I5", "valores": [["Alumno", "Nota"], ["Ana", 15], ["Luis", 12], ["Eva", 18], ["Rosa", 14]]},
+                                               {"poner": "M1:N6", "valores": [["Prod", "Monto"], ["a", 5], ["b", 40], ["c", 12], ["d", 33], ["e", 1]]}, {"poner": "P1", "valor": 0.12}],
+                    "turno": turno})
+    r = api.aplicar(t["id"]); ej = r.get("tutor_ej") or {}
+    P.ver(r["propuesta"]["estado"] == "aplicada" and ej.get("titulo") == "Todo junto", f"el ejercicio de objetos se crea: «{ej.get('titulo')}» en «{ej.get('hoja')}» → {r['propuesta']['mensaje'][:70]}")
+    comprobar = lambda: api.comprobar_ejercicio()["tutor_ej"]["revision"]
+    e = comprobar(); P.ver(e["estado"] == "vacio", f"sin hacer nada → {e['estado']}: {e['mensaje']}")
+    def todo_bien(l):
+        ws = l.buscar_hoja(prac); E = pythoncom.Empty
+        ws.Range("M1:N6").Sort(ws.Range("N1"), 2, E, E, E, E, E, 1)
+        co = ws.ChartObjects().Add(420, 5, 300, 180); ch = co.Chart; ch.SetSourceData(ws.Range("B1:C9")); ch.ChartType = 51
+        ch.HasTitle = True; ch.ChartTitle.Text = "Ventas"; ch.HasLegend = False
+        lo = ws.ListObjects.Add(1, ws.Range("H1:I5"), E, 1); lo.Name = "Notas"; lo.ShowTotals = True
+        pt = l.wb.PivotCaches().Create(1, ws.Range("A1:C9")).CreatePivotTable(ws.Range("S3"), "DinObj")
+        pt.PivotFields("Categoría").Orientation = 1; pt.AddDataField(pt.PivotFields("Ventas"), "Suma de Ventas", -4157)
+        ws.Range("C2:C9").FormatConditions.Add(1, 5, "=20")
+        ws.Range("K2:K5").Validation.Add(3, 1, 1, "Sí;No")
+        l.wb.Names.Add("IVAobj", f"='{prac}'!$P$1")
+        ws.Range("C2:C9").NumberFormatLocal = motor.formato_local(l.xl, "$#,##0.00")
+        ws.Range("A1:C9").AutoFilter(1, "Útiles")
+        ws.Activate(); motor.inmovilizar(ws, "A2")
+    x.hacer(todo_bien)
+    e = comprobar()
+    P.ver(e["estado"] == "bien" and e["ok"] == e["total"], f"todo bien → {e['estado']} {e['ok']}/{e['total']}: {e['mensaje']}")
+    for p in e.get("puntos", [])[:30]: print(f"        {'✔' if p['ok'] else '✘'} {p['texto']}")
+    def tres_errores(l):
+        ws = l.buscar_hoja(prac); ws.ChartObjects(1).Chart.ChartType = 5                 # circular (error típico)
+        for i in range(ws.Cells.FormatConditions.Count, 0, -1):
+            fc = ws.Cells.FormatConditions(i)
+            if fc.Type == 1: fc.Delete()
+        ws.Range("C2:C9").FormatConditions.Add(1, 6, "=20")                                   # menor que, no mayor
+        ws.Range("K2:K5").Validation.Delete(); ws.Range("K2:K5").Validation.Add(3, 1, 1, "Sí;Tal vez")
+    x.hacer(tres_errores)
+    e = comprobar(); malas = [p["texto"] for p in e.get("puntos", []) if not p["ok"]]
+    P.ver(e["estado"] == "mal" and e["mensaje"] == turno["errores"][0]["dice"] and len(malas) == 3,
+          f"tres errores → {e['estado']} {e['ok']}/{e['total']}; mensaje del error típico: «{e['mensaje']}»")
+    for m_ in malas: print(f"        ✘ {m_}")
+    formas = x.hacer(lambda l: [s.Name for s in l.buscar_hoja(prac).Shapes if s.Type != 3])
+    reglas = x.hacer(lambda l: sum(1 for i in range(1, l.buscar_hoja(prac).Cells.FormatConditions.Count + 1)
+                                   if _t(lambda: l.buscar_hoja(prac).Cells.FormatConditions(i).Formula1) == "=1=1"))
+    P.ver(not formas and reglas >= 3, f"las marcas son formato condicional (reglas de Comprobar: {reglas}), ninguna forma encima de las celdas ({formas})")
+    api._vigilar(x.hacer(lambda l: l)); x.hacer(lambda l: setattr(l.buscar_hoja(prac).ChartObjects(1).Chart, "ChartType", 51))
+    api._vigilar(x.hacer(lambda l: l))
+    P.ver(x.hacer(lambda l: (l.ejercicio.get("revision") or {}).get("viejo")) is True, "el vigía avisa «Cambiaste algo desde que comprobaste» al cambiar el gráfico")
+    ctx = x.hacer(lambda l: l.contexto_extra(0))
+    P.ver("pide: grafico, tabla" in ctx and "✘" in ctx, "el [Estado actual] cuenta el ejercicio de objetos con sus puntos")
+    def limpiar(l):
+        for n in list(l.wb.Names):
+            if n.Name == "IVAobj": n.Delete()
+    x.hacer(limpiar); api.deshacer(t["id"], True)
+    dif = diferencias(inicio, P.foto())
+    P.ver(not dif, f"al terminar, el libro está como al empezar {dif}")
+    print("Comprobar de objetos:", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
+def probar_power_query(x, api):
+    """Power Query con límite (sin IA): crear y cargar consultas de una tabla del libro y de un archivo de la carpeta
+    de datos, Deshacer exacto (hoja nueva y hoja que ya existía), cambiar una consulta (aviso de que no queda exacto)
+    y 10 consultas o propuestas peligrosas rechazadas."""
+    import tempfile
+    P = _Pruebas(x, api, "Power Query (sin IA)")
+    api.modulo(0); inicio = P.foto(); pq0 = x.hacer(foto_pq)
+    carpeta = os.path.join(tempfile.gettempdir(), f"datos_prueba_{os.getpid()}"); os.makedirs(carpeta, exist_ok=True)
+    Path(carpeta, "ventas.csv").write_text("Producto,Unidades\nCuaderno,4\nLápiz,10\nMochila,1\n", encoding="utf-8")
+    datos_antes = api._curso.datos; api._curso.datos = carpeta
+    try:
+        m_limpia = ('let\n    Origen = Excel.CurrentWorkbook(){[Name="GenteP"]}[Content],\n'
+                    '    Limpio = Table.TransformColumns(Origen, {{"Nombre", each Text.Proper(Text.Trim(_)), type text}}),\n'
+                    '    ConEdad = Table.SelectRows(Limpio, each [Edad] <> null)\nin\n    ConEdad')
+        gente = [["Nombre", "Edad"], ["  ana pérez", 20], ["LUIS GÓMEZ ", None], ["eva soto", 30]]
+        t = P.proponer({"para": "limpiar", "hoja": "PQ prueba", "cambios": [{"poner": "A1:B4", "valores": gente}, {"tabla": "A1:B4", "nombre": "GenteP"},
+                                                                            {"consulta": "GentePLimpia", "m": m_limpia, "cargar_en": "D1"}]})
+        P.ver("consulta «GentePLimpia»" in t["resumen"] and any("Power Query" in d for d in t["detalle"]), f"tarjeta: «{t['resumen']}»")
+        r = api.aplicar(t["id"])["propuesta"]
+        v = x.hacer(lambda l: l.buscar_hoja("PQ prueba").Range("D1:E3").Value if l.buscar_hoja("PQ prueba") else None)
+        P.ver(r["estado"] == "aplicada" and v == (("Nombre", "Edad"), ("Ana Pérez", 20.0), ("Eva Soto", 30.0)), f"crea la consulta y la carga en D1 (limpia): {v} → {r['mensaje'][:60]}")
+        ctx = x.hacer(lambda l: l.contexto_extra(0))
+        P.ver("Consultas de Power Query" in ctx and "«GentePLimpia» (cargada en 'PQ prueba'!D1" in ctx and "Text.Proper" in ctx, "el [Estado actual] cuenta la consulta, dónde está cargada y su M")
+        d = api.deshacer(t["id"])["propuesta"]
+        P.ver(d["estado"] == "deshecha" and x.hacer(foto_pq) == pq0 and not diferencias(inicio, P.foto()), f"deshacer (hoja nueva): sin hoja, sin consulta y sin conexión → {d['mensaje']}")
+        # En una hoja que ya existía (sin datos de Power Query): copia para deshacer, exacto
+        base = P.proponer({"hoja": "PQ base", "cambios": [{"poner": "A1:B2", "valores": [["Hola", 1], ["Chau", 2]]}, {"negrita": "A1:B1"}]})
+        api.aplicar(base["id"]); antes = P.foto(); pq1 = x.hacer(foto_pq)
+        t = P.proponer({"hoja": "PQ base", "cambios": [{"consulta": "VentasArchivo", "cargar_en": "D1",
+                        "m": 'let\n    Origen = Csv.Document(File.Contents("{datos}/ventas.csv"), [Delimiter=",", Encoding=65001]),\n    Enc = Table.PromoteHeaders(Origen)\nin\n    Enc'}]})
+        r = api.aplicar(t["id"])["propuesta"]
+        v = x.hacer(lambda l: l.buscar_hoja("PQ base").Range("D1:E4").Value)
+        P.ver(r["estado"] == "aplicada" and v[1][0] == "Cuaderno" and len(v) == 4, f"un archivo de la carpeta de datos ({{datos}}/ventas.csv) se carga en una hoja que ya existía: {v[1]}")
+        d = api.deshacer(t["id"])["propuesta"]
+        P.ver(d["estado"] == "deshecha" and not diferencias(antes, P.foto()) and x.hacer(foto_pq) == pq1, f"deshacer (hoja que ya existía) la deja exacta y sin la consulta → {d['mensaje']}")
+        # Cambiar una consulta que ya existe: la tarjeta avisa que Deshacer no queda exacto; deshacer le devuelve su M
+        c = P.proponer({"hoja": "PQ base", "cambios": [{"consulta": "SoloConexion", "m": 'let x = Excel.CurrentWorkbook() in x'}]}); api.aplicar(c["id"])
+        t = P.proponer({"hoja": "PQ base", "cambios": [{"consulta": "SoloConexion", "m": 'let x = Excel.CurrentWorkbook(), y = Table.RowCount(x) in y'}]})
+        P.ver(any("no queda exacto" in a for a in t["avisos"]), f"cambiar una consulta avisa antes: «{next((a for a in t['avisos'] if 'exacto' in a), '')[:80]}…»")
+        api.aplicar(t["id"]); api.deshacer(t["id"])
+        P.ver(x.hacer(lambda l: motor.avanzado.consultas(l.wb).get("SoloConexion")) == 'let x = Excel.CurrentWorkbook() in x', "deshacer le devuelve su M de antes")
+        api.deshacer(c["id"], True)
+        t = P.proponer({"hoja": "PQ base", "cambios": [{"actualizar": "todo"}]}) if False else None
+        # Lo peligroso no se acepta
+        peligrosos = [("web", 'let x = Web.Contents("http://example.com") in x'), ("ODBC", 'let x = Odbc.DataSource("dsn=x") in x'),
+                      ("SQL", 'let x = Sql.Database("srv", "db") in x'), ("carpeta", 'let x = Folder.Files("C:\\\\") in x'),
+                      ("archivo fuera de la carpeta", 'let x = File.Contents("C:\\\\Windows\\\\win.ini") in x'),
+                      ("#shared", 'let f = Record.Field(#shared, "Web.Contents") in f("http://x")'),
+                      ("Expression.Evaluate", 'let x = Expression.Evaluate("1+1") in x'), ("nombre entre comillas", 'let x = #"Web.Contents"("http://x") in x'),
+                      ("ruta juntando textos", 'let x = File.Contents("{datos}" & "/ventas.csv") in x'), ("Value.NativeQuery", 'let x = Value.NativeQuery(a, "select 1") in x')]
+        rech = []
+        for nombre, m in peligrosos:
+            mot = P.rechaza({"hoja": "PQ base", "cambios": [{"consulta": "Mala", "m": m, "cargar_en": "H1"}]})
+            if mot: rech.append((nombre, mot))
+            else: print(f"        ✘ NO se rechazó: {nombre}")
+        P.ver(len(rech) == len(peligrosos) and not diferencias(antes, P.foto()), f"rechaza {len(rech)} de {len(peligrosos)} consultas peligrosas y el libro no cambia")
+        for nombre, mot in rech: print(f"        · {nombre}: {mot[:80]}")
+        mot = P.rechaza({"cambios": [{"consulta": "EnModulo", "m": 'let x = Excel.CurrentWorkbook() in x', "cargar_en": "H1"}]})
+        P.ver(bool(mot) and "hoja aparte" in mot, f"no se carga en la hoja del módulo: {(mot or '')[:70]}")
+        con_pq = P.proponer({"hoja": "PQ base", "cambios": [{"consulta": "EnBase", "m": 'let x = Excel.CurrentWorkbook() in x', "cargar_en": "D1"}]}); api.aplicar(con_pq["id"])
+        mot = P.rechaza({"hoja": "PQ base", "cambios": [{"com": [{"ruta": "Range('K1').Value", "valor": 1}]}]})
+        P.ver(bool(mot) and "Power Query" in mot, f"en una hoja con datos de Power Query, el modo libre (que copia la hoja) se rechaza: {(mot or '')[:70]}")
+        t = P.proponer({"hoja": "PQ base", "cambios": [{"actualizar": "EnBase"}]})
+        P.ver(any("no se deshace" in n for n in t["notas"]), "actualizar avisa que no se deshace")
+        api.rechazar(t["id"]); api.deshacer(con_pq["id"], True); api.deshacer(base["id"], True)
+    finally:
+        api._curso.datos = datos_antes
+        try: os.remove(os.path.join(carpeta, "ventas.csv")); os.rmdir(carpeta)
+        except Exception: pass
+    dif = diferencias(inicio, P.foto())
+    P.ver(not dif and x.hacer(foto_pq) == pq0, f"al terminar, el libro está como al empezar (también consultas y conexiones) {dif}")
+    print("Power Query:", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
+def probar_analisis(x, api):
+    """Herramientas de análisis (sin IA): Buscar objetivo, tabla de datos y escenarios, con Deshacer exacto; Solver
+    solo si está activado."""
+    P = _Pruebas(x, api, "Herramientas de análisis (sin IA)")
+    api.modulo(0); inicio = P.foto(); h = "Análisis"
+    base = P.proponer({"hoja": h, "cambios": [{"poner": "A1:B3", "valores": [["Precio", 10], ["Unidades", 5], ["Total", "=B1*B2"]]},
+                                             {"poner": "D1", "valor": "=B3"}, {"poner": "C2:C4", "valores": [[4], [5], [6]]}]})
+    api.aplicar(base["id"]); antes = P.foto()
+    def caso(cambios, leer, esperado, que):
+        t = P.proponer({"hoja": h, "cambios": cambios})
+        r = api.aplicar(t["id"])["propuesta"]; v = x.hacer(lambda l: leer(l.buscar_hoja(h)))
+        P.ver(r["estado"] == "aplicada" and v == esperado, f"{que}: {v} → {r['mensaje'][:70]}")
+        d = api.deshacer(t["id"])["propuesta"]
+        P.ver(d["estado"] == "deshecha" and not diferencias(antes, P.foto()), f"  y deshacer lo deja exacto → {d['mensaje']}")
+        return t
+    caso([{"buscar_objetivo": "B3", "valor": 100, "cambiando": "B2"}], lambda ws: ws.Range("B2").Value, 10.0, "Buscar objetivo (B3 = 100 cambiando B2)")
+    caso([{"tabla_datos": "C1:D4", "columna": "B2"}], lambda ws: ws.Range("D2:D4").Value, ((40.0,), (50.0,), (60.0,)), "Tabla de datos (C1:D4, entrada B2)")
+    caso([{"escenario": "Optimista", "celdas": "B1:B2", "valores": [12, 8]}, {"mostrar_escenario": "Optimista"}],
+         lambda ws: (ws.Range("B3").Value, ws.Scenarios().Count), (96.0, 1), "Escenario «Optimista» creado y mostrado")
+    t = P.proponer({"hoja": h, "cambios": [{"buscar_objetivo": "B3", "valor": 100, "cambiando": "B2"}]})
+    P.ver(any("copia" in n for n in t["notas"]), "la tarjeta avisa que guarda una copia para deshacer"); api.rechazar(t["id"])
+    solver = x.hacer(lambda l: motor.avanzado.solver_disponible(l.xl))
+    mot = P.rechaza({"hoja": h, "cambios": [{"solver": "B3", "tipo": "max", "cambiando": "B2", "restricciones": [{"celda": "B2", "es": "<=", "valor": 10}]}]})
+    if solver: P.ver(mot is None, "Solver está activado: maximiza B3 con B2 ≤ 10 (aplicar y deshacer)")
+    else: P.ver(bool(mot) and "Solver no está activado" in mot, f"Solver no está activado en este Excel: se rechaza con un mensaje claro ({(mot or '')[:60]})")
+    malos = [{"buscar_objetivo": "B3:B4", "valor": 1, "cambiando": "B2"}, {"tabla_datos": "C1:D4"}, {"escenario": "X", "celdas": "B1:B2", "valores": [1]},
+             {"solver": "B3", "cambiando": "B2", "restricciones": [{"celda": "B2", "es": "~", "valor": 1}]}]
+    rech = sum(1 for c in malos if P.rechaza({"hoja": h, "cambios": [c]}))
+    P.ver(rech == len(malos), f"rechaza {rech} de {len(malos)} acciones de análisis mal escritas")
+    api.deshacer(base["id"], True)
+    dif = diferencias(inicio, P.foto())
+    P.ver(not dif, f"al terminar, el libro está como al empezar {dif}")
+    print("Herramientas de análisis:", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
+def probar_vba(x, api):
+    """VBA (sin IA): análisis estático (lo peligroso se rechaza, lo normal pasa), el vigía de bucles, el acceso al
+    proyecto y, si está activado, insertar y deshacer código, marcar líneas y el Comprobar de una macro."""
+    P = _Pruebas(x, api, "VBA (sin IA)")
+    api.modulo(0); inicio = P.foto()
+    peligrosos = [
+        ("Shell", 'Sub A()\n    Shell "cmd /c del x"\nEnd Sub'), ("Kill", 'Sub A()\n    Kill "C:\\x.txt"\nEnd Sub'),
+        ("Open For Output", 'Sub A()\n    Open "C:\\x.txt" For Output As #1\n    Print #1, "hola"\n    Close #1\nEnd Sub'),
+        ("CreateObject WScript.Shell", 'Sub A()\n    Dim o As Object\n    Set o = CreateObject("WScript.Shell")\nEnd Sub'),
+        ("CreateObject MSXML", 'Sub A()\n    Set o = CreateObject("MSXML2.XMLHTTP")\nEnd Sub'),
+        ("Declare PtrSafe / URLDownloadToFile", 'Private Declare PtrSafe Function URLDownloadToFile Lib "urlmon" (ByVal a As LongPtr) As Long\nSub A()\nEnd Sub'),
+        ("SendKeys", 'Sub A()\n    SendKeys "%{F4}"\nEnd Sub'), ("Application.Run", 'Sub A()\n    Application.Run "Otra"\nEnd Sub'),
+        ("Workbooks.Open", 'Sub A()\n    Workbooks.Open "C:\\a.xlsx"\nEnd Sub'), ("SaveAs", 'Sub A()\n    ThisWorkbook.SaveAs "C:\\b.xlsm"\nEnd Sub'),
+        ("VBProject", 'Sub A()\n    ThisWorkbook.VBProject.VBComponents.Add 1\nEnd Sub'), ("Environ", 'Sub A()\n    Range("A1").Value = Environ("USERNAME")\nEnd Sub'),
+        ("CallByName", 'Sub A()\n    CallByName Application, "Quit", VbMethod\nEnd Sub'), ("ExecuteExcel4Macro", 'Sub A()\n    ExecuteExcel4Macro "CALL(""x"")"\nEnd Sub'),
+        ("SaveSetting (registro)", 'Sub A()\n    SaveSetting "a", "b", "c", "d"\nEnd Sub'), ("Evaluate con [ ]", 'Sub A()\n    x = [CALL("kernel32","x")]\nEnd Sub'),
+        ("GetObject", 'Sub A()\n    Set o = GetObject("winmgmts:")\nEnd Sub'), ("Auto_Open (se ejecuta sola)", 'Sub Auto_Open()\n    Range("A1").Value = 1\nEnd Sub'),
+        ("Worksheet_Change (evento)", 'Private Sub Worksheet_Change(ByVal Target As Range)\nEnd Sub'), ("AddIns", 'Sub A()\n    AddIns("x").Installed = True\nEnd Sub'),
+        ("Application.OnTime", 'Sub A()\n    Application.OnTime Now, "A"\nEnd Sub'), ("Name … As (renombrar archivos)", 'Sub A()\n    Name "C:\\a.txt" As "C:\\b.txt"\nEnd Sub'),
+        ("partido con « _»", 'Sub A()\n    Application. _\n        Run "Otra"\nEnd Sub'), ("Dir (leer carpetas)", 'Sub A()\n    x = Dir("C:\\*.*")\nEnd Sub'),
+    ]
+    rech = []
+    for nombre, cod in peligrosos:
+        try: motor.vba.analizar(cod, "tutor"); print(f"        ✘ NO se rechazó: {nombre}")
+        except ValueError as e: rech.append((nombre, str(e)))
+    P.ver(len(rech) == len(peligrosos), f"análisis estático: rechaza {len(rech)} de {len(peligrosos)} macros peligrosas")
+    for nombre, mot in rech[:6]: print(f"        · {nombre}: {mot[:90]}")
+    buenos = ['Sub Negrita()\n    Dim c As Range\n    For Each c In Range("A2:A9")\n        If c.Value = "Total" Then c.Font.Bold = True \' total\n    Next c\n    MsgBox "Listo"\nEnd Sub',
+              'Function Doble(x As Double) As Double\n    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")\n    Doble = x * 2\nEnd Function',
+              'Sub Comentarios()\n    \' Shell, Kill y Workbooks en un comentario no cuentan\n    Range("A1").Value = "Shell y Kill en un texto tampoco"\nEnd Sub']
+    ok = [b for b in buenos if not motor.vba.problemas(b, "tutor")]
+    P.ver(len(ok) == len(buenos), f"lo normal pasa ({len(ok)} de {len(buenos)}: bucles, MsgBox, Scripting.Dictionary, palabras en comentarios y textos)")
+    ins = motor.vba.instrumentar(buenos[0])
+    P.ver("tutorVigia: Next c" in ins and "Private Function MsgBox" in ins and "Private Function InputBox" in ins,
+          "el vigía va antes de cada Next/Loop/GoTo y MsgBox/InputBox no se quedan esperando")
+    acceso = x.hacer(lambda l: motor.vba.acceso(l.wb))
+    print(f"        acceso al proyecto de VBA: {'activado' if acceso else 'NO activado'}")
+    turno = {"macro": "NegritaTotales", "rango": "A1:B4",
+             "solucion_vba": 'Sub NegritaTotales()\n    Dim c As Range\n    For Each c In Range("A2:A4")\n        If c.Value = "Total" Then c.Resize(1, 2).Font.Bold = True\n    Next c\nEnd Sub',
+             "errores": [{"vba": 'Sub NegritaTotales()\n    Range("A2:B4").Font.Bold = True\nEnd Sub', "dice": "Pusiste en negrita toda la tabla."}]}
+    t = P.proponer({"hoja": "VBA prueba", "cambios": [{"poner": "A1:B4", "valores": [["Concepto", "Monto"], ["Uno", 1], ["Total", 1], ["Dos", 2]]}], "turno": turno})
+    api.aplicar(t["id"])
+    comprobar = lambda: api.comprobar_ejercicio()["tutor_ej"]["revision"]
+    if not acceso:
+        mot = P.rechaza({"cambios": [{"vba": "Macros", "codigo": buenos[0]}]})
+        P.ver(bool(mot) and "Confiar en el acceso" in mot, f"sin acceso, proponer código se rechaza y explica cómo activarlo: {(mot or '')[:80]}…")
+        e = comprobar()
+        P.ver(e["estado"] == "vacio" and "Confiar en el acceso" in e["mensaje"], "sin acceso, Comprobar de un ejercicio de VBA explica cómo activarlo (y no ejecuta nada)")
+        r = x.hacer(lambda l: l.dibujar_marcas([{"tipo": "linea", "modulo": "Module1", "linea": 2, "texto": "x"}], 0))
+        P.ver(r["fallos"] and "sin acceso" in r["fallos"][0], f"sin acceso, marcar líneas no se puede y se dice: {r['fallos'][0][:60]}")
+        print("        (sin probar por falta de acceso: insertar y deshacer código, marcar líneas en el editor y ejecutar el Comprobar de una macro)")
+    else:
+        t2 = P.proponer({"cambios": [{"vba": "MacrosTutor", "codigo": buenos[0]}]})
+        P.ver(t2["codigos"] and "Sub Negrita()" in t2["codigos"][0]["texto"], "la tarjeta muestra el código entero")
+        r = api.aplicar(t2["id"])["propuesta"]
+        hay = x.hacer(lambda l: any(n == "MacrosTutor" for n, _, _ in motor.vba.modulos(l.wb)))
+        P.ver(r["estado"] == "aplicada" and hay, f"aplicar crea el módulo MacrosTutor → {r['mensaje']}")
+        r = x.hacer(lambda l: l.dibujar_marcas([{"tipo": "linea", "modulo": "MacrosTutor", "linea": 4, "texto": "mira esta condición"}], 0))
+        txt = x.hacer(lambda l: motor.vba._texto(next(c for c in l.wb.VBProject.VBComponents if c.Name == "MacrosTutor")))
+        P.ver(r["vba"] == 1 and "' ← tutor: mira esta condición" in txt, "marca una línea con un comentario temporal encima")
+        x.hacer(lambda l: l.borrar_marcas(0))
+        txt = x.hacer(lambda l: motor.vba._texto(next(c for c in l.wb.VBProject.VBComponents if c.Name == "MacrosTutor")))
+        P.ver("← tutor" not in txt, "«Borrar marcas» quita el comentario")
+        d = api.deshacer(t2["id"])["propuesta"]
+        hay = x.hacer(lambda l: any(n == "MacrosTutor" for n, _, _ in motor.vba.modulos(l.wb)))
+        P.ver(d["estado"] == "deshecha" and not hay, f"deshacer quita el módulo → {d['mensaje']}")
+        def escribir(cod):
+            def hacer(l):
+                vbp = l.wb.VBProject; comp = next((c for c in vbp.VBComponents if c.Name == "MiModulo"), None) or vbp.VBComponents.Add(1)
+                comp.Name = "MiModulo"; cm = comp.CodeModule
+                if cm.CountOfLines: cm.DeleteLines(1, cm.CountOfLines)
+                cm.AddFromString(cod.replace("\n", "\r\n"))
+            x.hacer(hacer)
+        escribir(turno["solucion_vba"]); e = comprobar()
+        P.ver(e["estado"] == "bien", f"Comprobar con la macro bien hecha → {e['estado']}: {e['mensaje']}")
+        escribir(turno["errores"][0]["vba"]); e = comprobar()
+        P.ver(e["estado"] == "mal" and e["mensaje"] == turno["errores"][0]["dice"], f"con el error típico → {e['mensaje']}")
+        escribir('Sub NegritaTotales()\n    Dim i As Long\n    Do While True\n        i = i + 1\n    Loop\nEnd Sub'); e = comprobar()
+        P.ver(e["estado"] == "mal" and "corté" in e["mensaje"], f"un bucle que no termina se corta → {e['mensaje']}")
+        escribir('Sub NegritaTotales()\n    Dim x As Long\n    x = 1 / 0\nEnd Sub'); e = comprobar()
+        P.ver(e["estado"] == "mal" and "error" in e["mensaje"].lower(), f"un error al ejecutar se dice → {e['mensaje'][:80]}")
+        escribir('Sub NegritaTotales()\n    Kill "C:\\x.txt"\nEnd Sub'); e = comprobar()
+        P.ver(e["estado"] == "mal" and "seguridad" in e["mensaje"], f"lo peligroso no se ejecuta → {e['mensaje'][:80]}")
+        abiertos = x.hacer(lambda l: [w.Name for w in l.xl.Workbooks])
+        P.ver(len(abiertos) == len(set(abiertos)) and x.hacer(lambda l: l.buscar_hoja("VBA prueba").Range("B3").Font.Bold) is False,
+              f"los libros temporales se cerraron y su hoja no se tocó (libros abiertos: {abiertos})")
+        x.hacer(lambda l: l.wb.VBProject.VBComponents.Remove(l.wb.VBProject.VBComponents("MiModulo")))
+    api.deshacer(t["id"], True)
+    perm = x.hacer(lambda l: l.macros_permitidas())
+    P.ver(perm, "un libro nuevo sin guardar (lección suelta) puede tener macros; un curso con «macros»: true usa .xlsm (lo prueba --probar del curso de ejemplo)")
+    dif = diferencias(inicio, P.foto())
+    P.ver(not dif, f"al terminar, el libro está como al empezar {dif}")
+    print("VBA:", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
+def probar_progreso(x, api):
+    """Que el panel recuerde dónde se quedó (módulo y paso) en progreso_panel.json, junto a curso.json."""
+    import tempfile
+    P = _Pruebas(x, api, "Progreso recordado (sin IA)")
+    ruta = os.path.join(tempfile.gettempdir(), f"progreso_prueba_{os.getpid()}.json"); antes = getattr(api._curso, "progreso", None)
+    api._curso.progreso = ruta
+    try:
+        api.modulo(0); api.ir(2)
+        d = json.loads(Path(ruta).read_text(encoding="utf-8"))
+        P.ver((d["m"], d["n"]) == (0, 2), f"al cambiar de paso se guarda: {d}")
+        otra = Api(x, api._tutor, api._curso)
+        P.ver((otra._m, otra._n) == (0, 2), f"al volver a abrir el panel, empieza en el módulo {otra._m + 1}, paso {otra._n + 1}")
+        x.vigia = None
+        Path(ruta).write_text('{"m": 9, "n": 99}', encoding="utf-8")
+        P.ver(Api(x, api._tutor, api._curso).progreso() == (0, 0), "si el archivo no cuadra con el curso (otro curso, módulos quitados), empieza desde el principio")
+        x.vigia = None
+    finally:
+        api._curso.progreso = antes
+        try: os.remove(ruta)
+        except Exception: pass
+    print("Progreso:", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
 def area_visible():
     """Área de la pantalla sin la barra de tareas, en píxeles lógicos (los que usa pywebview).
     Con la escala de Windows al 125 % o 150 %, un alto fijo se salía de la pantalla."""
@@ -784,16 +1303,25 @@ if __name__ == "__main__":
     try: sys.stdout.reconfigure(encoding="utf-8")     # acentos bien en cualquier consola
     except Exception: pass
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if not args: sys.exit("Uso: python panel_web.py <curso.json | leccion.json> [--probar | --probar-tutor]")
+    if not args: sys.exit("Uso: python panel_web.py <curso.json | leccion.json> [--probar | --probar-tutor] [--completo]")
     x, tutor, api = arrancar(args[0])
     if "--probar" in sys.argv or "--probar-tutor" in sys.argv:
         x.vigia = None; fallos = 0
+        api._curso.progreso = None          # las pruebas no cambian dónde se quedó la persona
+        if api._curso.macros:
+            fmt = x.hacer(lambda l: l.wb.FileFormat); ok = fmt == 52; fallos += not ok
+            print(f"Libro con macros {'✔' if ok else '✘'} {x.hacer(lambda l: l.wb.Name)} (formato {fmt}; 52 = .xlsm)")
         for m, lec in enumerate(api._curso.modulos):
             api.modulo(m); print(f"== Módulo {m + 1}: {lec.titulo} (hoja {lec.hoja})")
+            if api._estado().get("requisito"): print(f"      aviso del módulo en el panel: {api._estado()['requisito'][:110]}…")
             for k in range(len(lec)):
                 print(f"  [{k + 1}]", api.ir(k)["texto"])
                 t = lec.pasos[k].get("turno")
-                if t:       # la revisión automática: la solución debe salir bien y cada error con su mensaje
+                if t and not t.get("solucion"):     # ejercicio de objetos o de VBA: sin hacer nada, Comprobar no ve nada (lo del ejemplo no cuenta)
+                    e = api._estado()["revision"]; c = api.comprobar()["revision"]
+                    ok = e["estado"] == "pendiente" and c["estado"] == "vacio"; fallos += not ok
+                    print(f"      Comprobar de {'una macro' if t.get('macro') else 'objetos'} {'✔' if ok else '✘'} antes: {e['estado']} → al pulsar sin hacer nada: {c['estado']} ({c['mensaje'][:80]})")
+                elif t:       # la revisión automática: la solución debe salir bien y cada error con su mensaje
                     for nombre, ok, detalle in x.hacer(lambda l: l.probar_turno(m, t)):
                         fallos += not ok
                         print(f"      revisión {'✔' if ok else '✘'} {nombre} → {detalle}")
@@ -816,6 +1344,11 @@ if __name__ == "__main__":
         fallos += probar_propuestas(x, api)
         fallos += probar_hojas_y_bloques(x, api)
         fallos += probar_modo_libre(x, api)
+        if api._curso.libro is None or "--completo" in sys.argv:     # lo avanzado: con la lección suelta (libro sin guardar) o con --completo
+            for prueba in (probar_matrices, probar_pasos, probar_objetos, probar_power_query, probar_analisis, probar_vba, probar_progreso):
+                try: fallos += prueba(x, api)
+                except Exception as e:
+                    import traceback; traceback.print_exc(); fallos += 1; print(f"      ✘ {prueba.__name__} se cortó: {e}")
         print("Revisión automática:", "todo bien" if not fallos else f"{fallos} caso(s) no dieron lo esperado")
         if "--probar-tutor" in sys.argv:
             t = time.time(); tutor.calentar(); tutor.preguntar("", "Responde solo: ok"); print(f"Arranque del tutor: {time.time() - t:.1f}s")

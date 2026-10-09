@@ -1,0 +1,250 @@
+{
+  "titulo": "La clase",
+  "titulo_codigo": "UML",
+  "curso": "Diagramas de clase en Dia",
+  "tema_tutor": "diagramas de clase UML en el editor Dia 0.97: qué es una clase, atributos con tipo, visibilidad (+ público, - privado, # protegido) y métodos con parámetros y tipo de retorno; cómo se hace en Dia (hoja UML, doble clic para Propiedades, pestañas Atributos y Operaciones)",
+  "notas_tutor": "Tu turno: en mi_diagrama.dia, la clase Estudiante con -carnet: String, -nombre: String, -promedio: float, +inscribir(curso: String): void y +getPromedio(): float. Errores típicos en Dia: escribir «carnet: String» todo en el campo Nombre (el tipo va en Tipo), poner los paréntesis y parámetros en el nombre del método, dejar la visibilidad por defecto (público) en los atributos, olvidar guardar con Ctrl+S.",
+  "pasos": [
+    {
+      "titulo": "Qué es una clase",
+      "texto": "Una **clase** es un molde: describe cómo son todos los objetos de un tipo. «Libro» describe a todos los libros, aunque cada libro concreto sea distinto. En UML se dibuja como una caja con tres partes: el **nombre** arriba, los **atributos** en medio y los **métodos** abajo. De momento, solo el nombre.",
+      "en_dia": "En la caja de herramientas, abre el menú de hojas y elige **UML**. Haz clic en el icono de **Clase** y luego en el lienzo. Doble clic sobre la clase → pestaña **Clase** → campo **Nombre de clase**: escribe Libro.",
+      "diagrama": [
+        {
+          "nombre": "Libro",
+          "pos": [
+            2,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Atributos",
+      "texto": "Los **atributos** son los datos que guarda cada objeto: todo libro tiene un título, un autor y un número de páginas. Cada atributo lleva su **tipo**: `titulo: String` (texto), `paginas: int` (entero).",
+      "en_dia": "Doble clic en la clase → pestaña **Atributos** → botón **Nuevo**. Escribe el nombre en **Nombre** y el tipo en **Tipo** (¡en campos separados!). Repite para cada atributo y pulsa **Aceptar**.",
+      "diagrama": [
+        {
+          "nombre": "Libro",
+          "pos": [
+            2,
+            2
+          ],
+          "atributos": [
+            {
+              "nombre": "titulo",
+              "tipo": "String",
+              "vis": "+"
+            },
+            {
+              "nombre": "autor",
+              "tipo": "String",
+              "vis": "+"
+            },
+            {
+              "nombre": "paginas",
+              "tipo": "int",
+              "vis": "+"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Visibilidad",
+      "texto": "La **visibilidad** dice quién puede tocar cada cosa: `+` público (cualquiera), `-` privado (solo la propia clase) y `#` protegido (la clase y sus hijas). Lo normal es que los **atributos sean privados**: así nadie cambia el título de un libro por accidente.",
+      "en_dia": "En la pestaña **Atributos**, selecciona cada atributo y cambia **Visibilidad** a **Privado**. Dia pone **Público** por defecto: es el olvido más común.",
+      "diagrama": [
+        {
+          "nombre": "Libro",
+          "pos": [
+            2,
+            2
+          ],
+          "atributos": [
+            {
+              "nombre": "titulo",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "autor",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "paginas",
+              "tipo": "int",
+              "vis": "-"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Métodos",
+      "texto": "Los **métodos** son lo que el objeto sabe **hacer**: un libro se puede prestar y devolver. Se escriben con paréntesis y, al final, lo que **devuelven**: `+devolver(): void` (void = no devuelve nada), `+getTitulo(): String`.",
+      "en_dia": "Pestaña **Operaciones** → **Nuevo**. En **Nombre** solo el nombre (sin paréntesis), en **Tipo** lo que devuelve (void, String…) y la **Visibilidad**: los métodos suelen ser públicos.",
+      "diagrama": [
+        {
+          "nombre": "Libro",
+          "pos": [
+            2,
+            2
+          ],
+          "atributos": [
+            {
+              "nombre": "titulo",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "autor",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "paginas",
+              "tipo": "int",
+              "vis": "-"
+            }
+          ],
+          "metodos": [
+            {
+              "nombre": "devolver",
+              "tipo": "void",
+              "vis": "+"
+            },
+            {
+              "nombre": "getTitulo",
+              "tipo": "String",
+              "vis": "+"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Parámetros y retorno",
+      "texto": "Un método puede recibir **parámetros**, los datos que necesita para trabajar: para prestar un libro hay que saber por cuántos días. Se escriben dentro de los paréntesis con su tipo: `+prestar(dias: int): boolean` (devuelve sí o no: si se pudo prestar).",
+      "en_dia": "En **Operaciones**, selecciona el método y, abajo, en **Parámetros** pulsa **Nuevo**: nombre `dias`, tipo `int`. Nunca escribas «prestar(dias: int)» en el campo Nombre.",
+      "diagrama": [
+        {
+          "nombre": "Libro",
+          "pos": [
+            2,
+            2
+          ],
+          "atributos": [
+            {
+              "nombre": "titulo",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "autor",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "paginas",
+              "tipo": "int",
+              "vis": "-"
+            }
+          ],
+          "metodos": [
+            {
+              "nombre": "prestar",
+              "tipo": "boolean",
+              "vis": "+",
+              "params": [
+                {
+                  "nombre": "dias",
+                  "tipo": "int"
+                }
+              ]
+            },
+            {
+              "nombre": "devolver",
+              "tipo": "void",
+              "vis": "+"
+            },
+            {
+              "nombre": "getTitulo",
+              "tipo": "String",
+              "vis": "+"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Tu turno",
+      "texto": "**Tu turno.** En tu diagrama (la pestaña **mi_diagrama** de Dia; el panel te lleva a ella) dibuja la clase **Estudiante**: guarda su carnet y su nombre (texto) y su promedio (decimal), todos privados. Sabe **inscribirse** en un curso (recibe el nombre del curso y no devuelve nada) y **dar su promedio**. Cuando termines, guarda con **Ctrl+S** y pulsa **Comprobar** aquí abajo.",
+      "en_dia": "Lo mismo que con Libro: hoja **UML** → **Clase**, y doble clic para las pestañas **Atributos** y **Operaciones**. Guarda en el archivo que abre el panel (mi_diagrama.dia).",
+      "diagrama": [],
+      "turno": {
+        "archivo": "mi_diagrama.dia",
+        "al_empezar": "Dibuja la clase Estudiante en tu diagrama. Cuando termines, guarda en Dia (Ctrl+S) y pulsa Comprobar.",
+        "al_terminar": "¡Perfecto! Atributos privados con su tipo y métodos con parámetros y retorno. Ya sabes hacer una clase.",
+        "clase": {
+          "nombre": "Estudiante",
+          "atributos": [
+            {
+              "nombre": "carnet",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "nombre",
+              "tipo": "String",
+              "vis": "-"
+            },
+            {
+              "nombre": "promedio",
+              "tipo": "float",
+              "vis": "-"
+            }
+          ],
+          "metodos": [
+            {
+              "nombre": "inscribir",
+              "tipo": "void",
+              "vis": "+",
+              "params": [
+                {
+                  "nombre": "curso",
+                  "tipo": "String"
+                }
+              ]
+            },
+            {
+              "nombre": "getPromedio",
+              "tipo": "float",
+              "vis": "+",
+              "params": []
+            }
+          ]
+        },
+        "sinonimos": {
+          "String": [
+            "string",
+            "str",
+            "texto",
+            "cadena"
+          ],
+          "float": [
+            "double",
+            "real",
+            "decimal"
+          ],
+          "void": [
+            "vacio",
+            "none"
+          ]
+        },
+        "titulo": "La clase Estudiante"
+      }
+    }
+  ]
+}

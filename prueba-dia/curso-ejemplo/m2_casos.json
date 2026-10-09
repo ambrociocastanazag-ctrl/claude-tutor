@@ -1,0 +1,102 @@
+{
+  "titulo": "Casos de uso",
+  "titulo_codigo": "include",
+  "id": "casos",
+  "tema_tutor": "diagramas de casos de uso UML en Dia 0.97: actor, caso de uso, límite del sistema, asociación entre actor y caso, «include» (el caso base SIEMPRE usa al incluido; la flecha va del base al incluido) y «extend» (un caso que a veces amplía al base; la flecha va del que extiende al base). En Dia: hoja UML, herramientas Actor, Caso de uso y Dependencia (con estereotipo include o extend en sus Propiedades); el límite es una Caja de la hoja estándar.",
+  "notas_tutor": "Tu turno: en mi_casos.dia ya están el sistema Cajero, el actor Cliente y los casos Sacar dinero, Validar PIN e Imprimir recibo; la persona añade la asociación Cliente — Sacar dinero, un «include» de Sacar dinero a Validar PIN y un «extend» de Imprimir recibo a Sacar dinero. Errores típicos: extend en vez de include para Validar PIN, include al revés, extend al revés.",
+  "pasos": [
+    {
+      "titulo": "Actor y caso de uso",
+      "texto": "Un diagrama de casos de uso cuenta **quién** usa el sistema y **para qué**. El **actor** (el muñeco) es alguien de fuera: un socio de la biblioteca. Cada **caso de uso** (el óvalo) es algo que consigue con el sistema: pedir un libro. La caja es el **límite del sistema**, y la línea dice que el socio participa en ese caso.",
+      "en_dia": "Hoja **UML**: herramienta **Actor** fuera de la caja y **Caso de uso** dentro. La caja del límite es una **Caja** de las herramientas de arriba. La línea, una **Asociación**.",
+      "cambios": [
+        {"sistema": "Biblioteca"},
+        {"actor": "Socio"},
+        {"caso": "Pedir libro"},
+        {"relacion": "asociacion", "de": "Socio", "a": "Pedir libro"}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Actor", "texto": "Herramienta Actor"},
+        {"herramienta": "UML - Usecase", "texto": "Herramienta Caso de uso"}
+      ],
+      "hazlo": {"etiqueta": "Elige el Actor por mí", "hacer": [{"hoja": "UML"}, {"herramienta": "UML - Actor"}]}
+    },
+    {
+      "titulo": "«include»",
+      "texto": "Para pedir un libro **siempre** hay que validar el carnet. Eso es un **«include»**: el caso base (`Pedir libro`) incluye a otro (`Validar carnet`) cada vez. La flecha discontinua va **del caso base al incluido**.",
+      "en_dia": "Herramienta **Dependencia** (flecha discontinua) de **Pedir libro** a **Validar carnet**; doble clic en ella y en **Estereotipo** escribe `include`.",
+      "cambios": [
+        {"caso": "Validar carnet"},
+        {"relacion": "include", "de": "Pedir libro", "a": "Validar carnet"}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Dependency", "tip": "Dependencia", "texto": "Dependencia (estereotipo «include»)"}
+      ]
+    },
+    {
+      "titulo": "«extend»",
+      "texto": "**A veces**, al pedir un libro que no está, el socio lo **reserva**. Eso es un **«extend»**: `Reservar libro` amplía a `Pedir libro` solo en algunos casos. Ojo: la flecha va **del que extiende al caso base** (al revés que el include).",
+      "en_dia": "Otra **Dependencia**, ahora de **Reservar libro** a **Pedir libro**, con el estereotipo `extend`.",
+      "cambios": [
+        {"caso": "Reservar libro"},
+        {"relacion": "extend", "de": "Reservar libro", "a": "Pedir libro"}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Dependency", "tip": "Dependencia", "texto": "Dependencia (estereotipo «extend»)"}
+      ]
+    },
+    {
+      "titulo": "Tu turno",
+      "texto": "**Tu turno.** En tu diagrama (**mi_casos**) ya están el **Cajero**, el **Cliente** y tres casos. Únelos: el cliente **saca dinero**; para sacar dinero **siempre** hay que **validar el PIN**; y **a veces** se **imprime un recibo**. Guarda con **Ctrl+S** y pulsa **Comprobar**.",
+      "en_dia": "**Asociación** del Cliente a Sacar dinero; **Dependencia** con estereotipo `include` o `extend` según el caso (doble clic en la flecha → **Estereotipo**).",
+      "turno": {
+        "titulo": "El cajero",
+        "al_empezar": "Une el actor y los casos con una asociación, un «include» y un «extend». Guarda (Ctrl+S) y pulsa Comprobar.",
+        "al_terminar": "¡Bien! Include del base al incluido (siempre) y extend del que amplía al base (a veces).",
+        "conexiones": [
+          {"tipo": "asociacion", "de": "Cliente", "a": "Sacar dinero"},
+          {"tipo": "include", "de": "Sacar dinero", "a": "Validar PIN"},
+          {"tipo": "extend", "de": "Imprimir recibo", "a": "Sacar dinero"}
+        ],
+        "inicial": [
+          {"sistema": "Cajero"}, {"actor": "Cliente"},
+          {"caso": "Sacar dinero"}, {"caso": "Validar PIN"}, {"caso": "Imprimir recibo"}
+        ],
+        "solucion": [
+          {"relacion": "asociacion", "de": "Cliente", "a": "Sacar dinero"},
+          {"relacion": "include", "de": "Sacar dinero", "a": "Validar PIN"},
+          {"relacion": "extend", "de": "Imprimir recibo", "a": "Sacar dinero"}
+        ],
+        "errores": [
+          {
+            "dice": "Validar el PIN no es «a veces»: pasa SIEMPRE que sacas dinero. Eso es un «include», y la flecha va de Sacar dinero a Validar PIN.",
+            "patron": {"conexiones": [{"tipo": "extend", "de": "Validar PIN", "a": "Sacar dinero"}]},
+            "prueba": [
+              {"relacion": "asociacion", "de": "Cliente", "a": "Sacar dinero"},
+              {"relacion": "extend", "de": "Validar PIN", "a": "Sacar dinero"},
+              {"relacion": "extend", "de": "Imprimir recibo", "a": "Sacar dinero"}
+            ]
+          },
+          {
+            "dice": "El «include» va al revés: sale del caso base (Sacar dinero) y apunta al que incluye (Validar PIN).",
+            "patron": {"conexiones": [{"tipo": "include", "de": "Validar PIN", "a": "Sacar dinero"}]},
+            "prueba": [
+              {"relacion": "asociacion", "de": "Cliente", "a": "Sacar dinero"},
+              {"relacion": "include", "de": "Validar PIN", "a": "Sacar dinero"},
+              {"relacion": "extend", "de": "Imprimir recibo", "a": "Sacar dinero"}
+            ]
+          },
+          {
+            "dice": "El «extend» va al revés que el include: sale del caso que amplía (Imprimir recibo) y apunta al base (Sacar dinero).",
+            "patron": {"conexiones": [{"tipo": "extend", "de": "Sacar dinero", "a": "Imprimir recibo"}]},
+            "prueba": [
+              {"relacion": "asociacion", "de": "Cliente", "a": "Sacar dinero"},
+              {"relacion": "include", "de": "Sacar dinero", "a": "Validar PIN"},
+              {"relacion": "extend", "de": "Sacar dinero", "a": "Imprimir recibo"}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

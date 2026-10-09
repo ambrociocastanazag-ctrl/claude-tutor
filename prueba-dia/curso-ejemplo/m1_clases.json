@@ -1,0 +1,109 @@
+{
+  "titulo": "Clases y relaciones",
+  "titulo_codigo": "UML",
+  "id": "clases",
+  "tema_tutor": "diagramas de clases UML en Dia 0.97: clase con atributos y métodos, asociación con nombre y multiplicidades, herencia (generalización, triángulo vacío junto al padre) y dónde se hace en Dia (hoja UML, herramientas Clase, Asociación y Generalización, doble clic para Propiedades, pestañas Atributos y Operaciones).",
+  "notas_tutor": "Tu turno: en mi_clases.dia, las clases Animal, Perro y Dueño; Perro hereda de Animal (triángulo junto a Animal) y Dueño está asociado a Perro con multiplicidad 1 junto a Dueño y * junto a Perro. Errores típicos: la herencia al revés (de Animal a Perro), las multiplicidades cruzadas, y poner una asociación en vez de la herencia.",
+  "pasos": [
+    {
+      "titulo": "Dos clases",
+      "texto": "Empezamos con dos **clases**: `Libro` y `Autor`. Cada una es una caja con su nombre arriba, sus atributos en medio y sus métodos abajo. Un libro guarda su título y se puede prestar; un autor guarda su nombre.",
+      "en_dia": "En la caja de herramientas, hoja **UML** → herramienta **Clase** y clic en el lienzo. Doble clic sobre la clase para darle nombre, atributos y métodos.",
+      "cambios": [
+        {"clase": "Libro", "atributos": ["-titulo: String"], "metodos": ["+prestar(dias: int): boolean"], "pos": [2, 2]},
+        {"clase": "Autor", "atributos": ["-nombre: String"], "pos": [28, 2]}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Class", "tip": "Clase", "texto": "Herramienta Clase"}
+      ],
+      "hazlo": {"etiqueta": "Elige la herramienta por mí", "hacer": [{"hoja": "UML"}, {"herramienta": "UML - Class"}]}
+    },
+    {
+      "titulo": "Asociación con multiplicidad",
+      "texto": "Una **asociación** es una línea entre dos clases que dice que se conocen: un libro está **escrito por** autores. Los números de cada punta son la **multiplicidad**: `1..*` junto a Autor (un libro tiene uno o más autores) y `*` junto a Libro (un autor escribe muchos libros).",
+      "en_dia": "Herramienta **Asociación** (la línea simple de la hoja UML): arrastra de una clase a la otra hasta que las puntas se pongan rojas (pegadas). Doble clic en la línea para el **Nombre** y las **Multiplicidades** de cada lado.",
+      "cambios": [
+        {"relacion": "asociacion", "de": "Libro", "a": "Autor", "nombre": "escrito por", "mult": ["*", "1..*"]}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Association", "tip": "Asociación, dos clases están asociadas", "texto": "Herramienta Asociación"}
+      ]
+    },
+    {
+      "titulo": "Herencia",
+      "texto": "La **herencia** (generalización) dice que una clase **es un** tipo de otra: una `Novela` es un `Libro`, así que tiene todo lo de Libro y algo más (su género). Se dibuja con un **triángulo vacío junto al padre**.",
+      "en_dia": "Herramienta **Generalización**: arrastra **de la hija (Novela) al padre (Libro)**. El triángulo queda junto a Libro.",
+      "cambios": [
+        {"clase": "Novela", "atributos": ["-genero: String"]},
+        {"relacion": "herencia", "de": "Novela", "a": "Libro"}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Generalization", "texto": "Herramienta Generalización"}
+      ]
+    },
+    {
+      "titulo": "Añadir un atributo",
+      "texto": "Para añadir algo a una clase que ya existe se usa su ventana de **Propiedades**: le añadimos a `Libro` el número de páginas, `-paginas: int`. El nombre va en **Nombre** y el tipo en **Tipo**, en campos separados.",
+      "en_dia": "Doble clic en **Libro** → pestaña **Atributos** → **Nuevo** → escribe en **Nombre** y en **Tipo** → **Aceptar**.",
+      "cambios": [
+        {"modificar": "Libro", "agregar": ["-paginas: int"]}
+      ],
+      "interfaz": [
+        {"objeto": "Libro", "texto": "Doble clic en Libro"},
+        {"pestana": "Atributos"},
+        {"boton": "Nuevo"},
+        {"campo": "Nombre"}
+      ],
+      "hazlo": {"etiqueta": "Ábrelo por mí", "hacer": [{"propiedades": "Libro"}, {"pulsar": "Atributos"}]}
+    },
+    {
+      "titulo": "Tu turno",
+      "texto": "**Tu turno.** En tu diagrama (la pestaña **mi_clases** de Dia) dibuja las clases **Animal**, **Perro** y **Dueño**. Un perro **es un** animal, y un dueño tiene **muchos** perros (un perro tiene **un** dueño). Guarda con **Ctrl+S** y pulsa **Comprobar**.",
+      "en_dia": "Hoja **UML**: **Clase** para las tres cajas, **Generalización** de Perro a Animal y **Asociación** entre Dueño y Perro (doble clic en la línea para las multiplicidades).",
+      "turno": {
+        "titulo": "Animales y dueños",
+        "al_empezar": "Dibuja Animal, Perro y Dueño con su herencia y su asociación. Guarda (Ctrl+S) y pulsa Comprobar.",
+        "al_terminar": "¡Perfecto! La herencia apunta al padre y las multiplicidades están en su lado.",
+        "clases": [{"nombre": "Animal"}, {"nombre": "Perro"}, {"nombre": "Dueño"}],
+        "relaciones": [
+          {"tipo": "herencia", "de": "Perro", "a": "Animal"},
+          {"tipo": "asociacion", "de": "Dueño", "a": "Perro", "mult": ["1", "*"]}
+        ],
+        "solucion": [
+          {"clase": "Animal"}, {"clase": "Perro"}, {"clase": "Dueño"},
+          {"relacion": "herencia", "de": "Perro", "a": "Animal"},
+          {"relacion": "asociacion", "de": "Dueño", "a": "Perro", "mult": ["1", "*"]}
+        ],
+        "errores": [
+          {
+            "dice": "La herencia va al revés: el triángulo va junto al PADRE. Arrastra la Generalización de Perro (la hija) a Animal.",
+            "patron": {"relaciones": [{"tipo": "herencia", "de": "Animal", "a": "Perro"}]},
+            "prueba": [
+              {"clase": "Animal"}, {"clase": "Perro"}, {"clase": "Dueño"},
+              {"relacion": "herencia", "de": "Animal", "a": "Perro"},
+              {"relacion": "asociacion", "de": "Dueño", "a": "Perro", "mult": ["1", "*"]}
+            ]
+          },
+          {
+            "dice": "Las multiplicidades están cruzadas: se leen desde la otra clase. Un dueño tiene muchos perros, así que el «*» va junto a Perro y el «1» junto a Dueño.",
+            "patron": {"relaciones": [{"tipo": "asociacion", "de": "Dueño", "a": "Perro", "mult": ["*", "1"]}]},
+            "prueba": [
+              {"clase": "Animal"}, {"clase": "Perro"}, {"clase": "Dueño"},
+              {"relacion": "herencia", "de": "Perro", "a": "Animal"},
+              {"relacion": "asociacion", "de": "Dueño", "a": "Perro", "mult": ["*", "1"]}
+            ]
+          },
+          {
+            "dice": "Un perro no «usa» a un animal: ES un animal. Entre Perro y Animal va una Generalización (triángulo vacío), no una asociación.",
+            "patron": {"relaciones": [{"tipo": "asociacion", "de": "Perro", "a": "Animal"}]},
+            "prueba": [
+              {"clase": "Animal"}, {"clase": "Perro"}, {"clase": "Dueño"},
+              {"relacion": "asociacion", "de": "Perro", "a": "Animal"},
+              {"relacion": "asociacion", "de": "Dueño", "a": "Perro", "mult": ["1", "*"]}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

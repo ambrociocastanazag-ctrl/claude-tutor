@@ -2,9 +2,9 @@
 
 > **Si eres un agente de IA (Claude Code) y la persona te pidió "lee INSTALAR_TUTOR.md y síguelo", este archivo es para ti.** Aquí no hay temas de estudio de nadie: solo la forma de trabajar de un tutor y sus herramientas. Tu trabajo es dejar esta carpeta convertida en un **tutor de estudio personalizado** para quien te lo pidió, y al final dejarle claro cómo actualizar las herramientas.
 
-> **Esta carpeta es un repositorio git** (`tutor-de-estudio`). Junto a este archivo hay archivos ya hechos y probados: `panel-excel/` (panel de clase en vivo para Excel), `herramientas/` (capturas de páginas con Chrome) y `requirements.txt` (las librerías de Python). Úsalos tal cual: no los reescribas ni los copies a mano. Si falta algo, pídele a la persona que clone el repositorio completo.
+> **Esta carpeta es un repositorio git** (`tutor-de-estudio`). Junto a este archivo hay archivos ya hechos y probados: `panel-excel/` (panel de clase en vivo para Excel), `prueba-dia/` (panel de clase en vivo para el editor de diagramas Dia, con su plugin y un curso de ejemplo), `herramientas/` (capturas de páginas con Chrome) y `requirements.txt` (las librerías de Python). Úsalos tal cual: no los reescribas ni los copies a mano. Si falta algo, pídele a la persona que clone el repositorio completo.
 >
-> **Lo de la persona no va al repositorio.** Su `CLAUDE.md`, `contexto.md`, `README.md`, `panel-excel/preferencias.json` y sus carpetas de temas o cursos quedan fuera (el `.gitignore` ya lo hace). No hagas commits ni cambies archivos del repositorio: así `git pull` actualiza las herramientas sin chocar con lo suyo.
+> **Lo de la persona no va al repositorio.** Su `CLAUDE.md`, `contexto.md`, `README.md`, `panel-excel/preferencias.json`, sus diagramas y su progreso en los cursos de Dia, y sus carpetas de temas o cursos quedan fuera (el `.gitignore` ya lo hace). No hagas commits ni cambies archivos del repositorio: así `git pull` actualiza las herramientas sin chocar con lo suyo.
 
 Reglas mientras lo haces:
 - **Trabaja siempre con la carpeta donde está este archivo como directorio actual** (`cd` a ella al empezar): todos los comandos y scripts de aquí usan rutas relativas a esa carpeta.
@@ -43,9 +43,11 @@ Comprueba con un comando cada una (no instales todavía) y apunta cuáles existe
 | Excel | `EXCEL.EXE` dentro de `C:\Program Files\Microsoft Office\` (búscalo en subcarpetas; suele estar en `root\Office16\`) |
 | `openpyxl` | `python -c "import openpyxl"` |
 | `pywin32` | `python -c "import win32com.client"` |
-| `pywebview` | `python -c "import webview"` (solo para el panel de Excel) |
+| `pywebview` | `python -c "import webview"` (solo para los paneles de Excel y de Dia) |
+| Dia | existe `C:\Program Files (x86)\Dia\bin\diaw.exe`; la versión, con `"C:\Program Files (x86)\Dia\bin\dia.exe" --version` (solo para el panel de Dia; ver 4.7) |
+| Pillow | `python -c "import PIL"` (solo para las flechas del panel de Dia encima de su ventana) |
 | PyMuPDF | `python -c "import pymupdf"` (opcional: leer PDFs con fórmulas como imagen) |
-| Claude Code en terminal | `claude --version` (el tutor del panel de Excel lo usa) |
+| Claude Code en terminal | `claude --version` (el tutor de los paneles de Excel y de Dia lo usa) |
 
 Con las materias del paso 1, decide qué le sirve:
 - **Si ya está instalado**, no pidas permiso: pruébalo y anótalo.
@@ -59,6 +61,7 @@ Usa la plantilla del paso 4 y haz esto con la sección "Herramientas":
 - **MATLAB:** solo si lo tiene **y** le sirve para sus materias (matemáticas, ingeniería, física, estadística). Si lo tiene pero no le sirve, anótalo solo en «Equipo» de `contexto.md`.
 - **Excel por COM:** solo si tiene Excel y Python (o si aprueba instalar `pywin32`).
 - **Panel de clase en vivo para Excel** (4.6): solo si va a estudiar Excel y tiene (o aprueba instalar) `pywin32` y `pywebview`. Si no, la sección de Excel queda sin el panel.
+- **Panel de clase en vivo para Dia** (4.7): solo si va a estudiar diagramas UML (o cualquier diagrama) en Dia y tiene Dia 0.97.2 (o aprueba instalarlo). Si no, no pongas la sección de Dia.
 - **Falstad y verificación en Chrome:** la herramienta queda **guardada** en el `CLAUDE.md`, pero **se aplica solo si estudia electricidad o circuitos** (la sección dice esa condición). Si `herramientas/` no se crea ahora (no estudia electricidad o no aprueba descargar `puppeteer-core`), añade al final de la sección la línea de _pendiente_ que da 4.5.
 - **Plotly 3D girable:** entra como línea dentro de "Artefactos" (sirve para cualquier superficie o figura 3D).
 - Reemplaza `{{...}}` por los datos reales (rutas de su sistema, nombre).
@@ -112,6 +115,8 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 {{SECCIÓN MATLAB, solo si la tiene; ver 4.3}}
 
 {{SECCIÓN EXCEL, solo si aplica; ver 4.4}}
+
+{{SECCIÓN DIA, solo si aplica; ver 4.7}}
 
 {{SECCIÓN FALSTAD Y CHROME; ver 4.5}}
 
@@ -275,9 +280,41 @@ Si la persona no va a estudiar Excel o el panel no se instala, deja la carpeta `
 3. **Tutor del panel (opcional):** `--probar-tutor` le hace una pregunta y gasta del plan como un mensaje normal. Si no lo corres, anota en «Equipo» de `contexto.md`: «tutor del panel sin probar».
 4. Solo si los pasos 1 y 2 salieron bien, deja en su `CLAUDE.md` la parte del panel dentro de la sección de Excel. Si algo falló, quítala y explícale qué faltó.
 
+### 4.7 Panel de clase en vivo para Dia (opcional)
+
+Solo si la persona va a estudiar **diagramas UML** (clases, casos de uso, secuencia, actividades, estados…) o cualquier diagrama en **Dia**, y tiene:
+- **Dia 0.97.2 de dia-installer.de** (la versión de 32 bits, la habitual en Windows), instalado en la ruta estándar `C:\Program Files (x86)\Dia`. Compruébalo con `"C:\Program Files (x86)\Dia\bin\dia.exe" --version`: tiene que decir **0.97.2** (compilada el 22 de diciembre de 2011, la de dia-installer.de). El plugin del panel (`prueba-dia/plugin-dia/dia-tutor.dll`) está compilado para ese Dia exacto: con otro, Dia no lo carga y el panel trabaja «a la antigua» (una ventana por archivo, sin cambios en vivo ni flechas).
+- Python con `pywebview` y `pywin32`, y `Pillow` para las flechas encima de Dia (están en `requirements.txt`; sin Pillow todo lo demás funciona).
+- Claude Code en la terminal (`claude --version`) para el tutor.
+
+Cómo es: Dia en una ventana con dos pestañas (el ejemplo de la lección, que cambia solo en cada paso, y el diagrama de la persona en ese módulo) y el panel de la derecha, con la misma página que el de Excel.
+- **Lección:** menú de módulos, paso a paso con ← → (los pasos se suman y lo nuevo queda resaltado en Dia), «Señálamelo en Dia» (flechas y notas encima de la ventana de Dia que dejan pasar los clics), «Hazlo por mí» en algunos pasos y el «Tu turno» con **Comprobar**, sin IA, que reconoce los errores típicos del curso. Recuerda el módulo y el paso donde se quedó.
+- **Tutor:** marca su diagrama (en el panel y dentro de Dia) y crea o cambia diagramas de cualquier tipo, pero solo si la persona pulsa **Aplicar** en la tarjeta de permiso, y se puede **Deshacer**.
+
+Cada curso es una carpeta con `curso.json` y un JSON por módulo; el formato y la plantilla están en `prueba-dia/README.md` («Cómo hacer un curso») y en `prueba-dia/curso-ejemplo/`.
+
+1. **Los archivos ya están en `prueba-dia/`** (vienen en el repositorio): el código (`panel_dia.py`, `curso_dia.py`, `interfaz_dia.py`, `overlay_dia.py`, `cambios_dia.py`, `dia_uml.py`, `dia_objetos.py`, `dia_planes.py`), `catalogo_dia.json` (los tipos de objeto de Dia 0.97.2), `leccion_clase.json`, `curso-ejemplo/` y `plugin-dia/` con la DLL ya compilada. No los reescribas ni recompiles la DLL (no hace falta: se carga desde esa carpeta, sin tocar la instalación de Dia).
+2. **Prueba sin ventanas** (no abre Dia):
+   - `python prueba-dia/panel_dia.py --probar`: tiene que terminar en «Cambios del tutor en Dia: todo bien», «Otros diagramas y modo libre: todo bien» y «Fase 2 y arreglos: todo bien».
+   - `python prueba-dia/panel_dia.py prueba-dia/curso-ejemplo/curso.json --probar`: los pasos de los tres módulos, cada «Tu turno» con su solución y sus errores típicos, y al final «Curso de Dia: todo bien». Trabaja sobre una copia: no deja nada en la carpeta del curso.
+   El primer `--probar` crea `prueba-dia/mi_diagrama.dia` (vacío) si no existe; es el diagrama del ejemplo y queda fuera del repositorio.
+3. **Prueba con Dia (opcional, con su permiso: abre ventanas):** `python prueba-dia/panel_dia.py prueba-dia/curso-ejemplo/curso.json` abre Dia y el panel. La primera vez arma cada módulo en Dia (unos segundos). Si el panel dice «Dia va en el modo de antes», el plugin no cargó: casi siempre es otra versión de Dia. Al terminar, cierra el panel; Dia queda abierto con su diagrama.
+4. Solo si el paso 2 salió bien, pega esta sección en su `CLAUDE.md`, en el lugar de `{{SECCIÓN DIA}}`:
+
+````markdown
+### Dia (panel de clase en vivo, `prueba-dia/`)
+
+- Dia 0.97.2 con el plugin propio del panel (`prueba-dia/plugin-dia/`, se carga solo al abrir el panel). Ver `prueba-dia/README.md`.
+- **Cursos de Dia con el panel:** cada curso va en su carpeta con `curso.json` y un JSON por módulo (plantilla: `prueba-dia/curso-ejemplo/`): pasos que se suman y cambian Dia en vivo (con el mismo vocabulario de cambios que usa el tutor, para cualquier tipo de diagrama), flechas encima de Dia («interfaz»), «Hazlo por mí» y un «Tu turno» con su solución y sus errores típicos.
+- Antes de darle un módulo: `python prueba-dia/panel_dia.py <curso.json> --probar` hasta que termine en «Curso de Dia: todo bien».
+- Sus diagramas (`mi_diagrama.dia`, `mis_diagramas/`) y su progreso (`progreso.json`) son suyos: no se borran ni se sobrescriben. No cierres su Dia ni le mandes órdenes mientras tenga el panel abierto.
+````
+
+Si la persona **no tiene Dia** y quiere estudiar diagramas: **propón** instalar Dia 0.97.2 desde dia-installer.de (la versión de Windows de 32 bits, en la ruta que trae por defecto) y espera su visto bueno; luego vuelve al paso 1. Si no lo quiere o no va a estudiar diagramas, deja la carpeta `prueba-dia/` donde está (es del repositorio y no estorba) y no pongas la sección de Dia en su `CLAUDE.md`. Si tiene **otra versión de Dia**, explícale que el panel funcionará sin lo «en vivo» y propón instalar la 0.97.2.
+
 ## Paso 5. README de la carpeta
 
-Crea un `README.md` corto con: qué es la carpeta (un tutor de estudio con `CLAUDE.md` y `contexto.md`), qué hace cada archivo (incluido lo que se genera solo, como `panel-excel/__pycache__/` o `herramientas/node_modules/`), que `contexto.md` se actualiza solo con cada sesión, y las dependencias instaladas. Añade cómo actualizar las herramientas: `git pull` en esta carpeta (si dice que hay cambios locales en archivos del repositorio, no los fuerces: avisa).
+Crea un `README.md` corto con: qué es la carpeta (un tutor de estudio con `CLAUDE.md` y `contexto.md`), qué hace cada archivo (incluido lo que se genera solo, como `panel-excel/__pycache__/`, `herramientas/node_modules/` o, en `prueba-dia/`, `pasos/`, `tutor/`, `mis_diagramas/` y `progreso.json`), que `contexto.md` se actualiza solo con cada sesión, y las dependencias instaladas. Añade cómo actualizar las herramientas: `git pull` en esta carpeta (si dice que hay cambios locales en archivos del repositorio, no los fuerces: avisa).
 
 ## Paso 6. Verificar
 
@@ -287,6 +324,7 @@ Antes de terminar, comprueba y arregla:
 - [ ] No hay datos de otra persona: ningún correo, ruta de usuario ajena ni curso que la persona no haya mencionado.
 - [ ] Cada herramienta anotada en `CLAUDE.md` fue probada o está marcada como _pendiente de instalar_.
 - [ ] Si se instaló el panel de Excel: los cinco archivos de `panel-excel/` están y `--probar` terminó con «Revisión automática: todo bien» y «Libro de prueba cerrado sin guardar».
+- [ ] Si se instaló el panel de Dia: los dos `--probar` de 4.7 terminaron en «todo bien» y su `CLAUDE.md` tiene la sección de Dia.
 
 ## Paso 7. Despedirte
 

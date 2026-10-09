@@ -1,0 +1,102 @@
+{
+  "titulo": "Secuencia",
+  "titulo_codigo": "1, 2, 3",
+  "id": "secuencia",
+  "tema_tutor": "diagramas de secuencia UML en Dia 0.97: participantes (objeto o actor con su línea de vida), mensajes síncronos (flecha llena), de retorno (discontinua) y su ORDEN de arriba abajo; cómo meter un mensaje entre dos. En Dia: hoja UML, herramientas Objeto, Línea de vida y Mensaje (en Propiedades del mensaje, su Tipo: llamada, retorno...).",
+  "notas_tutor": "Tu turno: en mi_secuencia.dia ya están Alumno (actor), :Sistema y :BaseDatos con sus líneas de vida; la persona añade, en este orden: iniciarSesion() de Alumno a :Sistema, buscar(usuario) de :Sistema a :BaseDatos, datos de :BaseDatos a :Sistema (retorno) y mostrarInicio() de :Sistema a Alumno. Errores típicos: el orden cambiado (buscar antes de iniciarSesion) y la respuesta de la base de datos como mensaje normal en vez de retorno.",
+  "pasos": [
+    {
+      "titulo": "Participantes",
+      "texto": "Un diagrama de secuencia cuenta una conversación **en el tiempo**. Arriba van los **participantes**: un actor (el `Cliente`) y objetos (`:Cajero`, `:Banco`). De cada uno baja su **línea de vida**: el tiempo corre hacia abajo.",
+      "en_dia": "Hoja **UML**: **Objeto** para cada participante (o **Actor**) y debajo de cada uno una **Línea de vida** pegada a él.",
+      "cambios": [
+        {"participante": "Cliente", "como_actor": true},
+        {"participante": ":Cajero"},
+        {"participante": ":Banco"}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Object", "texto": "Objeto (un participante)"},
+        {"herramienta": "UML - Lifeline", "texto": "Línea de vida"}
+      ]
+    },
+    {
+      "titulo": "Mensajes en orden",
+      "texto": "Los **mensajes** son flechas entre líneas de vida y se leen **de arriba abajo**: primero el cliente mete la tarjeta (`insertarTarjeta()`), después el cajero pide al banco que valide el PIN (`validar(pin)`).",
+      "en_dia": "Herramienta **Mensaje**: arrastra de una línea de vida a otra, de arriba abajo en el orden en que pasan. Doble clic para escribir el mensaje.",
+      "cambios": [
+        {"mensaje": "insertarTarjeta()", "de": "Cliente", "a": ":Cajero"},
+        {"mensaje": "validar(pin)", "de": ":Cajero", "a": ":Banco"}
+      ],
+      "interfaz": [
+        {"herramienta": "UML - Message", "texto": "Herramienta Mensaje"}
+      ]
+    },
+    {
+      "titulo": "Retorno",
+      "texto": "La respuesta del banco es un mensaje de **retorno**: línea **discontinua** de vuelta (`ok`). Después el cajero da el dinero al cliente (`darDinero()`).",
+      "en_dia": "Otro **Mensaje** de :Banco a :Cajero; doble clic y en su **Tipo** elige el de retorno (línea discontinua).",
+      "cambios": [
+        {"mensaje": "ok", "de": ":Banco", "a": ":Cajero", "tipo": "retorno"},
+        {"mensaje": "darDinero()", "de": ":Cajero", "a": "Cliente"}
+      ]
+    },
+    {
+      "titulo": "Un mensaje en medio",
+      "texto": "Nos faltó un paso: después de meter la tarjeta, el cajero **pide el PIN** y el cliente lo escribe. Esos dos mensajes van **entre** `insertarTarjeta()` y `validar(pin)`, y todo lo de después **baja**: el orden de arriba abajo es lo que cuenta.",
+      "en_dia": "En Dia, selecciona los mensajes de abajo y bájalos para hacer sitio; luego dibuja los nuevos en el hueco.",
+      "cambios": [
+        {"mensaje": "pedirPIN()", "de": ":Cajero", "a": "Cliente", "despues_de": "insertarTarjeta()"},
+        {"mensaje": "escribirPIN(pin)", "de": "Cliente", "a": ":Cajero", "despues_de": "pedirPIN()"}
+      ]
+    },
+    {
+      "titulo": "Tu turno",
+      "texto": "**Tu turno.** En tu diagrama (**mi_secuencia**) ya están el **Alumno**, el **:Sistema** y la **:BaseDatos**. Dibuja el inicio de sesión: el alumno pide **iniciarSesion()**, el sistema **busca(usuario)** en la base de datos, la base de datos le **devuelve los datos** (retorno) y el sistema le **muestra el inicio** al alumno. Guarda con **Ctrl+S** y pulsa **Comprobar**.",
+      "en_dia": "Herramienta **Mensaje** entre las líneas de vida, de arriba abajo; la respuesta de la base de datos con el **Tipo** de retorno.",
+      "turno": {
+        "titulo": "Iniciar sesión",
+        "al_empezar": "Dibuja los cuatro mensajes en orden, de arriba abajo. Guarda (Ctrl+S) y pulsa Comprobar.",
+        "al_terminar": "¡Muy bien! Los mensajes en orden y la respuesta como retorno.",
+        "mensajes": [
+          {"de": "Alumno", "a": ":Sistema", "texto": "iniciarSesion()"},
+          {"de": ":Sistema", "a": ":BaseDatos", "texto": "buscar(usuario)"},
+          {"de": ":BaseDatos", "a": ":Sistema", "texto": "datos", "tipo": "retorno"},
+          {"de": ":Sistema", "a": "Alumno", "texto": "mostrarInicio()"}
+        ],
+        "inicial": [
+          {"participante": "Alumno", "como_actor": true},
+          {"participante": ":Sistema"},
+          {"participante": ":BaseDatos"}
+        ],
+        "solucion": [
+          {"mensaje": "iniciarSesion()", "de": "Alumno", "a": ":Sistema"},
+          {"mensaje": "buscar(usuario)", "de": ":Sistema", "a": ":BaseDatos"},
+          {"mensaje": "datos", "de": ":BaseDatos", "a": ":Sistema", "tipo": "retorno"},
+          {"mensaje": "mostrarInicio()", "de": ":Sistema", "a": "Alumno"}
+        ],
+        "errores": [
+          {
+            "dice": "El orden se lee de arriba abajo: primero el Alumno pide iniciar sesión y DESPUÉS el Sistema busca en la base de datos. Sube iniciarSesion() o baja buscar(usuario).",
+            "patron": {"mensajes": [{"de": ":Sistema", "a": ":BaseDatos", "texto": "buscar"}, {"de": "Alumno", "a": ":Sistema", "texto": "iniciarSesion"}]},
+            "prueba": [
+              {"mensaje": "buscar(usuario)", "de": ":Sistema", "a": ":BaseDatos"},
+              {"mensaje": "iniciarSesion()", "de": "Alumno", "a": ":Sistema"},
+              {"mensaje": "datos", "de": ":BaseDatos", "a": ":Sistema", "tipo": "retorno"},
+              {"mensaje": "mostrarInicio()", "de": ":Sistema", "a": "Alumno"}
+            ]
+          },
+          {
+            "dice": "La base de datos no le «pide» nada al sistema: le RESPONDE. Su mensaje es de retorno (línea discontinua): doble clic en él y cambia su Tipo.",
+            "patron": {"mensajes": [{"de": ":BaseDatos", "a": ":Sistema", "texto": "datos", "tipo": "sincrono"}]},
+            "prueba": [
+              {"mensaje": "iniciarSesion()", "de": "Alumno", "a": ":Sistema"},
+              {"mensaje": "buscar(usuario)", "de": ":Sistema", "a": ":BaseDatos"},
+              {"mensaje": "datos", "de": ":BaseDatos", "a": ":Sistema"},
+              {"mensaje": "mostrarInicio()", "de": ":Sistema", "a": "Alumno"}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "titulo": "UML en Dia: primeros pasos",
+  "modelo_tutor": "sonnet",
+  "modulos": ["m1_clases.json", "m2_casos.json", "m3_secuencia.json"]
+}
