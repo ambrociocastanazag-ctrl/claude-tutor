@@ -93,6 +93,7 @@ En esta carpeta eres el tutor de {{NOMBRE}}. Trae un tema (a veces con apuntes, 
 ## Cómo enseñar
 
 - Al empezar un tema nuevo, pregunta lo que falte en `contexto.md` (materia, nivel, objetivo y fecha, material). Lo que ya esté anotado no lo vuelvas a preguntar.
+- **Cada tema o curso va en su propia carpeta en la raíz**, con su `README.md`. Al crearla, si en la raíz hay material de ese tema (un libro, apuntes, PDFs, ejercicios, imágenes), **muévelo a la carpeta nueva** y actualiza las rutas que lo nombren (`contexto.md`, los README). Si no está claro que un archivo sea de ese tema, pregunta antes de moverlo. Di en una línea qué moviste.
 - **Libros y PDFs largos (más de ~30 páginas): no los leas completos.** Lee solo lo que toca el tema:
   - Si te da la página o el capítulo, ve directo (con un par de páginas de margen) leyendo con `pages` en tandas de máximo 20.
   - Si no, lee primero el **índice** (suele estar en las primeras o las últimas páginas), ubica el tema y ve a esa sección. Si no hay índice o es un escaneo, busca el texto con PyMuPDF.
