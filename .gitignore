@@ -6,7 +6,9 @@
 /*
 !/.gitignore
 !/INSTALAR_TUTOR.md
-!/requirements.txt
+!/paquete-tutor/
+/paquete-tutor/*
+!/paquete-tutor/requirements.txt
 
 # Panel de Excel: el motor, la página, la lección de ejemplo y el curso de ejemplo avanzado (sin su libro ni su progreso)
 !/panel-excel/

@@ -1,8 +1,12 @@
 # INSTALAR_TUTOR — instrucciones para el agente
 
+> **Para instalarlo**, la persona le dice a Claude Code, en cualquier carpeta: «Instala el tutor de https://github.com/ambrociocastanazag-ctrl/claude-tutor: clona el repo y sigue su INSTALAR_TUTOR.md».
+>
+> **Si no estás dentro del clon**, haz `git clone https://github.com/ambrociocastanazag-ctrl/claude-tutor tutor-de-estudio`, entra en esa carpeta y sigue desde el Paso 1.
+
 > **Si eres un agente de IA (Claude Code) y la persona te pidió "lee INSTALAR_TUTOR.md y síguelo", este archivo es para ti.** Aquí no hay temas de estudio de nadie: solo la forma de trabajar de un tutor y sus herramientas. Tu trabajo es dejar esta carpeta convertida en un **tutor de estudio personalizado** para quien te lo pidió, y al final dejarle claro cómo actualizar las herramientas.
 
-> **Esta carpeta es un repositorio git** (`tutor-de-estudio`). Junto a este archivo hay archivos ya hechos y probados: `panel-excel/` (panel de clase en vivo para Excel), `prueba-dia/` (panel de clase en vivo para el editor de diagramas Dia, con su plugin y un curso de ejemplo), `herramientas/` (capturas de páginas con Chrome) y `requirements.txt` (las librerías de Python). Úsalos tal cual: no los reescribas ni los copies a mano. Si falta algo, pídele a la persona que clone el repositorio completo.
+> **Esta carpeta es un repositorio git** (`tutor-de-estudio`). Junto a este archivo hay archivos ya hechos y probados: `panel-excel/` (panel de clase en vivo para Excel), `prueba-dia/` (panel de clase en vivo para el editor de diagramas Dia, con su plugin y un curso de ejemplo), `herramientas/` (capturas de páginas con Chrome) y `paquete-tutor/requirements.txt` (las librerías de Python). Úsalos tal cual: no los reescribas ni los copies a mano. Si falta algo, pídele a la persona que clone el repositorio completo.
 >
 > **Lo de la persona no va al repositorio.** Su `CLAUDE.md`, `contexto.md`, `README.md`, `panel-excel/preferencias.json`, sus diagramas y su progreso en los cursos de Dia, y sus carpetas de temas o cursos quedan fuera (el `.gitignore` es una lista blanca: solo versiona los archivos del tutor, uno por uno). No hagas commits ni cambies archivos del repositorio: así `git pull` actualiza las herramientas sin chocar con lo suyo.
 >
@@ -55,7 +59,7 @@ Comprueba con un comando cada una (no instales todavía) y apunta cuáles existe
 
 Con las materias del paso 1, decide qué le sirve:
 - **Si ya está instalado**, no pidas permiso: pruébalo y anótalo.
-- **Si falta**, propón instalarlo con una opción recomendada e instala solo lo que apruebe. Para Python, siempre `python -m pip install …`. Las librerías del panel están en `requirements.txt`: con su visto bueno, `python -m pip install -r requirements.txt` las instala todas de una vez.
+- **Si falta**, propón instalarlo con una opción recomendada e instala solo lo que apruebe. Para Python, siempre `python -m pip install …`. Las librerías del panel están en `paquete-tutor/requirements.txt`: con su visto bueno, `python -m pip install -r paquete-tutor/requirements.txt` las instala todas de una vez.
 - Pruébalo antes de darlo por bueno. Basta una prueba mínima: importar la librería; en MATLAB, `detect_matlab_toolboxes` si hay MCP; en Excel, conectarse por COM y leer `Version`. **Con Excel abierto, `Dispatch` se engancha a ese Excel: nunca llames a `Quit()` ni cierres libros que no abriste tú.**
 
 ## Paso 3. Decidir qué entra en su `CLAUDE.md`
@@ -256,7 +260,7 @@ Tiene dos bloques. Pega en el lugar de `{{SECCIÓN EXCEL}}` el **bloque A** siem
 - Para ver que el panel sigue bien (p. ej. después de `git pull`): `python panel-excel/panel_web.py panel-excel/ejemplo_leccion.json --probar --rapido` (menos de un minuto); para repetir un bloque, `--probar --rapido --solo vba` (o `pq`, `matrices`, `analisis`). La prueba completa (sin `--rapido`, varios minutos) es para quien cambia el código del panel.
 ````
 
-Si no tiene `pywin32`, **propón** `python -m pip install -r requirements.txt` (o solo `python -m pip install pywin32`) y pruébalo con `Dispatch('Excel.Application')` antes de anotarlo.
+Si no tiene `pywin32`, **propón** `python -m pip install -r paquete-tutor/requirements.txt` (o solo `python -m pip install pywin32`) y pruébalo con `Dispatch('Excel.Application')` antes de anotarlo.
 
 ### 4.5 Sección Falstad y verificación en Chrome
 
@@ -283,7 +287,7 @@ Si `herramientas/` no se instala ahora, déjala en la carpeta y añade al final 
 
 ### 4.6 Panel de clase en vivo para Excel (opcional)
 
-Solo si la persona va a estudiar Excel, tiene Excel, Python y Claude Code en la terminal (`claude --version`), y `pywin32` y `pywebview` ya están instalados (o aprueba `python -m pip install -r requirements.txt`).
+Solo si la persona va a estudiar Excel, tiene Excel, Python y Claude Code en la terminal (`claude --version`), y `pywin32` y `pywebview` ya están instalados (o aprueba `python -m pip install -r paquete-tutor/requirements.txt`).
 
 Cómo es: una ventana con pestañas encima de Excel, pegada a la derecha y a todo el alto de la pantalla.
 - **Lección:** módulo, paso a paso con ← →, y la revisión automática del "Tu turno" con el botón **Comprobar**.
@@ -314,7 +318,7 @@ Los cursos que se hagan para la persona van en **su propia carpeta en la raíz**
 
 Solo si la persona va a estudiar **diagramas UML** (clases, casos de uso, secuencia, actividades, estados…) o cualquier diagrama en **Dia**, y tiene:
 - **Dia 0.97.2 de dia-installer.de** (la versión de 32 bits, la habitual en Windows), instalado en la ruta estándar `C:\Program Files (x86)\Dia`. Compruébalo con `python -c "import subprocess; print(subprocess.run([r'C:\Program Files (x86)\Dia\bin\dia.exe', '--version'], capture_output=True, text=True, encoding='cp1252').stdout)"`: tiene que decir **«Versión 0.97.2 de Dia, compilada … Dec 22 2011»** (la de dia-installer.de). Si la «ó» sale como «�» (pasa con `dia.exe --version` directo y en algunas consolas, como Git Bash), no es un fallo: Dia escribe en cp1252 y la consola lo lee en otra codificación; lo que cuenta es el «0.97.2» y la fecha. El plugin del panel (`prueba-dia/plugin-dia/dia-tutor.dll`) está compilado para ese Dia exacto: con otro, Dia no lo carga y el panel trabaja «a la antigua» (una ventana por archivo, sin cambios en vivo ni flechas).
-- Python con `pywebview` y `pywin32`, y `Pillow` para las flechas encima de Dia (están en `requirements.txt`; sin Pillow todo lo demás funciona).
+- Python con `pywebview` y `pywin32`, y `Pillow` para las flechas encima de Dia (están en `paquete-tutor/requirements.txt`; sin Pillow todo lo demás funciona).
 - Claude Code en la terminal (`claude --version`) para el tutor.
 
 Cómo es: Dia en una ventana con dos pestañas (el ejemplo de la lección, que cambia solo en cada paso, y el diagrama de la persona en ese módulo) y el panel de la derecha, con la misma página que el de Excel.
