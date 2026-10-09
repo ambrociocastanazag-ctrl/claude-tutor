@@ -48,7 +48,7 @@ ELEMENTOS = {   # clave del bloque → (tipo de Dia, familia, campos permitidos 
     "componente": ("UML - Component", "bloques", {"estereotipo", "dentro_de"}),
     "nodo": ("UML - Node", "bloques", {"estereotipo", "dentro_de"}),
     "artefacto": ("UML - Class", "bloques", {"dentro_de"}),
-    "paquete": ("UML - LargePackage", "bloques", {"estereotipo", "dentro_de"}),
+    "paquete": ("UML - LargePackage", "bloques", {"estereotipo", "dentro_de", "ancho", "alto"}),
     "objeto": ("UML - Object", "bloques", {"valores", "dentro_de"}),
     "crear": (None, "libre", {"nombre", "texto", "props", "ancho", "alto", "dentro_de"}),
 }
@@ -130,6 +130,7 @@ def validar(clave, a, k):
             if clave == "final" and not nombre: nombre = "fin"
             if vacio and not nombre: raise ValueError(f"cambio {k}: ponle un nombre corto a la {clave} (p. ej. \"d1\") para poder unirla con flujos")
             c["nombre"] = nombre; c["texto"] = "" if vacio else nombre
+            if clave == "paquete": c["ancho"], c["alto"] = _medida(a.get("ancho"), k, "ancho"), _medida(a.get("alto"), k, "alto")     # tamaño mínimo de la capa
             if "lado" in a:
                 lado = _txt(a["lado"], f"cambio {k}, lado", 10).lower()
                 if lado not in ("izquierda", "derecha"): raise ValueError(f"cambio {k}: «lado» es \"izquierda\" o \"derecha\"")
@@ -240,6 +241,7 @@ class Contexto:
             if o["kind"] in ("rotulo", "linea_vida"): continue
             self._registrar(o, o.get("texto")); self._registrar(o, o.get("nombre")); self._registrar(o, "#" + o["id"], unico=True)
         for l in d.get("lineas", []) + d.get("relaciones", []): self._registrar(l, "#" + l["id"], unico=True)
+        self._auto = {}                                  # lo que crece o se corre de lo que ya estaba: id → {"q", "w", "h", "xy", "propio"}
         self.rutas_paq = []                              # rutas de las capas (paquetes) que hay y las que se crean, en orden
         for o in d.get("objetos", []):
             if o["kind"] == "paquete" and o.get("ruta"):
@@ -397,6 +399,48 @@ class Contexto:
         return {o.get("_clave") or _n(o.get("texto") or o.get("nombre")): o for o in self.d.get("objetos", [])
                 if o["kind"] == "paquete" and o["id"] not in self.plan["quitar"]}
 
+    # ----- crecer y correr lo que ya estaba (con Deshacer: son cambios «poner» de lo existente) -----
+    def _caja_actual(self, q):
+        x, y, w, h = q["caja"]; a = self._auto.get(q["id"])
+        if a: x, y = a.get("xy", (x, y)); w, h = max(w, a.get("w", w)), max(h, a.get("h", h))
+        return (x, y, w, h)
+
+    def _crecer_caja(self, q, caja=None, mover=None, propio=False):
+        """`q` (algo que ya estaba) pasa a medir al menos (ancho, alto) de `caja` y/o a estar en `mover` (x, y); las capas que lo contienen
+        crecen para seguir conteniéndolo. `propio`: su tamaño lo cambia Dia solo (una clase con «modificar»): solo se propaga a sus capas."""
+        a = self._auto.setdefault(q["id"], {"q": q, "propio": propio})
+        if caja: a["w"] = max(a.get("w", 0), caja[2]); a["h"] = max(a.get("h", 0), caja[3])
+        if mover: a["xy"] = mover
+        x, y, w, h = self._caja_actual(q)
+        P = self.d.get("_por_id", {}).get(q.get("padre_id"))
+        if P:
+            px, py, pw, ph = self._caja_actual(P)
+            nw, nh = max(pw, x + w + 1.2 - px), max(ph, y + h + 0.6 - py)
+            if nw > pw + 1e-6 or nh > ph + 1e-6: self._crecer_caja(P, (px, py, nw, nh))
+
+    def crecer_clase(self, vieja, dw, dh):
+        """Una clase que ya estaba y CRECE (modificar con más miembros): lo que tiene debajo (o a la derecha) se corre lo que crece, para no
+        pisarse, y su capa (y las de fuera) crecen para seguir conteniendo todo."""
+        x, y, w, h = self._caja_actual(vieja)
+        quitar = set(self.plan["quitar"])
+        for q in self.d["clases"]:
+            if q is vieja or q["id"] in quitar: continue
+            qx, qy, qw, qh = self._caja_actual(q)
+            if dh > 0 and qy >= y + h - 0.3 and qx < x + max(w, vieja["caja"][2]) + dw and qx + qw > x: self._crecer_caja(q, mover=(qx, qy + dh))
+            elif dw > 0 and qx >= x + w - 0.3 and qy < y + h + dh and qy + qh > y: self._crecer_caja(q, mover=(qx + dw, qy))
+        self._crecer_caja(vieja, (x, y, w + dw, h + dh), propio=True)
+
+    def _materializar_auto(self):
+        for i, a in self._auto.items():
+            q = a["q"]; pares = []
+            x, y, w, h = q["caja"]
+            if not a.get("propio"):
+                if a.get("h", 0) > h + 1e-6: pares.append(("elem_height", repr(round(a["h"], 2))))
+                if a.get("w", 0) > w + 1e-6: pares.append(("elem_width", repr(round(a["w"], 2))))
+            if a.get("xy") and (abs(a["xy"][0] - x) > 1e-6 or abs(a["xy"][1] - y) > 1e-6): pares.append(("elem_corner", f"{a['xy'][0]!r},{a['xy'][1]!r}"))
+            if pares: self.cambiar.append({"id": q["id"], "pares": pares, "nombre": nombre_de(q), "tag": q.get("tag"), "auto": True})
+        self._auto = {}
+
     def dentro_de_existentes(self):
         """Las clases nuevas con «dentro_de» un paquete que YA está en el diagrama: se colocan dentro de él (debajo de lo que tiene,
         o donde diga su «pos») y el paquete se agranda para contenerlas. Quedan hijas suyas de verdad (parentesco de Dia)."""
@@ -419,16 +463,7 @@ class Contexto:
                 w, h = _caja_clase(c)
                 if not c.get("pos"): c["pos"] = (round(x, 2), round(y, 2)); y += h + 1.0
                 ancho = max(ancho, c["pos"][0] + w + 1.2 - sx); alto = max(alto, c["pos"][1] + h + 0.6 - sy)
-            cur, q = (sx, sy, ancho, alto), o
-            while True:                                      # el paquete (y los que lo contienen, si lo cambia) crece para contener lo nuevo
-                pares = []
-                if cur[3] > q["caja"][3] + 1e-6: pares.append(("elem_height", repr(round(cur[3], 2))))
-                if cur[2] > q["caja"][2] + 1e-6: pares.append(("elem_width", repr(round(cur[2], 2))))
-                if not pares: break
-                self.cambiar.append({"id": q["id"], "pares": pares, "nombre": nombre_de(q), "tag": q.get("tag"), "auto": True})
-                q = self.d.get("_por_id", {}).get(q.get("padre_id"))
-                if not q: break
-                cur = (q["caja"][0], q["caja"][1], max(q["caja"][2], cur[0] + cur[2] + 1.2 - q["caja"][0]), max(q["caja"][3], cur[1] + cur[3] + 0.6 - q["caja"][1]))
+            self._crecer_caja(o, (sx, sy, ancho, alto))        # el paquete (y los que lo contienen, si lo cambia) crece para contener lo nuevo
 
     def _parentesco(self):
         """Marca a cada clase y paquete nuevo con «dentro_de»: _padre_id (el paquete es nuevo y va en el mismo archivo) o _hijo_de
@@ -446,9 +481,11 @@ class Contexto:
         """Coloca lo nuevo (sin encimar lo que hay) y deja en el plan: extra (XML de objetos y líneas), fondo (contenedores,
         que van detrás), poner (propiedades del modo libre y cambios con la orden «poner»), y los puntos de las relaciones."""
         self._parentesco()
+        self._materializar_auto()
         if not (self.elems or self.lineas or self.cambiar): return
         self._insertar_mensajes()
         Colocador(self, medidas, pistas).colocar()
+        self._materializar_auto()                      # lo que creció al colocar (capas hijas dentro de una capa que ya estaba)
         fondo, extra, poner = [], [], []
         for e in self.elems:
             xs = xml_elemento(e)
@@ -516,6 +553,8 @@ class Contexto:
             if e["accion"] in CONTENEDORES: continue
             o = _objeto_base(e)
             out.append(do.a_texto(o, f"M{len(out)}"))
+        for i, c in enumerate(self.plan["nuevas"]):         # las clases nuevas también: su tamaño real (Dia lo calcula por el texto)
+            out.append(du._clase_xml({k: v for k, v in c.items() if k not in ("_hijo_de", "_padre_id")}, i, f"MC{i}"))
         return out
 
 
@@ -650,7 +689,7 @@ class Colocador:
             for f in b.get("despues", []): f(dx, dy)
             y += caja[3] + 3
         for e in self.elems:
-            if e.get("pos"): e["xy"] = e["pos"]
+            if e.get("pos") and not e.get("_xy_ok"): e["xy"] = e["pos"]
             e.setdefault("xy", (2.0, 2.0))
             if e["accion"] == "artefacto" or e.get("es_clase"): pass
         self.barras()
@@ -914,7 +953,7 @@ class Colocador:
                     rel = resolver(sub)
                     caja = _union([(p[0], p[1], *self.tam_o(h)) for h, p in rel]) or (0, 0, 3, 2)
                     tit = 2.2 if e["accion"] in ("paquete", "compuesto") else 2.6 if e["accion"] == "nodo" else 1.8
-                    e["_tam"] = (max(caja[2] + 2.4, 0.6 * len(e.get("texto") or "") + 3), caja[3] + tit + 1.2)
+                    e["_tam"] = (max(caja[2] + 2.4, 0.6 * len(e.get("texto") or "") + 3, e.get("ancho") or 0), max(caja[3] + tit + 1.2, e.get("alto") or 0))
                     e["_hijos_rel"] = {id(h): (p[0] - caja[0] + 1.2, p[1] - caja[1] + tit) for h, p in rel}
                     e["_hijos"] = sub
             locales = [e for e in nivel]
@@ -929,14 +968,42 @@ class Colocador:
                 if calles: return self._con_calles(locales, calles, ar)
             pos = disponer(ids, ar, lambda i: self.tam_o(next(e for e in locales if id(e) == i)))
             return [(e, pos[id(e)]) for e in locales]
+        for e in todos:                                           # capas con tamaño dado y sin nada dentro: ese tamaño
+            if e["accion"] == "paquete" and (e.get("ancho") or e.get("alto")) and id(e) not in hijos:
+                bb = do.caja_xml(_objeto_base(e)); e["_tam"] = (e.get("ancho") or bb[2], e.get("alto") or bb[3])
         rel_raiz = resolver(raiz)
         def bajar(e, xy):
             e["xy"] = xy
             for h in e.get("_hijos", []):
                 dx, dy = e["_hijos_rel"][id(h)]; bajar(h, (xy[0] + dx, xy[1] + dy))
         rel = list(rel_raiz)
+        def fijo(e): return e.get("_pos_fijo") if e.get("es_clase") else e.get("pos")      # «pos» que pidió el curso o el tutor
+        def mover(e, dx, dy):
+            e["xy"] = (e["xy"][0] + dx, e["xy"][1] + dy)
+            for h in e.get("_hijos", []): mover(h, dx, dy)
+        def profundidad(e):
+            n = 0
+            while _dd(e) in nombres and nombres[_dd(e)] is not e and n < 20: e = nombres[_dd(e)]; n += 1
+            return n
+        def pos_fijas():
+            """Un «pos» (en cm, absoluto en el diagrama) de una clase, capa o contenedor hijo se respeta tal cual: se lleva consigo lo que
+            tiene dentro (salvo lo que trae su propio «pos») y su capa de fuera crece para contenerlo. Sin «pos», se coloca solo."""
+            ordenados = sorted(todos, key=profundidad)
+            for e in ordenados:
+                p = fijo(e)
+                if p and e.get("xy"): mover(e, p[0] - e["xy"][0], p[1] - e["xy"][1])
+            for e in sorted([x for x in todos if x.get("_hijos")], key=profundidad, reverse=True):     # de dentro hacia fuera
+                caja = _union([(*h["xy"], *self.tam_o(h)) for h in e["_hijos"] if h.get("xy")])
+                if not caja: continue
+                tit = 2.2 if e["accion"] in ("paquete", "compuesto") else 2.6 if e["accion"] == "nodo" else 1.8
+                w, h_ = self.tam_o(e)
+                x0, y0 = min(e["xy"][0], caja[0] - 1.2), min(e["xy"][1], caja[1] - tit)
+                x1, y1 = max(e["xy"][0] + w, caja[0] + caja[2] + 1.2), max(e["xy"][1] + h_, caja[1] + caja[3] + 1.2)
+                e["xy"], e["_tam"] = (x0, y0), (x1 - x0, y1 - y0)
+            for e in todos: e["_xy_ok"] = True
         def despues(dx, dy):
             for e, p in rel_raiz: bajar(e, (p[0] + dx, p[1] + dy))
+            pos_fijas()
             for c in clases_dentro: c["pos"] = c["xy"]
             for e in es:
                 if e.get("_calle_caja"): pass
@@ -949,15 +1016,17 @@ class Colocador:
                             sx <= q["caja"][0] + q["caja"][2] / 2 <= sx + sw and sy <= q["caja"][1] + q["caja"][3] / 2 <= sy + sh]
             y = max([q["caja"][1] + q["caja"][3] for q in hijos_viejos] + [sy + 2.0]) + 1.0
             x = sx + 1.2
+            resolver([e for e in dentro if id(e) in hijos])        # lo que llevan dentro (sus hijas, con su «pos») y su tamaño
+            nuevo_alto, nuevo_ancho = sh, sw
             for e in dentro:
-                w, h = self.tam_o(e); e["pos"] = (x, y)
-                if e.get("es_clase"): e["pos"] = (x, y)
-                y += h + 1.0
-            nuevo_alto = y + 0.4 - sy; nuevo_ancho = max([sw] + [self.tam_o(e)[0] + 2.4 for e in dentro])
-            pares = []
-            if nuevo_alto > sh: pares.append(("elem_height", repr(round(nuevo_alto, 2))))
-            if nuevo_ancho > sw: pares.append(("elem_width", repr(round(nuevo_ancho, 2))))
-            if pares: self.ctx.cambiar.append({"id": o["id"], "pares": pares, "nombre": nombre_de(o), "tag": o.get("tag"), "auto": True})
+                w, h = self.tam_o(e)
+                if not e.get("pos"): e["pos"] = (x, y); y += h + 1.0           # sin «pos»: debajo de lo que tiene la capa; con «pos», donde diga
+                bajar(e, tuple(e["pos"]))
+                nuevo_alto = max(nuevo_alto, e["pos"][1] + h + 0.6 - sy); nuevo_ancho = max(nuevo_ancho, e["pos"][0] + w + 1.2 - sx)
+            self.ctx._crecer_caja(o, (sx, sy, nuevo_ancho, nuevo_alto))
+        if not rel_raiz:                                    # todo va dentro de capas que ya estaban: no hay bloque que colocar, solo cerrar
+            despues(0, 0)
+            return {"rel": [], "despues": []}
         return {"rel": rel, "despues": [despues]}
 
     def _con_calles(self, locales, calles, ar):

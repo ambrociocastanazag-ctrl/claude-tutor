@@ -131,8 +131,100 @@ def _ref_objeto(v, donde):
     return v
 
 
+LADOS_PUNTO = {"arriba": 1, "abajo": 6, "izquierda": 3, "derecha": 4, "arriba-izq": 0, "arriba-der": 2, "abajo-izq": 5, "abajo-der": 7}
+
+
+def _v_punto(v, donde):
+    """«arriba», «abajo», «izquierda», «derecha», «arriba-izq», «arriba-der», «abajo-izq», «abajo-der», «fila:N» o «fila:N:izquierda|derecha»."""
+    t = _texto(v, donde, 30, vacio=False).lower().replace("_", "-").replace(" ", "")
+    m = re.fullmatch(r"fila:(\d{1,3})(?::(izquierda|derecha))?", t)
+    if t in LADOS_PUNTO or m: return t
+    raise ValueError(f"{donde}: «{v}» no es un punto; usa {', '.join(LADOS_PUNTO)}, «fila:N» (fila N de miembros, atributos y luego métodos) o «fila:N:izquierda»")
+
+
+def punto_de_clase(caja, c, token, otro_cx):
+    """(índice de Dia, (x, y), orientación del primer tramo 0 = H / 1 = V) del punto de conexión `token` de una clase de caja (x, y, w, h).
+    Los puntos de Dia 0.97 de una clase: 0 arriba izq., 1 arriba centro, 2 arriba der., 3 izquierda y 4 derecha (a la altura del nombre),
+    5 abajo izq., 6 abajo centro, 7 abajo der., y luego dos por miembro (izquierda, derecha): atributos primero y luego métodos."""
+    x, y, w, h = caja
+    enum = bool(c.get("enumerada"))
+    na = len(c["enumerada"]) if enum else len(c.get("atributos", [])); no = 0 if enum else len(c.get("metodos", []))
+    at = max(0.4, 0.2 + 0.8 * na); op = 0 if enum else max(0.4, 0.2 + 0.8 * no)
+    nom = h - at - op
+    if token in LADOS_PUNTO:
+        i = LADOS_PUNTO[token]
+        px = x if i in (0, 3, 5) else x + w / 2 if i in (1, 6) else x + w
+        py = y if i in (0, 1, 2) else y + nom / 2 if i in (3, 4) else y + h
+        return i, (px, py), (0 if i in (3, 4) else 1)
+    m = re.fullmatch(r"fila:(\d+)(?::(izquierda|derecha))?", token)
+    n = int(m.group(1)); filas = na + no
+    if n >= filas: raise ValueError(f"la clase «{c['nombre']}» tiene {filas} fila(s) de miembros: no hay «{token}»")
+    lado = m.group(2) or ("izquierda" if otro_cx < x + w / 2 else "derecha")
+    fy = (y + nom + 0.5 + 0.8 * n) if n < na else (y + nom + at + 0.5 + 0.8 * (n - na))
+    return 8 + 2 * n + (lado == "derecha"), ((x if lado == "izquierda" else x + w), fy), 0
+
+
+def trazo_ortogonal(p0, o0, medios, p1):
+    """Los puntos y las orientaciones (0 = horizontal, 1 = vertical) de una línea en ángulo recto de p0 a p1 que pasa por `medios`: el primer
+    tramo sale en la orientación o0 y, si dos puntos seguidos no están alineados, se mete el codo. Mínimo 3 puntos (con menos, Dia se cierra):
+    una recta se escribe como lo hace Dia en 5 o 3 tramos, con el rótulo en el del medio."""
+    pts, ori = [tuple(p0)], []
+    cur, o = tuple(p0), o0
+    cerca = lambda a, b: abs(a[0] - b[0]) < 0.02 and abs(a[1] - b[1]) < 0.02
+    for t in [tuple(q) for q in medios] + [tuple(p1)]:
+        if cerca(cur, t): continue
+        if not (abs(cur[1] - t[1]) < 0.02 if o == 0 else abs(cur[0] - t[0]) < 0.02):
+            e = (t[0], cur[1]) if o == 0 else (cur[0], t[1])
+            if cerca(e, cur): o = 1 - o                      # el codo caería en el mismo punto: el tramo va en la otra orientación
+            else: pts.append(e); ori.append(o); cur, o = e, 1 - o
+        if ori and ori[-1] == o: pts[-1] = t                  # mismo sentido que el tramo anterior: se alarga en vez de partirlo
+        else: pts.append(t); ori.append(o)
+        cur, o = t, 1 - o
+    if len(pts) == 2:
+        (x0, y0), (x1, y1) = pts
+        if ori[0] == 0:                                   # recta horizontal: 5 tramos (dos verticales de largo 0)
+            d = 0.6 if x1 > x0 else -0.6; a, b = (x0 + d, y0), (x1 - d, y0)
+            return [pts[0], a, a, b, (b[0], y1), pts[1]], [0, 1, 0, 1, 0]
+        return [pts[0], (x1, y0), pts[1], pts[1]], [0, 1, 0]   # recta vertical: 3 tramos
+    if len(pts) < 2: return None
+    return pts, ori
+
+
+def _rutas_de_relaciones(plan, d):
+    """Las relaciones con «desde», «hasta» o «por»: el punto de conexión de cada extremo (se pega por su índice) y el trazo (sin autorruta)."""
+    for r in plan["relaciones"]:
+        if not (r.get("desde") or r.get("hasta") or r.get("por")): continue
+        cajas, clases = [], []
+        for lado in ("de", "a"):
+            x = r["_" + lado]
+            if "c" not in x: raise ValueError(f"«desde», «hasta» y «por» solo valen entre clases ({r[lado]})")
+            c = (plan["modificar"].get(x["id"]) or (None, x["c"]))[1] if not x["nueva"] else x["c"]
+            if x["nueva"] or not x["c"].get("caja"): w, h = caja_estimada(c); p = c.get("pos") or (0, 0); caja = (p[0], p[1], w, h)
+            else: caja = tuple(x["c"]["caja"])
+            cajas.append(caja); clases.append(c)
+        cx = [cj[0] + cj[2] / 2 for cj in cajas]
+        res = []
+        for i, lado in enumerate(("de", "a")):
+            tok = r.get("desde" if lado == "de" else "hasta")
+            if tok: res.append(punto_de_clase(cajas[i], clases[i], tok, cx[1 - i]))
+            else:                                       # el otro extremo, como lo habría puesto el motor
+                idx, p = du.punto_conexion(cajas[i], cajas[1 - i]); res.append((idx, p, 0 if idx in (3, 4) else 1))
+        (i0, p0, o0), (i1, p1, o1) = res
+        t = du.TIPOS_REL[r["tipo"]]
+        medios, previo = [], p0
+        for j, q in enumerate(r.get("por") or []):          # un null repite el eje del punto anterior (o, en el último, el del extremo final)
+            ref = p1 if j == len(r["por"]) - 1 else previo
+            medios.append((ref[0] if q[0] is None else q[0], ref[1] if q[1] is None else q[1])); previo = medios[-1]
+        tr = trazo_ortogonal(p0, o0, medios, p1)
+        if tr is None: continue
+        pts, ori = tr
+        if t["inicio_es_a"]: pts, ori = list(reversed(pts)), list(reversed(ori))        # el trazo va del inicio al fin de Dia
+        r["_ruta"], r["_autoruta"], r["_idx"] = (pts, tuple(ori)), False, {"de": i0, "a": i1}
+        r["puntos"] = (pts[0], pts[-1])
+
+
 def _v_relacion(a, k):
-    _campos(a, {"relacion", "de", "a", "todo", "parte", "nombre", "mult", "roles", "direccion", "estereotipo", "lectura"}, k)
+    _campos(a, {"relacion", "de", "a", "todo", "parte", "nombre", "mult", "roles", "direccion", "estereotipo", "lectura", "desde", "hasta", "por"}, k)
     tipo = _texto(a["relacion"], f"cambio {k}, relacion", 20).lower()
     tipo = {"generalizacion": "herencia", "generalización": "herencia", "realización": "realizacion", "implementacion": "realizacion",
             "asociación": "asociacion", "agregación": "agregacion", "composición": "composicion", "inclusion": "include",
@@ -160,6 +252,14 @@ def _v_relacion(a, k):
         if d and d != "ninguna" and tipo not in ("asociacion", "agregacion", "composicion"):
             raise ValueError(f"cambio {k}: «direccion» es solo para asociaciones, agregaciones y composiciones")
         r["direccion"] = "" if d == "ninguna" else d
+    for lado in ("desde", "hasta"):                 # por dónde sale y entra la línea: un punto de conexión de la clase
+        if a.get(lado) is not None: r[lado] = _v_punto(a[lado], f"cambio {k}, {lado}")
+    if a.get("por") is not None:                    # puntos intermedios del trazo (cm, absolutos): [[x, y], ...]
+        v = a["por"]
+        if not (isinstance(v, list) and len(v) <= 12 and all(isinstance(q, (list, tuple)) and len(q) == 2 and all(n is None or (isinstance(n, (int, float)) and not isinstance(n, bool) and -50 <= n <= 400) for n in q) for q in v)):
+            raise ValueError(f"cambio {k}: «por» es una lista de puntos [[x, y], ...] en cm (máximo 12); un null en x o y repite el del punto anterior "
+                             f"(en el último punto, el del extremo final)")
+        r["por"] = [tuple(None if n is None else float(n) for n in q) for q in v]
     if "lectura" in a:      # el triángulo de lectura (convención 25) hacia «a» o hacia «de»; hace falta el verbo en «nombre»
         lec = _texto(a["lectura"], f"cambio {k}, lectura", 10).lower()
         if lec not in ("", "a", "de"): raise ValueError(f"cambio {k}: «lectura» es \"a\" o \"de\" (hacia qué clase apunta el triángulo)")
@@ -327,7 +427,8 @@ def _choca(a, b, margen=1.5):
 
 
 def caja_estimada(c):
-    """Ancho y alto aproximados de una clase en Dia (fuente Courier 0,8: unos 0,42 cm por letra)."""
+    """Ancho y alto aproximados de una clase en Dia (fuente Courier 0,8: unos 0,42 cm por letra), o los medidos por Dia si se midió."""
+    if c.get("_medida"): return c["_medida"]
     filas = [du.linea_atributo(a) for a in c.get("atributos", [])] + [du.linea_metodo(m) for m in c.get("metodos", [])]
     w = max(4.0, 0.42 * max([len(f) for f in filas] or [0]) + 0.8, 0.62 * len(c["nombre"]) + 1.4)
     h = (1.9 if c.get("estereotipo") else 1.4) + 0.8 * max(1, len(c.get("atributos", []))) + 0.8 * max(1, len(c.get("metodos", []))) + 0.4
@@ -377,7 +478,8 @@ def planear(prop, d, pid, medidas=None):
         if acc == "clase":
             if du._norm(a["nombre"]) in clases: raise ValueError(f"cambio {k}: ya hay una clase «{a['nombre']}» (para cambiarla, usa «modificar»)")
             c = {"nombre": a["nombre"], "atributos": a["atributos"], "metodos": a["metodos"], "abstracta": a["abstracta"],
-                 "estereotipo": a["estereotipo"], "tag": etiqueta(), "pos": a.get("pos"), "dentro_de": a.get("dentro_de", "")}
+                 "estereotipo": a["estereotipo"], "tag": etiqueta(), "pos": a.get("pos"), "dentro_de": a.get("dentro_de", ""),
+                 "_pos_fijo": a.get("pos")}
             if "negrita" in a: c["negrita"] = a["negrita"]
             if a.get("enumerada") is not None: c["enumerada"] = a["enumerada"]
             clases[du._norm(c["nombre"])] = {"c": c, "nueva": True, "id": None}
@@ -434,6 +536,12 @@ def planear(prop, d, pid, medidas=None):
         else:
             ctx.cambio(a, k)                           # los demás diagramas y el modo libre
         plan["detalle"].append(ACCIONES["interfaz" if acc == "clase" and a.get("estereotipo") == "interface" else acc][1](a))
+    for c in plan["nuevas"]:
+        m = (medidas or {}).get(c["tag"])
+        if m: c["_medida"] = (m[2], m[3])               # el tamaño real que Dia dio a la clase (orden «medir»)
+    for oid, (vieja, nueva) in plan["modificar"].items():          # una clase que crece con «modificar»: corre lo de al lado y hace crecer su capa
+        n, v = caja_estimada(dict(nueva, _medida=None)), caja_estimada(dict(vieja, _medida=None))
+        if n[0] > v[0] + 0.05 or n[1] > v[1] + 0.05: ctx.crecer_clase(vieja, max(0.0, n[0] - v[0]), max(0.0, n[1] - v[1]))
     ctx.resolver_clases(plan["nuevas"])                # «dentro_de» de las clases: nombre o ruta de su capa (error claro si es ambiguo)
     ej = prop.get("ejercicio") or {}
     ctx.dentro_de_existentes()                         # clases que van dentro de un paquete que ya estaba: su sitio dentro de él
@@ -442,6 +550,7 @@ def planear(prop, d, pid, medidas=None):
     plan["medir"] = ctx.xml_medir()
     # las relaciones a clases que ya estaban se pegan por su nombre DESPUÉS de los cambios (reemplazar va antes que anadir);
     # las de otros objetos que ya estaban, por su id (descontando lo que se quita antes)
+    _rutas_de_relaciones(plan, d)
     for r in plan["relaciones"]:
         inicio_es_a = du.TIPOS_REL[r["tipo"]]["inicio_es_a"]
         r["_cx"] = tuple(_centro_x(r["_" + lado]) for lado in ("de", "a"))     # dónde queda cada extremo: para el triángulo de lectura
@@ -450,6 +559,7 @@ def planear(prop, d, pid, medidas=None):
             x = r.pop("_" + lado)
             h = r.get("_hint_ini" if (lado == "a") == inicio_es_a else "_hint_fin")
             punto = f"@{h[0]:.3f},{h[1]:.3f}" if h else ""      # el lado por el que entra (trazo de dia_planes)
+            if r.get("_idx"): punto = f"#{r['_idx'][lado]}"        # «desde» / «hasta»: el punto de conexión de la clase, por su índice
             if "c" in x:
                 r["ref_" + lado] = (f"tag:{x['c']['tag']}" if x["nueva"] else f"clase:{(plan['modificar'].get(x['id']) or (None, x['c']))[1]['nombre']}") + punto
             else:
@@ -947,7 +1057,8 @@ Al final (después de <marcas> si lo hay), UN solo bloque en una línea:
   Máximo 30 cambios y 12 clases. Si la clase ya existe, usa "modificar".
   Para cursos con convenciones: "dentro_de": "capa" (con {"paquete": "capa"} antes; {"paquete": "awt", "dentro_de": "java"} los anida) deja la clase hija de
   verdad de su paquete · {"clase": "JFrame", "biblioteca": true} (vacía) · {"clase": "Show", "enumerada": ["A", "B"]} · en asociacion, agregacion y composicion,
-  "nombre": "tiene" es el verbo y "lectura": "a"|"de" el triángulo de lectura hacia esa clase ("direccion" = flecha de navegabilidad). Si el curso lo pide,
+  "nombre": "tiene" es el verbo y "lectura": "a"|"de" el triángulo de lectura hacia esa clase ("direccion" = flecha de navegabilidad).
+  Opcional, por dónde va la línea: "desde"/"hasta" (arriba, abajo, izquierda, derecha, arriba-izq…, "fila:N") y "por": [[x, y], ...]. Si el curso lo pide,
   los parámetros van solo con el tipo ("+f(String, int): void") y los nombres de clase sin negrita: el panel lo aplica solo.
 - "ejercicio" (opcional, con su solución ESCONDIDA para que lo revise Comprobar sin IA; normalmente en "diagrama": "nuevo", donde
   "cambios" pone lo que le das hecho): {"titulo": "Herencia de animales", "clases": [{"nombre": "Perro", "atributos": ["-raza: String"],

@@ -1477,6 +1477,74 @@ def probar_convenciones():
     a1, a2 = ag(parte="Producto", todo="Inventario"), ag(parte="Inventario", todo="Producto", mult=["1", "*"])
     ver(a1["ok"] == a1["total"] and a2["ok"] < a2["total"], "Rombo: bien en el todo (Inventario) y mal en la otra clase:")
 
+    # --- «pos» de clases y capas hijas en un mismo plan: se respeta (absoluto) y la capa de fuera crece para contenerlas
+    dp_ = cu.diagrama_de(cambios([{"paquete": "uno", "pos": [2, 2]}, {"paquete": "dos", "pos": [2, 40]}, {"paquete": "sub", "dentro_de": "uno", "pos": [30, 8]},
+                                  {"clase": "A", "dentro_de": "uno"}, {"clase": "B", "dentro_de": "uno", "pos": [60, 5]}, {"clase": "C", "dentro_de": "dos"},
+                                  {"clase": "D", "dentro_de": "dos", "pos": [4, 60]}, {"clase": "E", "dentro_de": "sub", "pos": [32, 12]}], None))
+    cj = {c["nombre"]: c["caja"] for c in dp_["clases"]}
+    pq = {o["texto"]: o["caja"] for o in dp_["objetos"] if o["kind"] == "paquete"}
+    def dentro_(c, p): return p[0] - 0.01 <= c[0] and p[1] - 0.01 <= c[1] and c[0] + c[2] <= p[0] + p[2] + 0.01 and c[1] + c[3] <= p[1] + p[3] + 0.01
+    pos_ok = (round(cj["B"][0], 1), round(cj["B"][1], 1)) == (60, 5) and (round(cj["D"][0], 1), round(cj["D"][1], 1)) == (4, 60)         and (round(cj["E"][0], 1), round(cj["E"][1], 1)) == (32, 12) and (round(pq["sub"][0], 1), round(pq["sub"][1], 1)) == (30, 8) and round(pq["dos"][1], 1) <= 40
+    ver(pos_ok and all(dentro_(cj[n], pq[p]) for n, p in (("A", "uno"), ("B", "uno"), ("C", "dos"), ("D", "dos"), ("E", "sub"))) and dentro_(pq["sub"], pq["uno"])
+        and {c["nombre"]: c["padre"] for c in dp_["clases"]} == {"A": "uno", "B": "uno", "C": "dos", "D": "dos", "E": "sub"},
+        "«pos» de clases y capas hijas en el mismo plan: se respeta tal cual y su capa crece para contenerlas (las que no lo traen se colocan solas y siguen a su capa):")
+
+    # --- «ancho» y «alto» de una capa; una capa que vuelve a crecer cuando su clase crece (modificar); capas hijas dentro de una capa que ya estaba
+    def dos(c1, c2):
+        with tempfile.TemporaryDirectory() as tmp:
+            f1, f2, f3 = Path(tmp) / "1.dia", Path(tmp) / "2.dia", Path(tmp) / "3.dia"
+            du.escribir(f1, [])
+            cu.aplicar_offline(f1, cu._plan(None, cambios(c1, None), du.leer(f1), "x1", False), f2)
+            cu.aplicar_offline(f2, cu._plan(None, cambios(c2, None), du.leer(f2), "x2", False), f3)
+            return du.leer(f3)
+    dv = cu.diagrama_de(cambios([{"paquete": "vacia", "pos": [2, 2], "ancho": 20, "alto": 12}, {"paquete": "llena", "pos": [30, 2], "ancho": 3, "alto": 3},
+                                 {"clase": "Z", "dentro_de": "llena", "metodos": ["+f(): void"]}], None))
+    pv = {o["texto"]: o["caja"] for o in dv["objetos"] if o["kind"] == "paquete"}
+    errs = []
+    for malo in ({"paquete": "x", "ancho": 0.1}, {"paquete": "x", "alto": 500}, {"paquete": "x", "ancho": "ancho"}):
+        try: cambios([malo], None); errs.append("(no falló)")
+        except ValueError as e: errs.append(str(e))
+    ver(pv["vacia"][2] >= 19.9 and pv["vacia"][3] >= 11.9 and pv["llena"][2] > 3.5 and "(no falló)" not in errs,
+        f"«ancho» y «alto» de una capa (mínimo 0,5 a 100 cm): vacía {pv['vacia'][2]:.0f}×{pv['vacia'][3]:.0f}, la que lleva clases crece más allá de lo pedido:")
+    base = [{"paquete": "cap", "pos": [2, 2]}, {"clase": "A", "dentro_de": "cap", "metodos": ["+f(): void"]}, {"clase": "B", "dentro_de": "cap", "metodos": ["+g(): void"]}]
+    d0 = cu.diagrama_de(cambios(base, None)); d1 = dos(base, [{"modificar": "A", "agregar": [f"+m{i}(): void" for i in range(8)]}])
+    c0 = {c["nombre"]: c["caja"] for c in d0["clases"]}; c1 = {c["nombre"]: c["caja"] for c in d1["clases"]}
+    p0 = next(o["caja"] for o in d0["objetos"] if o["kind"] == "paquete"); p1 = next(o["caja"] for o in d1["objetos"] if o["kind"] == "paquete")
+    sin_pisar = c1["B"][0] >= c1["A"][0] + c1["A"][2] - 0.1 or c1["B"][1] >= c1["A"][1] + c1["A"][3] - 0.1
+    ver(sin_pisar and (c1["B"][0] > c0["B"][0] or c1["B"][1] > c0["B"][1]) and p1[3] > p0[3] + 3 and dentro_(c1["B"], p1) and dentro_(c1["A"], p1)
+        and {c["nombre"]: c["padre"] for c in d1["clases"]} == {"A": "cap", "B": "cap"},
+        "«modificar» que hace crecer una clase: la de al lado se corre lo que crece y su capa vuelve a crecer para contenerlas:")
+    d2 = dos([{"paquete": "p", "pos": [2, 2]}], [{"paquete": "q", "dentro_de": "p"}, {"clase": "X", "dentro_de": "q", "metodos": ["+f(): void"]}])
+    pq2 = {o["texto"]: o for o in d2["objetos"] if o["kind"] == "paquete"}
+    ver(pq2["q"]["padre"] == "p" and d2["clases"][0]["padre"] == "q" and dentro_(pq2["q"]["caja"], pq2["p"]["caja"]) and dentro_(d2["clases"][0]["caja"], tuple(v - (0.6 if i < 2 else -1.2) for i, v in enumerate(pq2["q"]["caja"]))),
+        "Una capa hija (con sus clases) dentro de una capa que ya estaba: queda dentro, con su parentesco, y la de fuera crece:")
+
+    # --- por dónde va una línea: «desde», «hasta» y «por» (puntos de conexión de Dia y puntos intermedios)
+    cl = [{"clase": "A", "pos": [2, 2], "metodos": ["+f(): void", "+g(): void"]}, {"clase": "B", "pos": [22, 2]}, {"clase": "C", "pos": [2, 20]}]
+    dl = cu.diagrama_de(cambios(cl + [{"relacion": "asociacion", "de": "A", "a": "B", "desde": "fila:1", "hasta": "izquierda", "nombre": "x"},
+                                      {"relacion": "asociacion", "de": "A", "a": "C", "desde": "derecha", "hasta": "derecha", "por": [[16, 5], [16, 24]], "nombre": "y"},
+                                      {"relacion": "herencia", "de": "C", "a": "B", "desde": "arriba-der", "hasta": "abajo"}], None))
+    rl = {(r["de"], r["a"]): r for r in dl["relaciones"]}
+    r1, r2, r3 = rl[("A", "B")], rl[("A", "C")], rl[("C", "B")]
+    xs2 = [round(q[0], 1) for q in r2["puntos"]]; ys2 = [round(q[1], 1) for q in r2["puntos"]]
+    ver(r1["punto_de"] == "11" and r1["punto_a"] == "3" and r2["punto_de"] == "4" and r2["punto_a"] == "4" and r3["punto_de"] == "2" and r3["punto_a"] == "6"
+        and 16.0 in xs2 and len(r2["puntos"]) >= 3 and max(ys2) >= 24 - 0.1 and len(r1["puntos"]) >= 3,
+        f"Líneas con «desde», «hasta» y «por»: puntos de conexión de Dia (fila:1 derecha = 11, izquierda = 3, esquinas, centro de abajo) y trazo por los puntos dados ({len(r2['puntos'])} puntos):")
+    errs = []
+    for malo in ({"relacion": "asociacion", "de": "A", "a": "B", "desde": "centro"}, {"relacion": "asociacion", "de": "A", "a": "B", "desde": "fila:9"},
+                 {"relacion": "asociacion", "de": "A", "a": "B", "por": [[1, 2, 3]]}, {"relacion": "asociacion", "de": "A", "a": "B", "por": "x"}):
+        try: cu.diagrama_de(cambios(cl + [malo], None)); errs.append("(no falló)")
+        except ValueError as e: errs.append(str(e))
+    sin = cu.diagrama_de(cambios(cl + [{"relacion": "asociacion", "de": "A", "a": "B"}], None))["relaciones"][0]
+    ver("(no falló)" not in errs and len(sin["puntos"]) >= 3, "«desde»/«hasta»/«por» mal escritos dan error claro (" + " | ".join(x[:36] for x in errs) + "); sin ellos, todo como antes:")
+    dn = cu.diagrama_de(cambios(cl + [{"relacion": "asociacion", "de": "A", "a": "B", "desde": "fila:0", "hasta": "izquierda", "por": [[16, None], [16, None]], "nombre": "z"}], None))
+    pn = dn["relaciones"][0]["puntos"]
+    ver(len(pn) == 4 and abs(pn[1][0] - 16) < 0.05 and abs(pn[2][0] - 16) < 0.05 and abs(pn[1][1] - pn[0][1]) < 0.05 and abs(pn[2][1] - pn[3][1]) < 0.05,
+        "«por» con null (HVH): [[16, null], [16, null]] repite la altura de la salida y de la llegada:")
+    ver(cd.trazo_ortogonal((8, 3), 1, [], (8, 20)) == ([(8, 3), (8, 3), (8, 20), (8, 20)], [0, 1, 0]) and len(cd.trazo_ortogonal((8, 3), 0, [], (20, 3))[0]) == 6
+        and cd.trazo_ortogonal((8, 3), 1, [], (20, 10)) == ([(8, 3), (8, 10), (20, 10)], [1, 0]),
+        "El trazo ortogonal mete el codo donde no hay alineación y escribe las rectas con más de 2 puntos (Dia se cierra con menos de 3):")
+
     # --- un diagrama de entrega grande (25 clases, 13 capas anidadas, 35 relaciones): límites de curso y tiempo
     t0 = time.time()
     capas = [{"paquete": f"capa{i}", **({"dentro_de": f"capa{i // 3}"} if i >= 3 and i % 3 else {})} for i in range(13)]
@@ -1531,6 +1599,23 @@ def probar_convenciones():
     cu_ = next((x for x in dt["clases"] if x["nombre"] == "Cuenta"), {})
     ver(prop and not err and cu_.get("padre") == "capa" and not cu_.get("negrita", True) and cu_["metodos"][0]["params"][0]["nombre"] == ""
         and dt["relaciones"][0]["ver_lectura"], "Lo que crea el tutor lleva las convenciones del curso:")
+    # --- --capturas: los argumentos y la elección de módulos (sin ventanas)
+    import capturas_dia as cap
+    ok_args = cap.analizar_argumentos(["c.json", "--capturas", "salida", "m5,6"]) == ("c.json", "salida", ["m5", "6"])         and cap.analizar_argumentos(["c.json", "--capturas", "salida"]) == ("c.json", "salida", [])
+    errs = []
+    for malo in (["c.json"], ["--capturas", "x"], ["c.json", "--capturas"]):
+        try: cap.analizar_argumentos(malo); errs.append("(no falló)")
+        except ValueError as e: errs.append(str(e))
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, mid in enumerate(("uno", "dos", "tres"), 1):
+            (Path(tmp) / f"m{i}.json").write_text(json.dumps({"titulo": mid, "id": mid, "pasos": [{"texto": "x"}]}), encoding="utf-8")
+        (Path(tmp) / "curso.json").write_text(json.dumps({"titulo": "C", "modulos": ["m1.json", "m2.json", "m3.json"]}), encoding="utf-8")
+        cc = cu.Curso(Path(tmp) / "curso.json")
+        sel = lambda *p: [k for k, _ in cap.elegir_modulos(cc, list(p))]
+        try: cap.elegir_modulos(cc, ["9"]); raro = "(no falló)"
+        except ValueError as e: raro = str(e)
+        ver(ok_args and "(no falló)" not in errs and sel() == [1, 2, 3] and sel("m3", "1") == [1, 3] and sel("dos") == [2] and "no hay un módulo «9»" in raro,
+            "--capturas: argumentos (curso, carpeta, módulos por número, «mN» o id) y errores claros (" + " | ".join(x[:40] for x in errs) + "):")
     print("Convenciones del curso:", "todo bien" if all(todo) else "HAY FALLOS")
 
 
@@ -1639,6 +1724,9 @@ def probar_curso(curso):
 if __name__ == "__main__":
     try: sys.stdout.reconfigure(encoding="utf-8")
     except Exception: pass
+    if "--capturas" in sys.argv:                      # imágenes de cada paso con un Dia propio (capturas_dia.py)
+        import capturas_dia
+        capturas_dia.main(sys.argv[1:]); sys.exit(0)
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     ruta = Path(args[0]).resolve() if args else LECCION
     try: curso = cu.Curso(ruta)
