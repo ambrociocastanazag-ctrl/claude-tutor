@@ -1,0 +1,110 @@
+{
+  "titulo": "Power Query",
+  "titulo_codigo": "Datos → Obtener",
+  "hoja": "M3 Power Query",
+  "tema_tutor": "Power Query: traer datos de una tabla del libro o de un archivo CSV y limpiarlos con pasos (recortar espacios, mayúsculas, quitar filas vacías, tipos); cargar el resultado y actualizar",
+  "notas_tutor": "Tu turno: en la tabla ClientesLimpios (cargada en E1), filtrar la ciudad Lima. Las consultas solo leen tablas del libro y archivos de la carpeta de datos del curso.",
+  "pasos": [
+    {
+      "titulo": "Datos sucios",
+      "acciones": [
+        {
+          "poner": "A1:C6",
+          "valores": [
+            [
+              "Nombre",
+              "Ciudad",
+              "Compras"
+            ],
+            [
+              "  ana pérez",
+              "lima",
+              3
+            ],
+            [
+              "LUIS GÓMEZ ",
+              "Cusco",
+              5
+            ],
+            [
+              "eva soto",
+              "LIMA",
+              null
+            ],
+            [
+              "marco ruiz",
+              " arequipa",
+              2
+            ],
+            [
+              "rosa díaz",
+              "Lima",
+              4
+            ]
+          ]
+        },
+        {
+          "tabla": "A1:C6",
+          "nombre": "Clientes",
+          "estilo": "TableStyleLight1"
+        },
+        {
+          "ancho": "A:C",
+          "valor": 14
+        }
+      ],
+      "texto": "Una tabla con nombres y ciudades mal escritos y una compra vacía. Arreglarla a mano sería lento: lo hará Power Query.",
+      "donde": "Mira la tabla **Clientes** (A1:C6)."
+    },
+    {
+      "titulo": "Una consulta que limpia",
+      "acciones": [
+        {
+          "consulta": "ClientesLimpios",
+          "cargar_en": "E1",
+          "m": "let\n    Origen = Excel.CurrentWorkbook(){[Name=\"Clientes\"]}[Content],\n    Limpio = Table.TransformColumns(Origen, {{\"Nombre\", each Text.Proper(Text.Trim(_)), type text}, {\"Ciudad\", each Text.Proper(Text.Trim(_)), type text}}),\n    ConCompras = Table.SelectRows(Limpio, each [Compras] <> null)\nin\n    ConCompras"
+        },
+        {
+          "ajustar_ancho": "E:G"
+        }
+      ],
+      "texto": "La consulta ClientesLimpios lee la tabla Clientes, recorta espacios, pone Mayúscula Inicial y quita la fila sin compras. El resultado se cargó en E1.",
+      "donde": "**Datos** → **Consultas y conexiones** → doble clic en **ClientesLimpios** para ver sus pasos."
+    },
+    {
+      "titulo": "Desde un archivo",
+      "acciones": [
+        {
+          "consulta": "VentasCSV",
+          "cargar_en": "I1",
+          "m": "let\n    Origen = Csv.Document(File.Contents(\"{datos}/ventas.csv\"), [Delimiter=\",\", Encoding=65001]),\n    Encabezados = Table.PromoteHeaders(Origen),\n    Tipos = Table.TransformColumnTypes(Encabezados, {{\"Unidades\", Int64.Type}, {\"Precio\", type number}})\nin\n    Tipos"
+        },
+        {
+          "ajustar_ancho": "I:L"
+        }
+      ],
+      "texto": "VentasCSV lee ventas.csv de la carpeta de datos del curso, usa la primera fila como encabezados y pone los tipos. Si el archivo cambia, Actualizar lo vuelve a leer.",
+      "donde": "**Datos** → **Obtener datos** → **De un archivo** → **De texto/CSV**."
+    },
+    {
+      "titulo": "Tu turno",
+      "acciones": [],
+      "texto": "Tu turno: en la tabla ClientesLimpios (E1), filtra la columna Ciudad para ver solo Lima.",
+      "donde": "Clic en la flecha de **Ciudad** (en E1:G1) → deja marcado solo **Lima** → **Aceptar**.",
+      "turno": {
+        "titulo": "Solo Lima",
+        "pide": [
+          {
+            "filtro": {
+              "tabla": "ClientesLimpios",
+              "columna": "Ciudad",
+              "igual_a": "Lima"
+            }
+          }
+        ],
+        "al_empezar": "Filtra la tabla de E1 y pulsa Comprobar.",
+        "al_terminar": "¡Bien! Y como la limpieza la hizo Power Query, «lima», «LIMA» y «Lima» ya son lo mismo."
+      }
+    }
+  ]
+}

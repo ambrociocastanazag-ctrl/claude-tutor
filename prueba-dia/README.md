@@ -136,6 +136,8 @@ Se abren **Dia en vivo** y **el panel**:
 3. Pruébalo sin ventanas: `python prueba-dia/panel_dia.py <curso.json> --probar`. Trabaja sobre una copia (no toca la carpeta del curso): arma los pasos sin Dia y enseña el texto y lo nuevo de cada uno, revisa cada «Tu turno» con la solución (bien) y con cada error típico (su `dice`), prueba el menú de módulos, los botones y el progreso, y que los módulos mal escritos den un error claro. Termina en «Curso de Dia: todo bien».
 4. Ábrelo con el panel y recórrelo: la primera vez arma cada módulo en Dia (unos segundos).
 
+- **2026-10-08 (noche): editor aprobado.** Probó el curso de ejemplo (`curso-ejemplo/`) con el panel real: Dia en vivo, flecha sobre la herramienta Clase y botones del paso. Dijo: «funciona de maravilla, aprobado el editor Dia». Siguiente: escribir los módulos de su curso de verdad.
+
 ## Archivos
 
 - `plugin-dia/`: el plugin de Dia para la clase en vivo (código, DLL, compilador, cliente Python, demo y la propuesta). Tiene su propio README.

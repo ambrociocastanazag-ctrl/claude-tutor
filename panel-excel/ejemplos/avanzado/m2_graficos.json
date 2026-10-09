@@ -1,0 +1,53 @@
+{
+  "titulo": "Gráficos y formato condicional",
+  "titulo_codigo": "Alt+F1",
+  "hoja": "M2 Gráficos",
+  "tema_tutor": "elegir el gráfico según la pregunta (columnas para comparar meses, líneas para la tendencia), títulos de gráfico y ejes, y formato condicional con escala de colores",
+  "notas_tutor": "Tu turno: gráfico de columnas con A1:B7 (Mes y Ventas), título «Ventas por mes», sin leyenda; y escala de colores en B2:B7. Error típico: un gráfico circular.",
+  "pasos": [
+    {
+      "titulo": "Los datos",
+      "acciones": [
+        {"poner": "A1:C7", "valores": [["Mes", "Ventas", "Gastos"], ["Ene", 120, 80], ["Feb", 135, 90], ["Mar", 110, 85],
+                                        ["Abr", 160, 95], ["May", 150, 100], ["Jun", 175, 105]]},
+        {"negrita": "A1:C1"}, {"ancho": "A:C", "valor": 11}
+      ],
+      "texto": "Ventas y gastos de seis meses. Primero veremos un gráfico de ejemplo y luego harás el tuyo.",
+      "donde": "Mira la hoja **M2 Gráficos**: los datos están en **A1:C7**."
+    },
+    {
+      "titulo": "Un gráfico de líneas",
+      "acciones": [
+        {"com": [
+          {"ruta": "ChartObjects.Add", "args": [330, 5, 330, 190], "guardar": "g"},
+          {"en": "$g", "ruta": "Chart.SetSourceData", "args": [{"rango": "A1:A7,C1:C7"}]},
+          {"en": "$g", "ruta": "Chart.ChartType", "valor": "xlLineMarkers"},
+          {"en": "$g", "ruta": "Chart.HasTitle", "valor": true},
+          {"en": "$g", "ruta": "Chart.ChartTitle.Text", "valor": "Gastos (tendencia)"},
+          {"en": "$g", "ruta": "Chart.HasLegend", "valor": false}
+        ]}
+      ],
+      "texto": "Para ver cómo evoluciona algo en el tiempo, un gráfico de líneas: aquí, los gastos de enero a junio.",
+      "donde": "Selecciona los datos → **Insertar** → **Gráfico de líneas** (o **Alt+F1** y cambias el tipo)."
+    },
+    {
+      "titulo": "Tu turno",
+      "acciones": [],
+      "texto": "Tu turno: crea un gráfico de COLUMNAS con las ventas por mes (A1:B7), con el título «Ventas por mes» y sin leyenda. Después ponle una escala de colores a B2:B7.",
+      "donde": "Selecciona **A1:B7** → **Insertar** → **Columna agrupada**. Luego **B2:B7** → **Inicio** → **Formato condicional** → **Escalas de color**.",
+      "turno": {
+        "titulo": "Gráfico de ventas y escala de colores",
+        "pide": [
+          {"grafico": {"tipo": "columnas", "datos": "A1:B7", "titulo": "Ventas por mes", "leyenda": false}},
+          {"formato_condicional": {"rango": "B2:B7", "tipo": "escala"}}
+        ],
+        "al_empezar": "Haz el gráfico y el formato condicional, y pulsa Comprobar.",
+        "al_terminar": "¡Bien! Columnas para comparar meses y colores para ver los picos de un vistazo.",
+        "errores": [
+          {"si": {"grafico": {"tipo": "circular"}}, "dice": "Un circular sirve para partes de un todo, no para comparar meses: cámbialo a columnas (Diseño de gráfico → Cambiar tipo)."},
+          {"si": {"grafico": {"tipo": "lineas"}}, "dice": "Las líneas muestran tendencia; para comparar cada mes, columnas (Diseño de gráfico → Cambiar tipo)."}
+        ]
+      }
+    }
+  ]
+}

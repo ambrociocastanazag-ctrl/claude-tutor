@@ -7,6 +7,10 @@
 !/herramientas/
 !/prueba-dia/
 panel-excel/preferencias.json
+# Lo que genera un curso de Excel al usarlo: su libro y su progreso
+panel-excel/**/*.xlsx
+panel-excel/**/*.xlsm
+panel-excel/**/progreso_panel.json
 __pycache__/
 *.pyc
 herramientas/node_modules/

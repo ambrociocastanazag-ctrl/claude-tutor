@@ -7,15 +7,29 @@ Un panel que flota encima de Excel para dar un curso paso a paso:
 - Un **tutor** que conoce el curso entero lee tu hoja, contesta y la marca con flechas y notas (en la hoja que tienes al frente o en la que él elija; ver «Marcas del tutor»). Acepta **capturas, PDF y archivos de texto**.
 - El tutor también puede **cambiar el libro** (armar un ejercicio parecido en una hoja nueva, completar un ejemplo, dar formato, crear una tabla y, con el **modo libre**, casi cualquier cosa de Excel: gráficos, tablas dinámicas, formato condicional, validación, nombres, segmentaciones…), pero **siempre pide permiso**: muestra una tarjeta con **Aplicar / No** y, después, **Deshacer**. Los ejercicios que arma se revisan con su propio **Comprobar**, sin IA.
 - Todo va en **una ventana** pegada a la derecha, a todo el alto de la pantalla, con dos pestañas: **Lección | Tutor**.
+- **Para cursos avanzados:** fórmulas de **matriz dinámica** (FILTRAR, ORDENAR, UNICOS, SECUENCIA, BUSCARX, LET…) que se desbordan, ejercicios de **objetos** (gráfico, tabla, dinámica, formato condicional, validación, nombres, orden, filtros, inmovilizar, formato de número) revisados sin IA, **Power Query** con orígenes seguros, **Buscar objetivo, tablas de datos, escenarios** (y Solver si está activado) y **VBA** con cuidado (leer, marcar y proponer código; Comprobar ejecuta la macro de la persona en una copia). El panel **recuerda el módulo y el paso** donde te quedaste.
 
 ```
 python panel-excel/panel_web.py <carpeta-del-curso>/curso.json      # un curso con módulos
 python panel-excel/panel_web.py panel-excel/ejemplo_leccion.json     # una lección suelta (ejemplo)
+python panel-excel/panel_web.py panel-excel/ejemplos/avanzado/curso.json   # curso de ejemplo avanzado (plantilla)
 ```
 
 Los cursos van en su propia carpeta (por ejemplo `curso-excel/`, con su README); aquí solo vive el motor.
 
 ## Historia y decisiones
+
+- **2026-10-08 (cursos avanzados y VBA):** el usuario pidió todo lo necesario para dar cursos avanzados de Excel sin problemas, VBA incluido. Se hizo y se decidió:
+  - **Matrices dinámicas.** El motor escribía con `Formula`, y en este Excel eso añade el `@` (FILTRAR no se desbordaba) y, al cambiar de paso, le ponía `@` a las fórmulas de la persona. Ahora escribe y lee con `Formula2` (`motor.poner_formula` / `formula_de`) en lecciones, tutor, modo libre, revisión y Deshacer. Además, la revisión usaba `Evaluate`, que por pywin32 va en el idioma de Excel: cualquier solución con funciones (`=SUM(...)`) daba `#¿NOMBRE?`. Ahora `motor.evaluar_en` llama a Evaluate en inglés (LCID 0x0409) y devuelve la matriz entera. LAMBDA no existe en este Excel (build 14430): el tutor lo sabe por el [Estado actual].
+  - **Pasos que limpian.** Los pasos de una lección pueden usar el modo libre, Power Query, análisis y VBA (se revisan al leer la lección, igual que lo del tutor). Al cambiar de paso se quita todo lo que no es del paso (gráficos y formas «lec_», dinámicas, formato condicional, validación, nombres, consultas, escenarios, módulos de VBA y anchos). **Decisión sobre lo que crea la persona** (p. ej. su gráfico del Tu turno): se conserva. Sus gráficos y formas no se tocan; sus tablas, dinámicas, formato condicional y validación se anotan (`avanzado.inventario`) y se rehacen igual tras el paso. Lo que no se pueda rehacer se le cuenta al tutor. No se conservan: el formato de sus celdas, los anchos de columna, los filtros de un rango (no de tabla) y sus segmentaciones. Se eligió así antes que guardar copias de la hoja en cada paso (lento y con vínculos rotos).
+  - **Comprobar de objetos** (`"pide"` en el turno): puntos ✔/✘ como en Dia (la tarjeta ya los mostraba), errores típicos con `"si"` y marcas de formato condicional en el rango de cada cosa. No cuenta lo que ya estaba en la hoja al empezar (el gráfico del ejemplo).
+  - **Power Query con límite:** solo con acciones cerradas (`consulta`, `actualizar`), nunca desde el modo libre. El M se revisa sin ejecutarlo: solo `Excel.CurrentWorkbook()` y `File.Contents` con la ruta escrita dentro de la carpeta de datos del curso; nada de web, bases de datos, carpetas, `#shared` ni `Expression.Evaluate`. Deshacer es exacto en una hoja nueva o en una sin datos de Power Query (copia de la hoja + quitar consulta y conexión). Se descartó permitir copias de hojas con datos de Power Query: Excel duplica sus consultas («X (2)»), así que eso se rechaza. Cambiar una consulta que ya existe no se deshace exacto: la tarjeta lo avisa antes.
+  - **Análisis:** Buscar objetivo, tablas de datos y escenarios con Deshacer exacto (copia de la hoja). **Solver** va con una acción cerrada que solo llama a las macros fijas del complemento (`SolverReset/Ok/Add/Solve/Finish`) con celdas de la hoja revisadas, y solo si el complemento está activado. Aquí no lo está (y el panel no lo activa): **la parte de Solver no está probada**, solo el rechazo con su mensaje.
+  - **VBA:** el panel detecta si está activo «Confiar en el acceso al modelo de objetos de proyectos de VBA» y, si no, lo explica (no lo cambia). El tutor lee los módulos con líneas numeradas, **marca líneas** con un comentario aparte encima (`' ← tutor: …`), que se quita con Borrar marcas, con marcas nuevas y al cerrar el panel. Se eligió así antes que resaltar en el panel porque la persona trabaja en el editor de VBA, y una línea aparte no rompe su código ni se mezcla con él. Propone código con la tarjeta (el código entero, abierto) y Deshacer deja el módulo como estaba. El análisis estático rechaza Shell, archivos, internet, Workbooks, Run, Evaluate, Declare, CreateObject (salvo Scripting.Dictionary y VBScript.RegExp), el registro, eventos y Auto_Open, entre otros. Comprobar copia la hoja a un libro temporal, mete el código con un vigía en cada bucle (corta a los 4 s con `End`), MsgBox/InputBox de mentira y un vigilante que pulsa «Finalizar» si salta un aviso de VBA; compara con la solución ejecutada igual. **En esta PC el acceso no está activado: insertar código, marcar líneas en el editor y el Comprobar de macros no están probados**; sí el análisis, la detección y los mensajes.
+  - El libro del curso pasa a **.xlsm** con `"macros": true` en `curso.json` (si había un .xlsx, se guarda una copia .xlsm y el .xlsx queda igual).
+  - **Progreso:** `progreso_panel.json` junto a `curso.json` (módulo y paso); `--probar` no lo cambia.
+  - Se descartó dar al tutor código Python o VBA libre para todo lo demás: lo que puede hacer sigue siendo una lista cerrada y revisada.
+- **2026-10-08 (para Dia):** al cambiar de módulo el panel dice «Preparando el módulo en Excel…» o «…en Dia» (la app de `APP_PANEL`). Los botones del paso pueden pedir confirmación (`"confirmar"`) y se desactivan con «…» mientras corren.
 
 - **2026-10-08 (noche):** para cursos avanzados, el usuario quiere que el tutor pueda hacer «lo que sea» en Excel. Eligió el **modo mixto**:
   - Las acciones de siempre, validadas, para lo común. Se sumaron `ordenar` e `inmovilizar`.
@@ -59,6 +73,10 @@ Los cursos van en su propia carpeta (por ejemplo `curso-excel/`, con su README);
   - `Hoja.objetos()`: lo que hay en una hoja además de celdas (tablas, gráficos, dinámicas, formato condicional, validación), para el [Estado actual] del tutor.
   - `Tutor`: deja abierta una sesión de Claude Code (`claude -p` con stream-json) que conoce todos los módulos. Arranca una vez, en unos 6–11 s y en segundo plano, sin herramientas ni ajustes (`--setting-sources ""`: no carga hooks ni avisos de nadie). Después responde en unos 2–3 s y el texto va apareciendo. Se reinicia cada 15 preguntas, y también después de un error (por ejemplo, un adjunto que la API rechaza), para que ese mensaje no rompa los siguientes.
   - `mensaje()`: arma el mensaje con adjuntos (ver «Adjuntos del tutor»).
+- `avanzado.py`: lo avanzado que usa `motor.py`: el **Comprobar de objetos** (`revisar_objetos`, un `chk_…` por tipo), el **inventario** de la hoja (lo que hay además de celdas, para conservar lo de la persona al cambiar de paso: `inventario`, `recrear`, `base_objetos`), **Power Query** (`validar_m`, `crear_consulta`, `quitar_consulta`, `revertir_consultas`) y las **herramientas de análisis** (`ejecutar`, `validar_accion`, `describir`).
+- `vba.py`: **VBA**: acceso (`acceso`, `ACCESO`), análisis estático (`problemas`, `analizar`), leer y marcar módulos (`modulos`, `contexto`, `marcar`, `borrar_marcas`), proponer y deshacer código (`aplicar`, `restaurar`) y el Comprobar de una macro (`revisar`, `instrumentar`, `comparar`).
+- `ejemplos/avanzado/`: curso de ejemplo avanzado y plantilla (4 módulos cortos: matrices dinámicas, gráficos y formato condicional, Power Query con `datos/ventas.csv`, VBA). Ver su README. Su libro (`Curso_Avanzado.xlsm`) y `progreso_panel.json` se generan al abrirlo.
+- `progreso_panel.json` (junto a cada `curso.json`, se genera): módulo y paso donde se quedó la persona. No va al repositorio.
 - `ejemplo_leccion.json`: lección de ejemplo (referencias absolutas `$`: 7 pasos y un «Tu turno» con 8 errores típicos). Sirve de plantilla y para probar el motor. Se abre en un libro sin guardar.
 - `panel.html`: la página del panel. **Diseño de Claude Design** (proyecto «Panel.dc.html», pasado a JavaScript sin React), con letra Atkinson Hyperlegible. Se abre en **una sola ventana** de 460 px, pegada a la derecha y a todo el alto del área visible (sin la barra de tareas; respeta la escala de Windows, 125 % o 150 %).
   - Arriba, dos **pestañas tipo carpeta**: **Lección** (módulo, pasos y revisión automática) y **Tutor** (el chat). Cada una ocupa todo el alto que queda.
@@ -77,6 +95,10 @@ Los cursos van en su propia carpeta (por ejemplo `curso-excel/`, con su README);
   - Con «diagrama», el botón del ejercicio dice **«Ir al diagrama»**, y la confirmación de Deshacer, **«¿Deshacer igual?»** con el botón **«Deshacer igual»** (en Excel, «¿Borrar la hoja?» y «Borrar igual»).
   - La tarjeta puede traer `confirmar_titulo` y `confirmar_boton` para ese momento. El modo libre los usa cuando la hoja cambió después de aplicar: «¿Deshacer igual?», porque ahí la hoja vuelve a como estaba y no se borra.
   - `panel.html?demo&app=dia` muestra el demo con los textos y datos de Dia.
+  - **Recuadro amarillo en Lección** (`estado().requisito`): lo que le falta a Excel para el módulo (acceso al código VBA, Solver) y cómo activarlo.
+  - **Código en la tarjeta** (`codigos`: `[{titulo, texto}]`): el código VBA que propone el tutor, entero y con «Copiar»; «Ver los cambios» sale abierto.
+  - **Botones del paso** (`botones`, los usa Dia): si un botón trae `"confirmar": "texto"` (y opcional `"confirmar_boton"`), la página pide confirmación en un recuadro antes de llamar a `api.boton`; sin eso, igual que antes. Mientras corre, el botón queda desactivado con «…». Al cambiar de módulo dice «Preparando el módulo en Excel…» o «en Dia» (la app de `APP_PANEL`).
+  - El demo (`?demo&pestana=tutor`) trae también una propuesta de código VBA; el de Dia, un botón «Hazlo por mí» con confirmación.
 - `preferencias.json`: preferencias de la persona para el panel. Hoy solo `{"tema": "claro"}`. Lo crea el instalador según lo que conteste.
 
 ## Adjuntos del tutor
@@ -103,10 +125,12 @@ Ojo con el gasto: las imágenes se quedan en la conversación y cuentan en cada 
 
 ```json
 { "titulo": "Excel desde cero", "libro": "Curso_Excel.xlsx", "modelo_tutor": "sonnet",
-  "modulos": ["m1_referencias.json", "m2_tablas.json"] }   // archivos junto a curso.json
+  "modulos": ["m1_referencias.json", "m2_tablas.json"],    // archivos junto a curso.json
+  "macros": true,      // opcional: el libro es .xlsm (si había un .xlsx, se guarda una copia .xlsm y se sigue con ella)
+  "datos": "datos" }   // opcional: carpeta de datos (lo único de fuera del libro que puede leer Power Query: {datos}/archivo.csv)
 ```
 
-El libro se crea junto a `curso.json`. Si en vez de un curso se le pasa una lección suelta, la abre **siempre en un libro nuevo sin guardar** (nunca reutiliza un libro abierto: podría ser de la persona y se vaciaría).
+El libro se crea junto a `curso.json`. El panel recuerda dónde te quedaste en `progreso_panel.json`, junto a `curso.json` (si el archivo no cuadra con el curso, empieza desde el principio). Si en vez de un curso se le pasa una lección suelta, la abre **siempre en un libro nuevo sin guardar** (nunca reutiliza un libro abierto: podría ser de la persona y se vaciaría).
 
 ## Una lección (módulo)
 
@@ -120,7 +144,7 @@ El libro se crea junto a `curso.json`. Si en vez de un curso se le pasa una lecc
 }
 ```
 
-`titulo` (del paso y del «Tu turno») y `donde` son opcionales: si faltan, el panel no los muestra. En `donde`, lo que va entre `**` sale como una tecla o un botón.
+`titulo` (del paso y del «Tu turno») y `donde` son opcionales: si faltan, el panel no los muestra. En `donde`, lo que va entre `**` sale como una tecla o un botón. `"requiere": ["vba"]` (o `"solver"`) en la lección hace que el panel avise en Lección, con un recuadro amarillo, si a este Excel le falta eso y cómo activarlo (también se deduce de los pasos).
 
 Cada paso **se suma** a los anteriores: el paso 3 es la hoja vacía más las acciones de los pasos 1, 2 y 3.
 
@@ -148,7 +172,30 @@ Cada paso **se suma** a los anteriores: el paso 3 es la hoja vacía más las acc
 | Ordenar | `{"ordenar": "A1:C9", "por": "C", "orden": "desc"}` (con encabezados; `"encabezado": false` si no los hay) |
 | Inmovilizar paneles | `{"inmovilizar": "B2"}` (fija las filas de arriba y las columnas de la izquierda de B2) · `{"inmovilizar": "no"}` |
 
-Las fórmulas van en inglés y con coma (`=SUM(A1,B1)`), que es como las entiende Excel por dentro; luego las muestra traducidas. Los formatos de número también en inglés (`"0.0%"`, `"dd/mm/yyyy"`): el motor los traduce al idioma de Excel.
+Las fórmulas van en inglés y con coma (`=SUM(A1,B1)`), que es como las entiende Excel por dentro; luego las muestra traducidas. Se escriben con `Formula2`: las de matriz dinámica (`=FILTER(...)`, `=SORT(UNIQUE(...))`) se desbordan como si las tecleara la persona. Los formatos de número también en inglés (`"0.0%"`, `"dd/mm/yyyy"`): el motor los traduce al idioma de Excel.
+
+Más acciones (las de las lecciones y las del tutor; las del tutor siempre con permiso):
+
+| Acción | Ejemplo |
+|---|---|
+| Modo libre (ver «Modo libre») | `{"com": [{"ruta": "ChartObjects.Add", "args": [300, 10, 380, 230], "guardar": "g"}, …]}` |
+| Consulta de Power Query | `{"consulta": "VentasLimpias", "m": "let … in …", "cargar_en": "E1"}` (sin `cargar_en`: solo conexión; si ya existe, cambia su M) · `{"actualizar": "VentasLimpias"}` (`"todo"`) |
+| Buscar objetivo | `{"buscar_objetivo": "B5", "valor": 100, "cambiando": "B2"}` |
+| Tabla de datos | `{"tabla_datos": "D1:E8", "columna": "B2"}` (`"fila"` para la entrada de arriba; la fórmula en la esquina) |
+| Escenarios | `{"escenario": "Optimista", "celdas": "B2:B3", "valores": [120, 0.1]}` · `{"mostrar_escenario": "Optimista"}` |
+| Solver (si está activado) | `{"solver": "B10", "tipo": "max", "cambiando": "B2:B5", "metodo": "simplex", "restricciones": [{"celda": "B2:B5", "es": ">=", "valor": 0}]}` |
+| Código VBA | `{"vba": "Macros", "codigo": "Sub X()\n…\nEnd Sub", "modo": "reemplazar"}` (`"agregar"` lo añade al final; módulo normal) |
+
+### Cambiar de paso: qué se quita y qué se conserva
+
+Cada paso se rehace desde la hoja vacía (`Clase._limpiar` y `_construir`): se quitan las celdas, las tablas, los gráficos y formas que pusieron los pasos (se renombran `lec_N` para reconocerlos aunque se reabra el panel), las dinámicas, el formato condicional, la validación, los nombres que crearon los pasos, sus consultas de Power Query, escenarios y módulos de VBA, los filtros y los anchos de columna. Así, al volver a un paso, cada cosa está una sola vez y nada de pasos posteriores.
+
+Lo de la persona (decidido el 2026-10-08):
+- **Sus celdas** se conservan como antes (`suyo`).
+- **Sus gráficos y formas** no se tocan: siguen ahí y apuntando a sus celdas.
+- **Sus tablas, dinámicas, formato condicional y validación** se reconocen porque aparecieron después de rehacer el paso (`avanzado.inventario`, por su sitio y su regla) y se rehacen igual después (`avanzado.recrear`). Si algo no se puede rehacer (p. ej. su tabla quedaría encima de una de la lección), el tutor lo sabe por el [Estado actual].
+- Si borra algo suyo, se olvida. No se conservan el formato de sus celdas, los anchos, los filtros de un rango y sus segmentaciones.
+- Lo que el tutor puso con permiso en la hoja del módulo cuenta igual que lo de la persona; Deshacer quita sus tablas aunque se hayan rehecho.
 
 ## Marcas del tutor
 
@@ -209,7 +256,7 @@ Para lo que no está en la lista de acciones, el tutor manda, dentro de `cambios
 
 Si la hoja cambió después de aplicar, la tarjeta pregunta «¿Deshacer igual?», porque vuelve entera. Si un paso falla a mitad, se restaura la copia, todo queda como estaba y el tutor recibe en «[Del panel]» el error de Excel, legible (`motivo`). Las copias se borran al deshacer, al cerrar el panel y al abrirlo (por si quedó alguna de una sesión anterior). Con el panel cerrado, Deshacer del modo libre ya no existe; la nota de la tarjeta lo dice.
 
-**Lo que ve el tutor.** El [Estado actual] cuenta, además de las celdas, lo que hay en la hoja: tablas, gráficos (tipo, título, series), tablas dinámicas (rango, datos, filas, columnas, valores), formato condicional, validación y los nombres definidos. Así puede cambiar lo que ya existe.
+**Lo que ve el tutor.** El [Estado actual] cuenta, además de las celdas, lo que hay en la hoja: tablas, gráficos (tipo, título, series), tablas dinámicas (rango, datos, filas, columnas, valores), formato condicional, validación, tablas de Power Query, filtros, escenarios y los nombres definidos. Así puede cambiar lo que ya existe. También: las fórmulas que se desbordan con su rango y primeros valores («[se desborda en E2:G4: …]»), las consultas de Power Query con su M y dónde están cargadas, los archivos de la carpeta de datos, el código VBA con líneas numeradas (si hay acceso), los puntos ✔/✘ de la última revisión (primero lo que falla) y una línea con lo que tiene este Excel (matrices dinámicas, LAMBDA, Power Query, Solver, acceso a VBA, si el libro guarda macros), para que no proponga lo que no se puede.
 
 ## Cambios que propone el tutor (con permiso)
 
@@ -230,7 +277,9 @@ El tutor, además de `<marcas>`, puede terminar su respuesta con un bloque `<acc
 - **Deshacer** (en la misma tarjeta; Ctrl+Z de Excel no deshace lo hecho por COM):
   - Hoja creada: se borra (sin el aviso de Excel). Si la persona escribió en ella después, la tarjeta pregunta antes: **Borrar igual** / **Cancelar**.
   - Hoja que ya existía: cada celda que sigue como la dejó el tutor vuelve a como estaba (contenido y formato), las tablas nuevas vuelven a ser rango y las de antes recuperan su tamaño, totales y filtros. Las celdas que la persona cambió después **no se tocan** y la tarjeta dice cuáles.
-  - **En la hoja del módulo y después de cambiar de paso:** la hoja se rehízo, así que el formato y las tablas del tutor ya no están; los valores que escribió se conservaron como los de la persona (`Clase.ir` guarda como «suyo» todo lo que no puso la lección). Deshacer quita esos valores: vuelve lo que había o, si era de la lección, la celda queda vacía (para que no aparezca en otro paso). Lo comprueba `--probar`.
+  - **En la hoja del módulo y después de cambiar de paso:** la hoja se rehízo, así que el formato del tutor ya no está; los valores que escribió se conservaron como los de la persona (`Clase.ir` guarda como «suyo» todo lo que no puso la lección) y sus tablas se rehicieron como las de ella. Deshacer quita esos valores (vuelve lo que había o, si era de la lección, la celda queda vacía, para que no aparezca en otro paso) y sus tablas vuelven a ser rango. Lo comprueba `--probar`.
+  - **Código VBA:** el módulo vuelve a como estaba (o se quita, si lo creó el tutor); si la persona lo cambió después, pregunta «¿Deshacer igual?».
+  - **Power Query:** se quitan las consultas que creó (con su tabla y su conexión) y las que cambió vuelven a su M y se actualizan.
 - **Ejercicio del tutor**: si la propuesta trae `turno`, al aplicarla aparece en la pestaña Lección la tarjeta «Ejercicio del tutor», con su **Comprobar** (revisa en la hoja del ejercicio con `Hoja.revisar`: marcos de formato condicional, nunca formas), el aviso «Cambiaste algo desde que comprobaste» y «Pregúntale al tutor». Hay uno a la vez (uno nuevo reemplaza al anterior). Si la solución da error en Excel, no se crea y se avisa. Si está en la hoja del módulo, al cambiar de paso vuelve a «sin comprobar» (la hoja se rehízo).
 - El tutor recibe en cada pregunta qué hoja tiene la persona al frente (y adónde irían sus marcas), dónde están sus marcas, las hojas del libro, su ejercicio con la revisión del momento y el contenido de la hoja aparte que tenga al frente, y un «[Del panel]» con lo que hizo la persona con su última propuesta (aplicó, no aplicó, deshizo, o por qué no se pudo usar).
 - Las hojas que crea el tutor **no** las toca `_construir`; se guardan con el libro del curso.
@@ -260,6 +309,58 @@ El tutor, además de `<marcas>`, puede terminar su respuesta con un bloque `<acc
 - **Además detecta solo:** un número escrito a mano en vez de fórmula, y filas con fórmulas distintas (no la copió).
 - Si no reconoce el error, ofrece "Pregúntale al tutor".
 
+**Fórmulas que se desbordan** (FILTRAR, ORDENAR, UNICOS…): `{"rango": "G2", "solucion": "=FILTER(A2:C9,C2:C9>20)"}`. Se reconoce sola (o con `"desborda": true`): la fórmula va solo en la primera celda y se compara todo lo desbordado (puntos `ok/total` por celda). Detecta sola `#¡DESBORDAMIENTO!` (algo estorba o la copió hacia abajo), el resultado escrito a mano, la `@` y el tamaño distinto; un error típico `{"desbordamiento": true, "dice": "…"}` cambia el mensaje del desbordamiento.
+
+**Ejercicios de objetos** (`"pide"`, también en los del tutor; pueden ir junto a una fórmula):
+```json
+"turno": {"titulo": "Gráfico de ventas", "pide": [
+    {"grafico": {"tipo": "columnas", "datos": "A1:B7", "titulo": "Ventas por mes", "leyenda": false}},
+    {"formato_condicional": {"rango": "B2:B7", "tipo": "escala"}}],
+  "errores": [{"si": {"grafico": {"tipo": "circular"}}, "dice": "Un circular no compara meses: usa columnas."}]}
+```
+| Qué | Campos |
+|---|---|
+| `grafico` | `tipo` (columnas, barras, lineas, circular, anillo, dispersion, area, radial, burbujas, o una lista), `datos`, `series`, `titulo` (texto o `true`), `eje_x`, `eje_y`, `leyenda`, `existente` |
+| `tabla` | `rango` (sin la fila de totales), `nombre`, `columnas`, `totales` (`true` o `{"Total": "suma"}`), `estilo` |
+| `dinamica` | `origen` (rango o tabla), `filas`, `columnas`, `filtros`, `valores` (`"Ventas"` o `{"campo": "Ventas", "funcion": "suma"}`), `en`, `nombre` |
+| `formato_condicional` | `rango`, `tipo` (valor, formula, escala, barras, iconos, superiores, duplicados, texto, promedio), `operador` (mayor, menor, igual, entre, `>`…), `valor`, `valor2`, `formula` (en inglés), `texto` |
+| `validacion` | `rango`, `tipo` (lista, entero, decimal, fecha, hora, longitud, personalizada), `lista` (`["Sí", "No"]` o `"=$F$1:$F$3"`), `operador`, `min`, `max`, `formula` |
+| `nombre` | `nombre`, `refiere`, `valor` |
+| `orden` | `rango` (con encabezados), `por` (letra), `orden` (asc/desc): mira el orden y que las filas sigan enteras |
+| `filtro` | `tabla` o `rango`, `columna` (encabezado o letra), `igual_a` (valor o lista), `mayor_que`, `menor_que`: mira qué filas se ven |
+| `inmovilizar` | `celda` |
+| `formato_numero` | `rango`, `es` (porcentaje, moneda, fecha, hora, texto, general, entero, decimal, miles), `codigo`, `decimales` |
+
+Cada cosa da sus puntos ✔/✘ («El gráfico es circular: aquí va uno de columnas.»), que salen en la tarjeta como en Dia. Si no hay nada hecho: «vacío». Un error típico `{"si": {...}, "dice": "…"}` pone su mensaje si lo de la persona cumple el `si`. Lo que ya estaba al empezar (el gráfico del ejemplo, lo que armó el tutor) no cuenta, salvo con `"existente": true`. Las marcas son formato condicional sobre el rango de cada cosa, nunca formas.
+
+**Ejercicios de VBA** (`"macro"`):
+```json
+"turno": {"titulo": "Macro NegritaTotales", "macro": "NegritaTotales", "rango": "A1:B9",
+  "solucion_vba": "Sub NegritaTotales()\n  ...\nEnd Sub", "entradas": ["respuesta para InputBox"], "limite": 4,
+  "errores": [{"vba": "Sub NegritaTotales()\n  Range(\"A2:B9\").Font.Bold = True\nEnd Sub", "dice": "Pusiste en negrita toda la tabla."}]}
+```
+Solo al pulsar Comprobar (nunca el tutor): revisa el código de la persona (análisis estático), copia la hoja a un libro temporal, ejecuta su macro allí con el vigía (ver «VBA») y hace lo mismo con `solucion_vba` en otra copia; compara valores, negrita, cursiva, relleno, color de letra, formato de número, alineación y cuántos gráficos, tablas y reglas hay. Cada diferencia es un ✘ («B4 debería quedar en negrita.») y se marca en su hoja. También puede llevar `pide`. Sin el acceso al proyecto de VBA, dice cómo activarlo.
+
+## Power Query (con límite)
+
+- Solo con las acciones `consulta` y `actualizar` (el modo libre no llega a `Queries` ni a conexiones). `cargar_en` crea una tabla con la consulta en esa celda (sobrescribe, no mueve celdas) y nombra la conexión «Consulta - X».
+- **Orígenes:** solo `Excel.CurrentWorkbook()` (tablas y rangos con nombre del libro) y `File.Contents("{datos}/archivo.csv")` con la ruta escrita tal cual, dentro de la carpeta `datos` de `curso.json` (`{datos}` se cambia por la carpeta: así la lección sirve en otra PC). `avanzado.validar_m` revisa el M sin ejecutarlo: cada nombre con punto tiene que ser de una lista blanca (Table, List, Text, Number, Date, Csv, Json, Xml, Excel.CurrentWorkbook, Excel.Workbook, File.Contents, parte de Value…), también los `#"..."`; se rechazan `#shared`, `#sections`, `section`, `Expression.Evaluate`, `Value.NativeQuery`, Web, Sql, Odbc, OleDb, Folder, SharePoint…, rutas fuera de la carpeta, rutas armadas juntando textos y archivos que no existen.
+- **Deshacer:** en una hoja nueva, se borra la hoja y la consulta con su conexión; en una hoja que ya existía, se pone su copia (ver «Modo libre») y se quitan la consulta y la conexión. Exacto (lo comprueba `--probar`). En una hoja que ya tiene datos de Power Query no se puede hacer nada que copie la hoja (modo libre, consultas, análisis): Excel duplicaría sus consultas. Cambiar el M de una consulta que ya existía se deshace devolviéndole su M y actualizándola (la tarjeta avisa que no es exacto) y `actualizar` no se deshace (la nota lo dice).
+- En las lecciones, las consultas de los pasos se quitan y se vuelven a crear al cambiar de paso (cargar tarda 1–4 s). Las del tutor van en una hoja aparte.
+
+## Herramientas de análisis
+
+Buscar objetivo, tablas de datos y escenarios se aplican con la copia de la hoja (Deshacer exacto, también los escenarios). Solver: acción cerrada que solo llama a `Solver.xlam!SolverReset/SolverOk/SolverAdd/SolverSolve/SolverFinish` (sin `Application.Run` libre: el nombre de la macro es fijo y las celdas se revisan), con la hoja activa, y solo si el complemento está activado (`avanzado.solver_disponible`). El panel no lo activa: si un módulo usa Solver y no está, Lección dice cómo (Archivo → Opciones → Complementos → Ir… → Solver). **No probado aquí** porque Solver no está activado en esta PC.
+
+## VBA
+
+- **Requisito:** «Confiar en el acceso al modelo de objetos de proyectos de VBA» (Archivo → Opciones → Centro de confianza → Configuración del Centro de confianza → Configuración de macros). El panel lo detecta (`vba.acceso`) y, si falta, lo explica en Lección (módulos con VBA), en el chat y en la tarjeta. Nunca lo cambia.
+- **Leer:** el [Estado actual] trae los módulos con sus líneas numeradas (si el curso tiene macros o el libro ya tiene código).
+- **Marcar:** `{"tipo": "linea", "modulo": "Module1", "linea": 5, "texto": "falta End If"}` inserta encima de esa sentencia una línea `' ← tutor: falta End If` (con su sangría). Se quitan con Borrar marcas, al llegar marcas nuevas, antes de Comprobar y al abrir y cerrar el panel. No cambian su código: son líneas aparte.
+- **Proponer:** `{"vba": "Macros", "codigo": "...", "modo": "reemplazar" | "agregar"}`, solo en módulos normales y en libros que guardan macros (.xlsm o sin guardar). La tarjeta muestra el código entero. Deshacer deja el módulo como estaba (o lo quita); si la persona lo cambió después, pregunta antes. El panel nunca ejecuta lo que propone el tutor.
+- **Análisis estático** (`vba.problemas`), antes de insertar y antes de ejecutar: palabras vetadas (Shell, Kill, RmDir, MkDir, FileCopy, Environ, SendKeys, Declare, PtrSafe, CallByName, GetObject, Workbooks, Run, Evaluate, ExecuteExcel4Macro, OnTime, Wait, SaveAs, Export, AddIns, SaveSetting/GetSetting, VBProject, Stop, Quit…), sentencias de archivos (`Open … For`, `Print #`, `Name … As`), `.Close`/`.Save`, `.Show`, `Dir(`, `[…]`, CreateObject salvo `"Scripting.Dictionary"` y `"VBScript.RegExp"`, y en lo del tutor, eventos y `Auto_Open`. Las líneas partidas con « _» se juntan antes; los comentarios y textos no cuentan.
+- **Comprobar** de una macro (ver «Revisión automática»): `vba.instrumentar` pone `tutorVigia` antes de cada `Next`, `Loop`, `Wend` y `GoTo` (si pasa el límite, `End` corta todo), cambia MsgBox e InputBox por funciones que no esperan, y la macro corre en un libro temporal (copia de la hoja) con los eventos apagados; un hilo pulsa «Finalizar/Aceptar» si salta un aviso de Visual Basic. Los libros temporales se cierran sin guardar.
+
 ## Cómo hacer un módulo nuevo
 
 1. Copia `ejemplo_leccion.json` a la carpeta del curso, cambia los pasos y añádelo a `modulos` en `curso.json`.
@@ -270,12 +371,18 @@ El tutor, además de `<marcas>`, puede terminar su respuesta con un bloque `<acc
    - 18 intentos peligrosos rechazados (abrir libros, SaveAs, Run, VBProject, Application.Quit, hipervínculos, WEBSERVICE, QueryTables, dinámica externa, otro libro, Export, AddPicture, otra hoja, renombrar o borrar la hoja, Copy, llegar al libro, rutas);
    - y en la hoja del módulo: sin dinámicas, y que deshacer la deje igual, también después de cambiar de paso.
 
-   Termina en «Modo libre: todo bien». Con una lección suelta, al final cierra sin guardar el libro que abrió. `--probar-tutor` además le hace una pregunta al tutor (gasta del plan; es opcional).
+   Termina en «Modo libre: todo bien».
+
+   Con la lección suelta (o con `--completo` en un curso), además, sin IA y cada una con su «todo bien»: **matrices dinámicas** (`probar_matrices`: se desborda lo que escribe el motor; Comprobar bien, error típico, #¡DESBORDAMIENTO!, copiada, a mano y con @; [Estado actual]; una fórmula suya que sobrevive al cambio de paso; Evaluate en inglés), **pasos con modo libre y limpieza** (`probar_pasos`: una lección temporal con gráfico, dinámica, escala de colores y nombre; nada amontonado al ir y volver; su gráfico, tabla, formato condicional y validación se conservan; una lección peligrosa no se abre), **Comprobar de objetos** (`probar_objetos`: diez cosas a la vez; vacío, 28/28 y tres errores con el típico), **Power Query** (`probar_power_query`: tabla del libro y archivo de datos, Deshacer exacto en hoja nueva y existente, cambiar una consulta, 10 consultas peligrosas y otros rechazos), **análisis** (`probar_analisis`), **VBA** (`probar_vba`: 24 macros peligrosas rechazadas y lo normal pasa; el vigía; sin acceso, los mensajes; con acceso, insertar, marcar, deshacer y Comprobar bien, error típico, bucle sin fin, error y macro peligrosa) y **progreso** (`probar_progreso`). Si una prueba se corta, sale su error y cuenta como fallo. Termina en «Revisión automática: todo bien».
+
+   **En un curso, `--probar` prueba solo sus módulos** (desde el 2026-10-08): las pruebas del motor de arriba (propuestas, marcas, modo libre y lo avanzado) suponen el primer módulo como el de `ejemplo_leccion.json` y en otro curso fallaban por eso; van con la lección suelta o con `--completo`. Además mira que el libro sea .xlsm si el curso pide macros, muestra lo que le falta a Excel por módulo y, en los ejercicios de objetos o de VBA, que Comprobar sin hacer nada diga «vacío» (lo del ejemplo no cuenta). `--probar` no cambia dónde se quedó la persona.
+
+   Con una lección suelta, al final cierra sin guardar el libro que abrió. `--probar-tutor` además le hace una pregunta al tutor (gasta del plan; es opcional).
 3. Prueba la revisión escribiendo respuestas buenas y malas en la zona del "Tu turno" y pulsando **Comprobar** con el panel abierto.
 
 ## Pasarlo a otra PC
 
-Estos cinco archivos van en el repositorio del tutor (`../paquete-tutor/`). Después de cambiar cualquiera, sincronízalo con `python paquete-tutor/construir.py "qué cambió"`.
+Estos archivos van en el repositorio del tutor (`../paquete-tutor/`): `README.md`, `motor.py`, `avanzado.py`, `vba.py`, `panel_web.py`, `panel.html` y `ejemplo_leccion.json` (y, si se quiere la plantilla, `ejemplos/avanzado/` sin su libro ni `progreso_panel.json`). Después de cambiar cualquiera, sincronízalo con `python paquete-tutor/construir.py "qué cambió"` (a su lista le faltan `avanzado.py` y `vba.py`).
 
 ## Notas de este Excel
 
@@ -292,6 +399,17 @@ Estos cinco archivos van en el repositorio del tutor (`../paquete-tutor/`). Desp
 - `SourceData` de una dinámica y `RefersTo` de algunos nombres vuelven en R1C1 en español (`Hoja!F1C1:F7C3`): `motor._a1` los pasa a `A1:C7`.
 - Si un `Select` se hace en una hoja que no está activa, falla. Las formas, el formato condicional, `ShowPrecedents` y los gráficos sí funcionan en una hoja que no se ve.
 - `ConvertFormula` devuelve las fórmulas R1C1 en español (`F[3]C[-4]`) y no sirve para copiar fórmulas: el motor las mueve él mismo (`copiar_formula`).
+- **`Formula` añade `@`:** en este Excel 365, `Range.Formula = "=UNIQUE(...)"` queda `=@UNIQUE(...)` (un solo valor), y `Range.Value = "=SORT(...)"` también. Con `Formula2` se desborda. `Formula2` acepta una matriz de fórmulas y valores. Las celdas desbordadas tienen `Formula2` vacía; `HasSpill` y `SpillingToRange` dicen dónde se desborda. `#¡DESBORDAMIENTO!` llega como -2146826243.
+- **`Evaluate` va en el idioma de Excel:** por pywin32, `ws.Evaluate("=SUM(A1:A5)")` da `#¿NOMBRE?` (entiende `SUMA`). Llamándolo por IDispatch con el LCID 0x0409 entiende inglés y devuelve las matrices dinámicas enteras (`motor.evaluar_en`). BUSCARX devuelve un rango (se lee su valor).
+- LAMBDA no existe en esta versión (16.0, build 14430); LET, FILTRAR, ORDENAR, UNICOS, SECUENCIA y BUSCARX sí.
+- `Cells.Clear` borra tablas dinámicas, formato condicional, validación, minigráficos y comentarios, pero no gráficos ni formas.
+- **Power Query por COM:** `Workbook.Queries.Add(nombre, m)` y `ListObjects.Add(0, "OLEDB;Provider=Microsoft.Mashup.OleDb.1;Data Source=$Workbook$;Location=X;…", Empty, 1, celda)` con `CommandType = 2` y `CommandText = ["SELECT * FROM [X]"]`; la conexión sale como «Conexión» (el motor la renombra). Cargar tarda 1–4 s. **Copiar una hoja con una tabla de Power Query duplica la consulta** («X (2)»). Borrar la consulta deja la tabla como datos sueltos.
+- Las tablas de datos se leen en español (`=TABLA(,B2)`) y no se puede escribir en una parte: por eso se deshacen con la copia de la hoja.
+- `ws.Scenarios` es un método (`ws.Scenarios()`); `Scenario.Values` es una tupla.
+- En una tabla con fila de totales, `ListObject.Range` incluye esa fila.
+- Al leer un filtro de varios valores, `Criteria1` no es fiable: para revisar filtros se mira qué filas están ocultas.
+- Copiar una hoja sin argumentos (`ws.Copy()`) la lleva a un libro nuevo (así corre el Comprobar de VBA). Sin «Confiar en el acceso al modelo de objetos de proyectos de VBA», `wb.VBProject` da error («no es de confianza»).
+- Una vez, `Validation.Add` del modo libre falló con un error genérico en mitad de `--probar` y no se repitió; por si es la ventana minimizada, `Libro.aplicar` la maximiza antes.
 
 ## Dependencias
 

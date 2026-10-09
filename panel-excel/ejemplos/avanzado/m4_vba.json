@@ -1,0 +1,45 @@
+{
+  "titulo": "Macros (VBA)",
+  "titulo_codigo": "Alt+F11",
+  "hoja": "M4 VBA",
+  "requiere": ["vba"],
+  "tema_tutor": "primeras macros en VBA: el editor (Alt+F11), un módulo, Sub ... End Sub, recorrer un rango con For Each y cambiar el formato",
+  "notas_tutor": "Tu turno: la macro NegritaTotales pone en negrita las filas (A:B) cuya columna A dice «Total». Solución: For Each c In Range(\"A2:A9\"): If c.Value = \"Total\" Then c.Resize(1, 2).Font.Bold = True. Error típico: poner en negrita toda la tabla.",
+  "pasos": [
+    {
+      "titulo": "Los datos",
+      "acciones": [
+        {"poner": "A1:B9", "valores": [["Concepto", "Monto"], ["Cuadernos", 30], ["Lápices", 12], ["Total", 42], ["Mochilas", 90],
+                                        ["Reglas", 10], ["Total", 100], ["Libros", 25], ["Total", 25]]},
+        {"negrita": "A1:B1"}, {"ancho": "A:B", "valor": 13}
+      ],
+      "texto": "Una lista con filas de «Total» mezcladas. Haremos una macro que las ponga en negrita sola.",
+      "donde": "Mira la hoja **M4 VBA**: las filas de **Total** están en A4, A7 y A9."
+    },
+    {
+      "titulo": "Una macro de ejemplo",
+      "acciones": [
+        {"vba": "EjemploM4", "codigo": "Sub ColorearMontos()\n    ' Pinta de amarillo los montos mayores que 50\n    Dim c As Range\n    For Each c In Range(\"B2:B9\")\n        If c.Value > 50 Then c.Interior.Color = RGB(255, 230, 153)\n    Next c\nEnd Sub"}
+      ],
+      "texto": "En el módulo EjemploM4 hay una macro: recorre B2:B9 con For Each y pinta los montos mayores que 50. Ábrela con Alt+F11 y ejecútala con F5.",
+      "donde": "**Alt+F11** → doble clic en **EjemploM4** → cursor dentro de la Sub → **F5**."
+    },
+    {
+      "titulo": "Tu turno",
+      "acciones": [],
+      "texto": "Tu turno: en un módulo nuevo escribe la macro NegritaTotales, que ponga en negrita (columnas A y B) cada fila cuya columna A diga «Total».",
+      "donde": "**Alt+F11** → **Insertar** → **Módulo** → escribe **Sub NegritaTotales()** … **End Sub**.",
+      "turno": {
+        "titulo": "Macro NegritaTotales",
+        "macro": "NegritaTotales",
+        "rango": "A1:B9",
+        "solucion_vba": "Sub NegritaTotales()\n    Dim c As Range\n    For Each c In Range(\"A2:A9\")\n        If c.Value = \"Total\" Then c.Resize(1, 2).Font.Bold = True\n    Next c\nEnd Sub",
+        "errores": [
+          {"vba": "Sub NegritaTotales()\n    Range(\"A2:B9\").Font.Bold = True\nEnd Sub", "dice": "Pusiste en negrita toda la tabla: recorre las filas (For Each) y pon negrita solo donde la columna A dice «Total»."}
+        ],
+        "al_empezar": "Escribe la macro NegritaTotales y pulsa Comprobar: la pruebo en una copia de la hoja, no en la tuya.",
+        "al_terminar": "¡Tu macro hace lo que tiene que hacer! Ejecútala tú con Alt+F8 para verla en tu hoja."
+      }
+    }
+  ]
+}

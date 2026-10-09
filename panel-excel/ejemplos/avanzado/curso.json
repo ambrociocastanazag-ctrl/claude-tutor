@@ -1,0 +1,8 @@
+{
+  "titulo": "Excel avanzado (ejemplo)",
+  "libro": "Curso_Avanzado.xlsm",
+  "macros": true,
+  "datos": "datos",
+  "modelo_tutor": "sonnet",
+  "modulos": ["m1_matrices.json", "m2_graficos.json", "m3_power_query.json", "m4_vba.json"]
+}

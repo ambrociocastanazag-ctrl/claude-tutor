@@ -1,0 +1,47 @@
+{
+  "titulo": "Matrices dinámicas",
+  "titulo_codigo": "FILTRAR",
+  "hoja": "M1 Matrices",
+  "tema_tutor": "fórmulas de matriz dinámica: UNICOS, ORDENAR y FILTRAR se escriben en una celda y se desbordan; #¡DESBORDAMIENTO! cuando algo estorba",
+  "notas_tutor": "Tu turno (G2): las filas con ventas mayores que 20, con FILTRAR. Solución: =FILTER(A2:C9,C2:C9>20) (en español =FILTRAR(A2:C9;C2:C9>20)). Errores típicos: >= en vez de >, copiarla hacia abajo (desbordamiento).",
+  "pasos": [
+    {
+      "titulo": "Los datos",
+      "acciones": [
+        {"poner": "A1:C9", "valores": [["Producto", "Categoría", "Ventas"], ["Cuaderno", "Útiles", 30], ["Lápiz", "Útiles", 12],
+                                        ["Mochila", "Bolsos", 45], ["Regla", "Útiles", 20], ["Estuche", "Bolsos", 18],
+                                        ["Libro", "Lectura", 25], ["Revista", "Lectura", 8], ["Goma", "Útiles", 5]]},
+        {"negrita": "A1:C1"}, {"ancho": "A:C", "valor": 13}
+      ],
+      "texto": "Ocho productos con su categoría y sus ventas. Con matrices dinámicas, una sola fórmula puede devolver muchas celdas.",
+      "donde": "Mira la hoja **M1 Matrices**: los datos están en **A1:C9**."
+    },
+    {
+      "titulo": "UNICOS y ORDENAR",
+      "acciones": [
+        {"poner": "E1", "valor": "Categorías"}, {"negrita": "E1"},
+        {"poner": "E2", "valor": "=SORT(UNIQUE(B2:B9))"}, {"color": "E2", "es": "azul"}, {"ancho": "E:E", "valor": 13}
+      ],
+      "texto": "En E2 hay UNA fórmula: {f:E2}. Excel la desborda hacia abajo con cada categoría, sin copiarla.",
+      "donde": "Clic en **E2**: la fórmula solo está ahí; las de abajo salen con borde azul (desbordadas)."
+    },
+    {
+      "titulo": "Tu turno",
+      "acciones": [{"poner": "G1", "valor": "Ventas > 20"}, {"negrita": "G1"}, {"ancho": "G:I", "valor": 12}],
+      "texto": "Tu turno: en G2 escribe UNA fórmula con FILTRAR que devuelva las filas (producto, categoría y ventas) con ventas mayores que 20.",
+      "donde": "Clic en **G2** → **=FILTRAR(** → el rango, la condición → **Enter**. No la copies: se desborda sola.",
+      "turno": {
+        "titulo": "Filas con ventas > 20 · G2",
+        "rango": "G2",
+        "solucion": "=FILTER(A2:C9,C2:C9>20)",
+        "al_empezar": "Escribe la fórmula en G2 (una sola) y pulsa Comprobar.",
+        "al_terminar": "¡Bien! Una fórmula, tres filas: así trabajan las matrices dinámicas.",
+        "errores": [
+          {"formula": "=FILTER(A2:C9,C2:C9>=20)", "dice": "Casi: con >= entra también la Regla (20). Pide mayores que 20."},
+          {"formula": "=FILTER(C2:C9,C2:C9>20)", "dice": "Devuelves solo las ventas: el primer argumento es todo lo que quieres ver (A2:C9)."},
+          {"desbordamiento": true, "dice": "#¡DESBORDAMIENTO!: hay algo escrito donde la fórmula tiene que desbordarse (G2:I4). Bórralo (o borra las copias de la fórmula) y se extiende sola."}
+        ]
+      }
+    }
+  ]
+}

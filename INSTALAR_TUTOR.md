@@ -225,6 +225,7 @@ Pégala en el lugar de `{{SECCIÓN EXCEL}}`:
   - pasos con ← → que mueven Excel en vivo, conservando lo que escribe;
   - revisión automática del "Tu turno" al pulsar **Comprobar**, sin IA y al instante;
   - un tutor en su propia pestaña (Lección | Tutor) que conoce el curso entero, responde en 2–3 s y marca la hoja con flechas y notas; acepta capturas, PDF y texto;
+  - cursos avanzados: fórmulas de matriz dinámica (FILTRAR, UNICOS, BUSCARX…), «Comprobar» de gráficos, tablas, dinámicas, formato condicional y validación, Power Query solo con datos del libro o de la carpeta `datos` del curso, Buscar objetivo, tablas de datos y escenarios, y VBA (si la persona activó el acceso al proyecto): leer y marcar sus macros, proponer código con permiso y revisar sus ejercicios ejecutando la macro en una copia. Plantilla: `panel-excel/ejemplos/avanzado/`;
   - el tutor también puede modificar el libro (armar un ejercicio en una hoja nueva, completar un ejemplo, dar formato y, con su «modo libre», gráficos, tablas dinámicas, formato condicional, validación y nombres, siempre dentro del libro del curso), **siempre con permiso**: tarjeta con Aplicar / No y luego Deshacer; sus ejercicios se revisan con Comprobar, sin IA.
 - Antes de dar un módulo: `python panel-excel/panel_web.py <curso.json> --probar`, y prueba la revisión con respuestas buenas y malas.
 - **Cuidados con COM:**
@@ -270,7 +271,7 @@ Cada curso es un `curso.json` con un JSON por módulo; el formato está en `pane
 
 Si la persona no va a estudiar Excel o el panel no se instala, deja la carpeta `panel-excel/` donde está (es del repositorio y no estorba) y no pongas la parte del panel en su `CLAUDE.md`.
 
-1. **Los archivos ya están en `panel-excel/`** (vienen en el repositorio): `README.md`, `motor.py`, `panel_web.py`, `panel.html` y `ejemplo_leccion.json`. Comprueba que están los cinco y no los reescribas: ya resuelven varios fallos de COM.
+1. **Los archivos ya están en `panel-excel/`** (vienen en el repositorio): `README.md`, `motor.py`, `avanzado.py`, `vba.py`, `panel_web.py`, `panel.html` y `ejemplo_leccion.json`, más el curso de ejemplo avanzado en `ejemplos/avanzado/` (matrices dinámicas, gráficos y dinámicas, Power Query y VBA; sirve de plantilla). Comprueba que están y no los reescribas: ya resuelven varios fallos de COM.
    Después crea `panel-excel/preferencias.json` con el tema que eligió en el paso 1: `{"tema": "claro"}`, `{"tema": "oscuro"}` o `{"tema": "auto"}` (el de Windows).
 2. **Prueba sin ventana:** `python panel-excel/panel_web.py panel-excel/ejemplo_leccion.json --probar`. Tiene que salir:
    - los 7 pasos del ejemplo con valores reales (16,8; 2; un error de Excel como #¡VALOR! o #VALUE!; 80…);
@@ -278,7 +279,8 @@ Si la persona no va a estudiar Excel o el panel no se instala, deja la carpeta `
    - `Libro de prueba cerrado sin guardar`.
    La prueba abre siempre un libro nuevo y lo cierra ella misma: no toca ni cierra libros de la persona.
 3. **Tutor del panel (opcional):** `--probar-tutor` le hace una pregunta y gasta del plan como un mensaje normal. Si no lo corres, anota en «Equipo» de `contexto.md`: «tutor del panel sin probar».
-4. Solo si los pasos 1 y 2 salieron bien, deja en su `CLAUDE.md` la parte del panel dentro de la sección de Excel. Si algo falló, quítala y explícale qué faltó.
+4. **Solo si va a hacer cursos con macros (VBA) o Solver:** pídele que lo active él (tú no cambies el Centro de confianza ni el registro): Archivo → Opciones → Centro de confianza → Configuración del Centro de confianza → Configuración de macros → «Confiar en el acceso al modelo de objetos de proyectos de VBA»; y, para Solver, Archivo → Opciones → Complementos → Solver. Sin eso el panel funciona igual y avisa en los módulos que lo necesitan. Anota en «Equipo» de `contexto.md` qué quedó activado.
+5. Solo si los pasos 1 y 2 salieron bien, deja en su `CLAUDE.md` la parte del panel dentro de la sección de Excel. Si algo falló, quítala y explícale qué faltó.
 
 ### 4.7 Panel de clase en vivo para Dia (opcional)
 
@@ -323,7 +325,7 @@ Antes de terminar, comprueba y arregla:
 - [ ] No queda ningún `{{...}}` ni texto de plantilla en ellos (búscalos).
 - [ ] No hay datos de otra persona: ningún correo, ruta de usuario ajena ni curso que la persona no haya mencionado.
 - [ ] Cada herramienta anotada en `CLAUDE.md` fue probada o está marcada como _pendiente de instalar_.
-- [ ] Si se instaló el panel de Excel: los cinco archivos de `panel-excel/` están y `--probar` terminó con «Revisión automática: todo bien» y «Libro de prueba cerrado sin guardar».
+- [ ] Si se instaló el panel de Excel: los archivos de `panel-excel/` están y `--probar` terminó con «Revisión automática: todo bien» y «Libro de prueba cerrado sin guardar».
 - [ ] Si se instaló el panel de Dia: los dos `--probar` de 4.7 terminaron en «todo bien» y su `CLAUDE.md` tiene la sección de Dia.
 
 ## Paso 7. Despedirte

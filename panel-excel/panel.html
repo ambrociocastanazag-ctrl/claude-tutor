@@ -113,6 +113,11 @@ h1{margin:0;font-size:21px;line-height:1.2;font-weight:700;letter-spacing:-.01em
 .lienzo{margin:0 8px 8px;padding:6px;border-radius:8px;background-color:#fff;background-image:radial-gradient(#deddd7 1px,transparent 1.3px);background-size:14px 14px;border:1px solid var(--line2);overflow-x:auto}
 .lienzo svg{display:block;max-width:100%;height:auto}
 .botones{display:flex;flex-wrap:wrap;gap:8px}
+.botones button.trabajando{opacity:.7;cursor:progress} .botones .tres{margin-left:-3px;letter-spacing:1px}
+.confirma{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:10px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:13.5px;line-height:1.45}
+.confirma .acc{display:flex;gap:8px;flex-wrap:wrap}
+.confirma button{height:32px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:650}
+.confirma button.si{border-color:transparent;background:var(--acc);color:var(--on-acc);font-weight:700}
 .botones button{flex:1 1 auto;display:flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface);font-size:13px;font-weight:650;white-space:nowrap}
 
 /* Navegación */
@@ -223,7 +228,7 @@ textarea:focus-visible{outline:none}
 .pm-det ol{margin:6px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.45;color:var(--ink2)}
 .pm-det code,.pm-res code,.pm-aviso code{white-space:normal;overflow-wrap:anywhere}
 .pm-det li::marker{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
-.pm-det .bloque-codigo{margin-top:8px} .pm-det .bloque-codigo pre{font-size:12.5px;font-weight:500;line-height:1.5;max-height:280px;overflow:auto}
+.pm-det .bloque-codigo{margin-top:8px} .pm-det .bloque-codigo pre{font-size:12.5px;font-weight:500;line-height:1.5;max-height:280px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .pm-msg{margin:0;font-size:13.5px;font-weight:650;line-height:1.45;text-wrap:pretty}
 .pm-acc{display:flex;gap:8px;flex-wrap:wrap}
 .pm-acc button{height:34px;padding:0 14px;display:flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:650}
@@ -306,6 +311,7 @@ textarea:focus-visible{outline:none}
         <div class="lienzo" id="lienzo"></div>
       </div>
       <div class="botones" id="botones" hidden></div>
+      <div class="confirma" id="confirmaBoton" hidden></div>
     </div>
     <div class="nav">
       <button class="btn" id="ant" type="button" disabled title="Flecha izquierda"><span data-ic="left"></span>Anterior</button>
@@ -467,10 +473,11 @@ textarea:focus-visible{outline:none}
     $('subTutor').textContent = 'lee tu ' + OBJ + ' y la marca';
     $('chipRevisarTxt').textContent = 'Revisar mi ' + OBJ; $('chipRevisar').dataset.q = 'Revisa lo que hice en mi ' + OBJ;
     window.mostrarDiagrama(e.svg, e.diagrama_titulo, e.diagrama_archivo);
-    var bs = e.botones || []; $('botones').hidden = !bs.length; $('botones').innerHTML = '';
+    var bs = e.botones || []; $('botones').hidden = !bs.length; $('botones').innerHTML = ''; $('confirmaBoton').hidden = true;
     bs.forEach(function(b){
       var x = document.createElement('button'); x.type = 'button'; x.innerHTML = (b.icono ? ic(b.icono) : '') + esc(b.etiqueta);
-      x.onclick = function(){ api.boton(b.id).then(function(r){ if (r && r.aviso) aviso(r.aviso, 3000); }); };
+      // Un botón puede pedir confirmación ({"confirmar": "texto", "confirmar_boton": "Sí, hazlo"}); si no, se llama directo
+      x.onclick = function(){ if (b.confirmar) pedirConfirmacion(b, x); else correrBoton(b, x); };
       $('botones').appendChild(x);
     });
     window.estadoTurno(e.revision, true);
@@ -485,9 +492,27 @@ textarea:focus-visible{outline:none}
     moviendo = true; $('ant').disabled = $('sig').disabled = true;
     api.ir(k).then(function(e){ mostrar(e); $('cuerpo').scrollTop = 0; }).finally(function(){ moviendo = false; });
   }
+  // Botones del paso: mientras corre uno, queda desactivado con «…» hasta que vuelve la Api
+  function correrBoton(b, x){
+    if (!api || !api.boton || x.disabled) return;
+    $('confirmaBoton').hidden = true;
+    var antes = x.innerHTML; x.disabled = true; x.classList.add('trabajando'); x.innerHTML = antes + '<span class="tres">…</span>';
+    Promise.resolve(api.boton(b.id)).then(function(r){ if (r && r.aviso) aviso(r.aviso, 3000); },
+      function(){ aviso('No pude hablar con ' + APP + '. Intenta otra vez.', 3000); })
+      .finally(function(){ x.disabled = false; x.classList.remove('trabajando'); x.innerHTML = antes; });
+  }
+  function pedirConfirmacion(b, x){
+    var c = $('confirmaBoton');
+    c.innerHTML = '<span>' + enLinea(esc(b.confirmar)) + '</span><div class="acc"><button type="button" class="si">' + esc(b.confirmar_boton || 'Sí, hazlo')
+      + '</button><button type="button" class="no">Cancelar</button></div>';
+    c.hidden = false;
+    c.querySelector('.si').onclick = function(){ correrBoton(b, x); };
+    c.querySelector('.no').onclick = function(){ c.hidden = true; };
+    c.scrollIntoView({block: 'nearest'});
+  }
   function irModulo(k){
     if (!api || moviendo) return; cerrarMenu(); moviendo = true;
-    $('pasoTxt').textContent = 'Preparando el módulo en Excel…';
+    $('pasoTxt').textContent = 'Preparando el módulo en ' + APP + '…';
     api.modulo(k).then(mostrar).finally(function(){ moviendo = false; });
   }
   $('ant').onclick = function(){ ir(n - 1); };
@@ -861,10 +886,11 @@ textarea:focus-visible{outline:none}
       revision: {estado: 'pendiente', ok: 0, total: 0, mensaje: 'Une las clases: Perro y Gato heredan de Animal; un Dueño tiene muchos perros. Guarda (Ctrl+S) y pulsa Comprobar.'}};
     var e = function(){ return {m: 0, n: 5, total: 6, curso: 'Diagramas de clase en Dia', titulo: 'La clase', titulo_codigo: 'UML', app: 'Dia', objeto: 'diagrama',
       hoja: 'mi_diagrama.dia', paso_titulo: 'Tu turno', ejercicio: 'Estudiante', texto: 'Tu turno: en tu diagrama, dibuja la clase Estudiante.',
-      donde: 'Doble clic en la clase → pestaña **Atributos** → **Nuevo**.', botones: [{id: 'mio', etiqueta: 'Ir a mi diagrama en Dia', icono: 'open'}],
+      donde: 'Doble clic en la clase → pestaña **Atributos** → **Nuevo**.', botones: [{id: 'mio', etiqueta: 'Ir a mi diagrama en Dia', icono: 'open'},
+        {id: 'hazlo', etiqueta: 'Hazlo por mí', icono: 'spark', confirmar: 'Lo hago yo en tu diagrama: verás la solución del Tu turno. ¿Seguro?', confirmar_boton: 'Sí, hazlo'}],
       revision: {estado: 'pendiente', ok: 0, total: 0, mensaje: 'Dibuja tu clase en Dia. Cuando termines, guarda (Ctrl+S) y pulsa Comprobar.'}, tutor_ej: ej}; };
     return {estado: function(){ return Promise.resolve(e()); }, ir: function(){ return Promise.resolve(e()); }, modulo: function(){ return Promise.resolve(e()); },
-      preguntar: function(){ return Promise.resolve({texto: 'Listo.', marcas: 0}); }, boton: function(){ return Promise.resolve({ok: true}); },
+      preguntar: function(){ return Promise.resolve({texto: 'Listo.', marcas: 0}); }, boton: function(){ return new Promise(function(ok){ setTimeout(function(){ ok({ok: true}); }, 1200); }); },
       comprobar: function(){ return Promise.resolve({revision: {estado: 'mal', ok: 3, total: 5, mensaje: 'Falta el atributo «promedio».'}}); },
       borrar_marcas: function(){ return Promise.resolve({ok: true}); },
       aplicar: function(id){ return Promise.resolve({propuesta: Object.assign({}, propuestas[id], {estado: 'aplicada', mensaje: 'Hecho: creé 1 clase y uní con 1 relación en tu diagrama. Lo puedes deshacer aquí o con Ctrl+Z en Dia.'}), tutor_ej: ej}); },

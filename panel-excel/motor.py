@@ -120,6 +120,15 @@ def igual(a, b):
     return a == b
 
 
+def puntos_txt(puntos, maximo=8):
+    """Los puntos ✔/✘ de una revisión para el tutor: primero lo que falla, y luego lo que está bien, en corto."""
+    if not puntos: return ""
+    malos = [p["texto"] for p in puntos if not p["ok"]]; buenos = [p["texto"] for p in puntos if p["ok"]]
+    out = "".join("\n  ✘ " + t for t in malos[:maximo])
+    if buenos: out += "\n  ✔ " + (" · ".join(buenos) if len(buenos) <= 4 else f"{len(buenos)} cosas bien ({' · '.join(buenos[:3])}…)")
+    return out
+
+
 def _como_matriz(v):
     """Un valor o una matriz de COM → lista de filas (un valor suelto es 1×1)."""
     if isinstance(v, (tuple, list)):
@@ -676,6 +685,10 @@ class Clase(Hoja):
         self.version = 0                     # cuántas veces se reconstruyó la hoja (para deshacer lo del tutor)
         acciones = [a for p in leccion.pasos for a in p.get("acciones", [])]
         self.inmoviliza = any("inmovilizar" in a for a in acciones)
+        # lo que crean los pasos fuera de la hoja se conoce desde el principio: si el libro se guardó con ello, se quita al rehacer
+        self.consultas_nuestras = {a["consulta"] for a in acciones if "consulta" in a}
+        self.vba_nuestro = {a["vba"].lower() for a in acciones if "vba" in a}
+        self.escenarios_nuestros = {a["escenario"] for a in acciones if "escenario" in a}
         self._preparar()
 
     def es_suya(self, k, f):
@@ -813,7 +826,7 @@ class Clase(Hoja):
     def contexto(self, n, texto_paso, revision=None):
         obj = self.objetos()
         rev = f"\nRevisión automática del Tu turno: {revision['mensaje']} ({revision['ok']} de {revision['total']} bien)" if revision else ""
-        if revision and revision.get("puntos"): rev += "\n  " + "\n  ".join(("✔ " if p["ok"] else "✘ ") + p["texto"] for p in revision["puntos"][:10])
+        if revision: rev += puntos_txt(revision.get("puntos"))
         no = f"\nAl cambiar de paso no pude rehacer lo suyo: {'; '.join(self.no_rehecho)}" if self.no_rehecho else ""
         return (f"[Estado actual] Módulo: {self.lec.titulo} (hoja '{self.ws.Name}'). Paso {n + 1} de {len(self.lec)}. El panel dice: {texto_paso}"
                 + ("\nEn la hoja, además de celdas: " + " | ".join(obj) if obj else "") + rev + no
@@ -2102,7 +2115,7 @@ class Libro:
                        f"macro «{t['macro']}»" if t.get("macro") else "pide: " + ", ".join(next(iter(i)) for i in t.get("pide", [])))
                 partes.append(f"Ejercicio que armaste (se revisa con Comprobar en la pestaña Lección): hoja '{h.ws.Name}', {que}. "
                               f"Revisión de ahora: {rev['mensaje']} ({rev['ok']} de {rev['total']} bien)"
-                              + "".join(("\n  ✔ " if p["ok"] else "\n  ✘ ") + p["texto"] for p in rev.get("puntos", [])[:8]))
+                              + puntos_txt(rev.get("puntos")))
                 if h.ws.Name.lower() != actual:
                     obj = h.objetos()
                     partes.append(f"Hoja '{h.ws.Name}' (celda: contenido -> valor):\n" + h.lineas(120) + ("\nAdemás de celdas: " + " | ".join(obj) if obj else ""))
@@ -2151,11 +2164,13 @@ class Libro:
             if tipo in avanzado.COPIA:
                 if tipo == "consulta":
                     an["pq"] = True
+                    avanzado.validar_m(a["m"], self.carpeta_datos())     # las rutas, con la carpeta de datos de este curso
                     if a.get("cargar_en") and clase is not None: raise ValueError("las consultas se cargan en una hoja aparte (la del módulo se rehace en cada paso)")
                     if x in avanzado.consultas(self.wb): an.setdefault("consultas_cambia", []).append(x)
                     if not a.get("cargar_en"): continue
                 if tipo == "solver" and not avanzado.solver_disponible(self.xl): raise ValueError("Solver no está activado en este Excel (Archivo → Opciones → Complementos → Solver)")
-                if tipo == "mostrar_escenario" and ws is not None and not any(s.Name.lower() == x.lower() for s in ws.Scenarios()):
+                if tipo == "escenario": an.setdefault("escenarios", set()).add(x.lower())
+                if tipo == "mostrar_escenario" and x.lower() not in an.get("escenarios", set()) and (ws is None or not any(s.Name.lower() == x.lower() for s in ws.Scenarios())):
                     raise ValueError(f"no hay un escenario «{x}» en la hoja «{hoja}»")
                 if ws is not None and avanzado.tiene_pq(ws):
                     raise ValueError(f"«{hoja}» tiene datos de Power Query y Deshacer no podría dejarla exacta: haz esto en una hoja aparte")

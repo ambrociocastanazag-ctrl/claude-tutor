@@ -1018,7 +1018,7 @@ def probar_objetos(x, api):
     api._vigilar(x.hacer(lambda l: l))
     P.ver(x.hacer(lambda l: (l.ejercicio.get("revision") or {}).get("viejo")) is True, "el vigía avisa «Cambiaste algo desde que comprobaste» al cambiar el gráfico")
     ctx = x.hacer(lambda l: l.contexto_extra(0))
-    P.ver("pide: grafico, tabla" in ctx and "✘" in ctx, "el [Estado actual] cuenta el ejercicio de objetos con sus puntos")
+    if not P.ver("pide: grafico, tabla" in ctx and "✘" in ctx, "el [Estado actual] cuenta el ejercicio de objetos con sus puntos"): print(ctx[:1500])
     def limpiar(l):
         for n in list(l.wb.Names):
             if n.Name == "IVAobj": n.Delete()
@@ -1119,7 +1119,7 @@ def probar_analisis(x, api):
         d = api.deshacer(t["id"])["propuesta"]
         P.ver(d["estado"] == "deshecha" and not diferencias(antes, P.foto()), f"  y deshacer lo deja exacto → {d['mensaje']}")
         return t
-    caso([{"buscar_objetivo": "B3", "valor": 100, "cambiando": "B2"}], lambda ws: ws.Range("B2").Value, 10.0, "Buscar objetivo (B3 = 100 cambiando B2)")
+    caso([{"buscar_objetivo": "B3", "valor": 100, "cambiando": "B2"}], lambda ws: round(ws.Range("B2").Value, 6), 10.0, "Buscar objetivo (B3 = 100 cambiando B2)")
     caso([{"tabla_datos": "C1:D4", "columna": "B2"}], lambda ws: ws.Range("D2:D4").Value, ((40.0,), (50.0,), (60.0,)), "Tabla de datos (C1:D4, entrada B2)")
     caso([{"escenario": "Optimista", "celdas": "B1:B2", "valores": [12, 8]}, {"mostrar_escenario": "Optimista"}],
          lambda ws: (ws.Range("B3").Value, ws.Scenarios().Count), (96.0, 1), "Escenario «Optimista» creado y mostrado")
@@ -1341,11 +1341,11 @@ if __name__ == "__main__":
                     formas, reglas, quedan = x.hacer(marcas_seleccionables)
                     ok = formas == 0 and reglas == 3 and quedan == 0; fallos += not ok
                     print(f"      marcas sin formas sobre las celdas {'✔' if ok else '✘'} formas: {formas}, reglas en la celda: {reglas}, tras borrar: {quedan}")
-        fallos += probar_propuestas(x, api)
-        fallos += probar_hojas_y_bloques(x, api)
-        fallos += probar_modo_libre(x, api)
-        if api._curso.libro is None or "--completo" in sys.argv:     # lo avanzado: con la lección suelta (libro sin guardar) o con --completo
-            for prueba in (probar_matrices, probar_pasos, probar_objetos, probar_power_query, probar_analisis, probar_vba, probar_progreso):
+        # Las pruebas del motor (propuestas, marcas, modo libre y todo lo avanzado) usan el primer módulo tal como es en
+        # ejemplo_leccion.json: van con la lección suelta (libro sin guardar) o con --completo. En un curso, solo sus módulos.
+        if api._curso.libro is None or "--completo" in sys.argv:
+            for prueba in (probar_propuestas, probar_hojas_y_bloques, probar_modo_libre, probar_matrices, probar_pasos, probar_objetos,
+                           probar_power_query, probar_analisis, probar_vba, probar_progreso):
                 try: fallos += prueba(x, api)
                 except Exception as e:
                     import traceback; traceback.print_exc(); fallos += 1; print(f"      ✘ {prueba.__name__} se cortó: {e}")
