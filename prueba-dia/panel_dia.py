@@ -566,7 +566,8 @@ class Api:
     def _preparar_modulo(self):
         """Con el plugin: arma los pasos del módulo de verdad en Dia (una vez; luego quedan guardados) y abre su diagrama."""
         mod = self._mod
-        if mod.id in self._preparado: return ""
+        if mod.id in self._preparado:
+            self._abrir_mio(); return ""             # al volver a un módulo: su pestaña se cerró al salir, se reabre
         aviso = ""
         try:
             if self._cambios.plugin_al_dia():
@@ -582,9 +583,14 @@ class Api:
         self._preparado.add(mod.id)
         return aviso
 
+    def _abrir_mio(self):
+        """Abre en Dia la pestaña de su diagrama del módulo si no está abierta (la cerró él o se cerró al cambiar de módulo)."""
+        mio = self._mio()
+        if mio.exists() and mio.name not in self._cambios.abiertos(): self._dia.orden(f'abrir "{mio}"')
+
     def _mover_dia(self):
         if self._turno():
-            try: self._dia.mostrar_mio(self._mio().name)
+            try: self._abrir_mio(); self._dia.mostrar_mio(self._mio().name)
             except Exception: pass
             return
         if not self._tiene_ejemplo(): return
@@ -660,7 +666,8 @@ class Api:
         if cual == "senalar": return self._senalar()
         if cual == "hazlo": return self._hazlo()
         if self._dia.modo == "plugin":
-            self._mover_dia() if cual == "paso" else self._dia.mostrar_mio(self._mio().name)
+            if cual == "paso": self._mover_dia()
+            else: self._abrir_mio(); self._dia.mostrar_mio(self._mio().name)
             h, _ = self._dia.ventana()
             if h: al_frente(h)
             return {"ok": True}
