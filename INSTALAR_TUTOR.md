@@ -149,6 +149,7 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 ## Comunicación
 
 - Español, tono cercano.
+- **En el chat, las fórmulas van en texto plano**, nunca en LaTeX (la terminal no lo dibuja y se lee mal): `√x`, `x²`, `x^(1/2)`, `∫ de 0 a 4 de √x dx`, y las largas en un bloque de código. El LaTeX es solo para las guías y los archivos, donde se dibuja y se copia.
 - Si surge una duda, pregunta directo (con `AskUserQuestion` o en texto).
 ````
 
