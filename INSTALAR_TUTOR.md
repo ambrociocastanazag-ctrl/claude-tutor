@@ -222,6 +222,7 @@ Pégala en el lugar de `{{SECCIÓN MATLAB}}`, ajustando versión, toolboxes (`de
 - Para probar scripts sin llenarle la pantalla: `set(groot,'DefaultFigureVisible','off')`, ejecutar, `close all` y restaurar. Correrlos deja variables en su Workspace: anota sus nombres y bórralas por nombre.
 - Guarda scripts y figuras en `{{DOCS}}\MATLAB`, en una subcarpeta por tema: el `.m` comentado, el `.fig` para que pueda girarla y un `.png` si necesitas verla tú o meterla en un artefacto.
 - Nunca uses `restoredefaultpath`: rompe la conexión del MCP con MATLAB.
+- Varias gráficas en una figura: con `tiledlayout`/`nexttile`, no `subplot` + `sgtitle` (se pone en blanco al maximizar y `exportgraphics` falla).
 - Si el MCP no responde, MATLAB está en `{{ruta de matlab.exe}}` y se puede llamar con `-batch` desde Bash (PowerShell 5.1 se come los `--` de los argumentos).
 ````
 
