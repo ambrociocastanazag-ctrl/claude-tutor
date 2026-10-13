@@ -54,6 +54,7 @@ Comprueba con un comando cada una (no instales todavía) y apunta cuáles existe
 | Pillow | `python -c "import PIL"` (solo para las flechas del panel de Dia encima de su ventana) |
 | PyMuPDF | `python -c "import pymupdf"` (opcional: leer PDFs con fórmulas como imagen) |
 | Claude Code en terminal | `claude --version` (el tutor de los paneles de Excel y de Dia lo usa) |
+| Skill `anatomy` | existe `~/.claude/skills/anatomy/SKILL.md` (opcional: figuras realistas de aparatos; ver 4.8) |
 
 **Entorno virtual:** si la persona usa un entorno virtual (venv, conda) para esta carpeta, todas las comprobaciones e instalaciones van con **ese** Python, y en su `CLAUDE.md` los comandos `python …` también (pon la ruta de ese `python.exe` o di que se active antes). Si no usa ninguno, el `python` del sistema.
 
@@ -72,6 +73,7 @@ Usa la plantilla del paso 4 y haz esto con la sección "Herramientas":
 - **Panel de clase en vivo para Dia** (4.7): solo si va a estudiar diagramas UML (o cualquier diagrama) en Dia y tiene Dia 0.97.2 (o aprueba instalarlo). Si no, no pongas la sección de Dia.
 - **Falstad y verificación en Chrome:** la herramienta queda **guardada** en el `CLAUDE.md`, pero **se aplica solo si estudia electricidad o circuitos** (la sección dice esa condición). Si `herramientas/` no se crea ahora (no estudia electricidad o no aprueba descargar `puppeteer-core`), añade al final de la sección la línea de _pendiente_ que da 4.5.
 - **Plotly 3D girable:** entra como línea dentro de "Artefactos" (sirve para cualquier superficie o figura 3D).
+- **Skill `anatomy`** (figuras isométricas realistas e interactivas de aparatos: un circuito armado, un motor, un instrumento): opcional, sobre todo para física, electrónica o ingeniería. Si se instala (4.8), entra como línea dentro de "Artefactos"; si no, esa línea de la plantilla se borra.
 - Reemplaza `{{...}}` por los datos reales (rutas de su sistema, nombre).
 
 ## Paso 4. Crear los archivos
@@ -142,6 +144,7 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 - **Tema (claro u oscuro):** el que diga su preferencia en `contexto.md` (puede ser uno para los artefactos y otro para los paneles). Los paneles del tutor (el de Excel y el de Dia, si están instalados) lo leen los dos de `panel-excel/preferencias.json`.
 - **Tutor dentro de las guías completas:** toda guía de un curso o tema completo lleva un tutor integrado (capacidad `sample` del artefacto; carga antes la skill `artifact-capabilities`, si existe en la cuenta) para preguntar mientras estudia. Sabe en qué módulo está y qué tocó por último, y sigue las reglas de "Cómo enseñar": primero la idea y luego la cuenta, señala el paso exacto del error y en ejercicios sin resolver solo da pistas. Las **pruebas rápidas** y los artefactos sueltos no lo llevan.
 - **3D girable** (superficies, sólidos, campos): Plotly dentro del artefacto.
+{{LÍNEA ANATOMY, solo si se instaló (ver 4.8); si no, borra esta línea}}
 - **Archivos** para lo que va a repasar: resúmenes, hojas de fórmulas, listas de ejercicios con solución. Van en esta carpeta, en una subcarpeta por tema en la raíz (también sus cursos de Excel o de Dia), nunca dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, que son del repositorio.
 - Los PDFs o imágenes que pase se leen directamente.
 - **Cada carpeta de proyecto lleva un `README.md`**: se escribe al crear la carpeta y se actualiza cada vez que cambian sus archivos o su forma de uso. Debe decir qué es el proyecto y su enlace publicado si lo tiene, su **historia y decisiones** (estado, diagnóstico, qué se eligió y qué se descartó, y por qué), qué es cada archivo (incluidos los que se generan y no se editan a mano), cómo cambiarlo paso a paso (editar, construir, verificar y publicar) y qué dependencias usa. Corto y en español.
@@ -351,9 +354,27 @@ Cada curso es una carpeta con `curso.json` y un JSON por módulo; el formato y l
 
 Si la persona **no tiene Dia** y quiere estudiar diagramas: **propón** instalar Dia 0.97.2 desde dia-installer.de (la versión de Windows de 32 bits, en la ruta que trae por defecto) y espera su visto bueno; luego vuelve al paso 1. Si no lo quiere o no va a estudiar diagramas, deja la carpeta `prueba-dia/` donde está (es del repositorio y no estorba) y no pongas la sección de Dia en su `CLAUDE.md`. Si tiene **otra versión de Dia**, explícale que el panel funcionará sin lo «en vivo» y propón instalar la 0.97.2.
 
+### 4.8 Skill `anatomy`: figuras realistas de aparatos (opcional)
+
+Es una skill de otro autor ([wheresryan22/anatomy](https://github.com/wheresryan22/anatomy), licencia MIT): dibuja un aparato real en isométrico (SVG, con WebGL para fuego, agua o luz), con muchas piezas, sombreado y movimiento, dentro de una página interactiva. Sirve para enseñar cómo está hecho y cómo funciona algo físico (un circuito armado en protoboard, un motor, un instrumento de medida). No es para gráficas (MATLAB o Plotly) ni para circuitos esquemáticos (Falstad), y cada figura lleva una sesión larga: por eso **se usa solo cuando la persona lo pida**.
+
+No viene en este repositorio: se clona del repositorio de su autor, así `git pull` la actualiza desde ahí.
+
+1. **Si ya existe `~/.claude/skills/anatomy/SKILL.md`**, no la reinstales: anótala en «Equipo» y pasa al punto 4.
+2. **Si no**, y estudia física, electrónica o ingeniería (o le interesa), **propón** instalarla y espera su visto bueno. Necesita git, **Node 20.10 o más nuevo** (sin `npm install`: solo usa módulos de Node) y Chrome (para sus revisiones). Se instala **fuera de esta carpeta**, en las skills globales de Claude Code:
+   `git clone https://github.com/wheresryan22/anatomy.git "$HOME/.claude/skills/anatomy"`
+3. **Pruébala:** que exista `SKILL.md` en esa carpeta y que `node --version` dé 20.10 o más. La skill aparece en sesiones nuevas de Claude Code.
+4. Pega en «Artefactos y archivos» de su `CLAUDE.md`, en el lugar de la línea `{{LÍNEA ANATOMY…}}`:
+
+````markdown
+- **Figuras realistas de aparatos** (un circuito armado, un motor, un instrumento, en isométrico e interactivas): skill `anatomy`, **solo cuando la persona lo pida** (cada figura lleva una sesión larga). Para gráficas, MATLAB o Plotly; para circuitos esquemáticos, Falstad. Se actualiza con `git -C "$HOME/.claude/skills/anatomy" pull`.
+````
+
+Si no se instala, borra esa línea de la plantilla. Si la persona la quiere más adelante, el tutor puede proponerla entonces (regla «Si falta una herramienta, búscala»).
+
 ## Paso 5. README de la carpeta
 
-Crea un `README.md` corto con: qué es la carpeta (un tutor de estudio con `CLAUDE.md` y `contexto.md`), qué hace cada archivo (incluido lo que se genera solo, como `panel-excel/__pycache__/`, `herramientas/node_modules/` o, en `prueba-dia/`, `pasos/`, `tutor/`, `mis_diagramas/`, `progreso.json`, `mi_diagrama.dia` y `__pycache__/`), que `contexto.md` se actualiza solo con cada sesión, y las dependencias instaladas. Añade cómo actualizar las herramientas: `git pull` en esta carpeta (si dice que hay cambios locales en archivos del repositorio, no los fuerces: avisa).
+Crea un `README.md` corto con: qué es la carpeta (un tutor de estudio con `CLAUDE.md` y `contexto.md`), qué hace cada archivo (incluido lo que se genera solo, como `panel-excel/__pycache__/`, `herramientas/node_modules/` o, en `prueba-dia/`, `pasos/`, `tutor/`, `mis_diagramas/`, `progreso.json`, `mi_diagrama.dia` y `__pycache__/`), que `contexto.md` se actualiza solo con cada sesión, y las dependencias instaladas. Añade cómo actualizar las herramientas: `git pull` en esta carpeta (si dice que hay cambios locales en archivos del repositorio, no los fuerces: avisa) y, si se instaló la skill `anatomy`, `git -C "$HOME/.claude/skills/anatomy" pull`.
 
 ## Paso 6. Verificar
 
@@ -365,6 +386,7 @@ Antes de terminar, comprueba y arregla:
 - [ ] Si se instaló el panel de Excel: los archivos de `panel-excel/` están, `--probar --rapido` terminó con «Revisión automática: todo bien» (o con «Lo básico del panel: todo bien» y cada bloque opcional que falló anotado como _pendiente_ en `CLAUDE.md` y en `contexto.md`) y con «Libro de prueba cerrado sin guardar», y Excel no quedó con libros de la prueba abiertos.
 - [ ] Sus temas y cursos (si ya hay alguno) están en carpetas propias en la raíz, no dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, y `git status` sale limpio.
 - [ ] Si se instaló el panel de Dia: los dos `--probar` de 4.7 terminaron en «todo bien» y su `CLAUDE.md` tiene la sección de Dia.
+- [ ] Si se instaló la skill `anatomy`: existe `~/.claude/skills/anatomy/SKILL.md` y su `CLAUDE.md` tiene la línea de 4.8; si no, esa línea no quedó.
 
 ## Paso 7. Despedirte
 
