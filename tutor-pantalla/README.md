@@ -57,10 +57,12 @@ Además de las flechas, el asistente y los tres tutores (Excel, Dia, curso) pued
 | `formula` | La fórmula bien escrita (MathJax) junto a algo; en Excel, la de la celda y una mini gráfica de sus datos |
 | `rayos_x` | Excel: de las celdas que usa la fórmula al resultado, con los valores viajando |
 | `desarmar` | Copia ampliada de una fórmula, línea de código o comando con una llave y una nota por parte |
-| `svg` | El dibujo propio del tutor (filtrado: solo formas y texto) |
+| `svg` | El dibujo propio del tutor (filtrado: solo formas y texto), **también animado** (SMIL o CSS): un punto que recorre una curva, barras que crecen, un engrane que gira |
 
 **Voz:** botón 🔊 en el panel (apagado al empezar). Lee la respuesta y, si hay dibujos con `"decir"`, los narra al
-ritmo de la animación (paso a paso en el fantasma y la secuencia).
+ritmo de la animación (paso a paso en el fantasma y la secuencia). Usa una **voz natural** (edge-tts: Dalia de México;
+`"voz": "es-MX-JorgeNeural"` en `panel-excel/preferencias.json` para Jorge). Necesita internet y el texto va al
+servicio de Microsoft (nunca capturas); sin internet, vuelve a la voz de Windows.
 
 **Cómo funciona:** la **página del panel dibuja** (SVG → PNG en `dibujante.js` y `formas_*.js`, el mismo motor Edge
 del panel) y **`capa.py` proyecta**: una ventana transparente por capa que deja pasar los clics, sigue a la app y
@@ -122,10 +124,11 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 | `formas_fijas.js` | Foco, teclas, mano alzada, lupa y SVG libre (con su filtro). |
 | `formas_animadas.js` | Ratón fantasma, forma guía y secuencia. |
 | `formas_formulas.js` | Fórmula flotante (con mini gráfica), rayos X y desarmar. |
-| `voz.js` | La voz (`speechSynthesis`, en español) y el botón 🔊. |
+| `voz.js` | La voz y el botón 🔊: la natural (pide el audio a Python) y, si no hay, `speechSynthesis` de Windows. |
+| `voz_natural.py` | El audio de cada frase con edge-tts (voz de `preferencias.json`, Dalia por defecto), en caché. `python voz_natural.py "texto" muestra.mp3 [voz]` para oír una. |
 | `capa.py` | El proyector: ventanas transparentes que pegan las capas encima de la app, las animan y leen la zona de la lupa. `capa.fotograma()` compone un instante igual que en vivo. |
 | `probar_dibujos.py` | Banco de pruebas sin panel: dibuja un lote de muestras en el Chrome instalado y guarda tiras de 6 momentos y el cuadro final. |
-| `muestras/*.json` | Lotes de ejemplo de cada forma, para `probar_dibujos.py`. |
+| `muestras/*.json` | Lotes de ejemplo de cada forma, para `probar_dibujos.py` (`svg_animado.json`: SMIL, CSS y un SVG trampa que debe quedar filtrado). |
 | `vendor/` | MathJax 3.2.2 (`tex-svg.js`) y rough.js 4.6.6, con sus licencias (Apache 2.0 y MIT). No se editan. |
 | `../panel-excel/rayos_x.py` | Lo que se lee de Excel para los dibujos (solo lectura): caja de una celda en pantalla, celdas que usa una fórmula, la fórmula en LaTeX y los datos de la mini gráfica. |
 
@@ -141,4 +144,4 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 
 ## Dependencias
 
-Python 3.12 con `pywebview` (Edge WebView2), `Pillow` y `uiautomation` (`python -m pip install uiautomation`), Claude Code (`claude`) y `prueba-dia/overlay_dia.py`. Los dibujos: MathJax y rough.js (ya en `vendor/`, sin instalar nada), `pywin32` y `openpyxl` para lo de Excel, y Node con `herramientas/` solo para `probar_dibujos.py`.
+Python 3.12 con `pywebview` (Edge WebView2), `Pillow` y `uiautomation` (`python -m pip install uiautomation`), Claude Code (`claude`) y `prueba-dia/overlay_dia.py`. Los dibujos: MathJax y rough.js (ya en `vendor/`, sin instalar nada), `edge-tts` para la voz natural (`python -m pip install edge-tts`; sin ella, la voz de Windows), `pywin32` y `openpyxl` para lo de Excel, y Node con `herramientas/` solo para `probar_dibujos.py`.

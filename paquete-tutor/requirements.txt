@@ -5,3 +5,4 @@ pywebview>=6.2      # ventana del panel (usa WebView2, que ya trae Windows 11)
 openpyxl>=3.1       # crear libros de Excel sin abrir Excel
 pillow>=10          # flechas encima de las ventanas (panel de Dia, opcional; asistente de pantalla) y sus capturas
 uiautomation>=2.0.29  # asistente de pantalla: dónde está cada botón de la ventana (UI Automation de Windows)
+edge-tts>=7.3.1  # voz natural de los paneles (opcional: sin ella, la voz de Windows)

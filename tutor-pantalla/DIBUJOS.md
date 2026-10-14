@@ -35,7 +35,7 @@ voz; si falta, se usa `texto`), `"n"` (número de orden).
 | `teclas` | teclas que se pulsan | `teclas`: `["Ctrl", "S"]` (objetivo opcional: salen junto a él; si no, abajo al centro) |
 | `mano` | trazo a mano alzada que se va dibujando | `trazo`: `circulo` \| `subrayado` \| `flecha` \| `tache` \| `check` |
 | `lupa` | la zona, aumentada al lado y **en vivo** | `aumento` (2.5). Solo en una ventana que la persona ya aprobó |
-| `svg` | el dibujo propio del tutor, encajado en el objetivo | `svg`: `"<svg viewBox=...>...</svg>"` (se filtra) |
+| `svg` | el dibujo propio del tutor, encajado en el objetivo; puede ir **animado** (SMIL o CSS `@keyframes`) | `svg`: `"<svg viewBox=...>...</svg>"` (se filtra) |
 | `fantasma` | cursor animado que hace los pasos | `pasos`: `[{"accion": "mover"\|"clic"\|"doble"\|"derecho"\|"arrastrar"\|"escribir", objetivo, "hasta": objetivo (arrastrar), "texto": (escribir), "decir"}]` |
 | `guia` | contorno punteado que se dibuja: «hazlo aquí» | `figura`: `rect` \| `elipse` \| `linea` \| `flecha` |
 | `secuencia` | 1 → 2 → 3 en orden, con flechas curvas | `pasos`: `[{objetivo, "texto", "decir"}]` |
@@ -126,6 +126,13 @@ Utilidades `U` (todas en píxeles de cliente; `d.escala` para tamaños):
 
 `Dibujante.renderizar(lote)` → `Promise<{capas, narracion, errores}>` (sin tocar nada: lo usa el banco de pruebas).
 `Dibujante.mostrar(lote, texto)` → renderiza, llama `api.capa_poner` y, con la voz encendida, narra.
+
+**SVG animado:** si el SVG trae `<animate>`, `<animateTransform>`, `<animateMotion>`, `<set>` o CSS con `@keyframes`,
+la forma `svg` lo pasa a fotogramas (≤ 60, a ~15 por segundo) y capa.py los repite. SMIL: para el instante t, cada
+animación empieza t segundos antes (el SVG pasado a imagen se pinta en su instante 0). CSS: Chrome no anima el CSS de
+un SVG pasado a imagen, así que se mete escondido (en un shadow root) en la página, se lleva cada animación a t con
+Web Animations y sus valores quedan fijos en el estilo. Lo que se repite se graba un ciclo (mínimo común múltiplo de
+sus duraciones, tope 6 s) desde que ya empezaron todas, para que el bucle no salte. No se animan `href` ni `on*`.
 
 ## 5. Probar sin panel
 

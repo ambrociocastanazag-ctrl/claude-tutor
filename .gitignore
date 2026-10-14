@@ -95,12 +95,14 @@
 !/tutor-pantalla/formas_animadas.js
 !/tutor-pantalla/formas_formulas.js
 !/tutor-pantalla/voz.js
+!/tutor-pantalla/voz_natural.py
 !/tutor-pantalla/probar_dibujos.py
 !/tutor-pantalla/muestras/
 /tutor-pantalla/muestras/*
 !/tutor-pantalla/muestras/fijas.json
 !/tutor-pantalla/muestras/animadas.json
 !/tutor-pantalla/muestras/formulas.json
+!/tutor-pantalla/muestras/svg_animado.json
 !/tutor-pantalla/vendor/
 /tutor-pantalla/vendor/*
 !/tutor-pantalla/vendor/tex-svg.js

@@ -310,16 +310,20 @@
   });
 
   // =====================================================================================================
-  // 5. svg: el dibujo propio del tutor, filtrado y encajado en el objetivo
+  // 5. svg: el dibujo propio del tutor, filtrado y encajado en el objetivo. Puede ir animado (SMIL: animate,
+  //    animateTransform, animateMotion, set; o CSS con @keyframes): se toman fotogramas y capa.py los repite
   // =====================================================================================================
   var ELEM = {svg: 1, g: 1, path: 1, rect: 1, circle: 1, ellipse: 1, line: 1, polyline: 1, polygon: 1, text: 1, tspan: 1, defs: 1, marker: 1,
-              lineargradient: 1, radialgradient: 1, stop: 1, clippath: 1, mask: 1};
+              lineargradient: 1, radialgradient: 1, stop: 1, clippath: 1, mask: 1,
+              animate: 1, animatetransform: 1, animatemotion: 1, set: 1, mpath: 1, style: 1};
+  var ANIMA = {animate: 1, animatetransform: 1, animatemotion: 1, set: 1};
   var ATTR = {};
   ('x y x1 y1 x2 y2 cx cy r rx ry width height d points transform viewBox preserveAspectRatio fill fill-opacity fill-rule stroke stroke-width stroke-opacity ' +
    'stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-miterlimit opacity font-family font-size font-weight font-style text-anchor ' +
    'dominant-baseline letter-spacing dx dy rotate textLength lengthAdjust marker-start marker-mid marker-end markerWidth markerHeight refX refY orient markerUnits ' +
    'id offset stop-color stop-opacity gradientUnits gradientTransform spreadMethod fx fy clip-path clipPathUnits mask maskUnits maskContentUnits paint-order ' +
-   'vector-effect style class').split(' ').forEach(function(a){ ATTR[a.toLowerCase()] = a; });
+   'vector-effect style class ' +
+   'attributeName attributeType from to by values dur begin end repeatCount repeatDur keyTimes keySplines keyPoints calcMode type additive accumulate path').split(' ').forEach(function(a){ ATTR[a.toLowerCase()] = a; });
   var CON_URL = {fill: 1, stroke: 1, 'clip-path': 1, mask: 1, 'marker-start': 1, 'marker-mid': 1, 'marker-end': 1};
   var NS = 'http://www.w3.org/2000/svg';
 
@@ -346,15 +350,22 @@
     for (var i = 0; i < origen.attributes.length; i++){
       var a = origen.attributes[i], an = a.name.toLowerCase();
       if (an.indexOf('on') === 0 || an.indexOf('xmlns') === 0) continue;
-      if (an === 'href' || an === 'xlink:href'){            // solo referencias internas (degradados que se encadenan)
-        if (/^(lineargradient|radialgradient)$/.test(nombre) && /^#[\w\-.:]+$/.test(a.value.trim())) nuevo.setAttribute(an === 'href' ? 'href' : 'xlink:href', a.value.trim());
+      if (an === 'href' || an === 'xlink:href'){            // solo referencias internas (degradados que se encadenan, mpath)
+        if (/^(lineargradient|radialgradient|mpath)$/.test(nombre) && /^#[\w\-.:]+$/.test(a.value.trim())) nuevo.setAttribute(an === 'href' ? 'href' : 'xlink:href', a.value.trim());
         continue;
       }
+      if (an === 'attributename' && /^(on|href|xlink:href|style$)/i.test(a.value.trim())) return null;   // no se animan enlaces ni eventos
       if (!ATTR[an]) continue;
       if (an === 'style'){ if (estiloSeguro(a.value)) nuevo.setAttribute('style', a.value); continue; }
-      if (an === 'class') continue;
+      if (an === 'class'){ if (/^[\w\- ]{1,200}$/.test(a.value)) nuevo.setAttribute('class', a.value); continue; }   // para el CSS propio
       if (!valorSeguro(an, a.value)) continue;
       nuevo.setAttribute(ATTR[an], a.value);
+    }
+    if (nombre === 'style'){                                   // CSS propio (animaciones con @keyframes), sin nada externo
+      var css = origen.textContent || '';
+      if (css.length > 8000 || !estiloSeguro(css)) return null;
+      nuevo.appendChild(document.createTextNode(css));
+      return nuevo;
     }
     var conTexto = nombre === 'text' || nombre === 'tspan';
     for (var n = origen.firstChild; n; n = n.nextSibling){
@@ -366,6 +377,73 @@
   function numero(v){ var m = /^\s*([0-9.]+)/.exec(v || ''); return m ? parseFloat(m[1]) : NaN; }
   var DIBUJA = {path: 1, rect: 1, circle: 1, ellipse: 1, line: 1, polyline: 1, polygon: 1, text: 1};
   function cuentaDibujo(el){ var n = DIBUJA[el.localName.toLowerCase()] ? 1 : 0; for (var c = el.firstChild; c; c = c.nextSibling) if (c.nodeType === 1 && c.localName !== 'defs') n += cuentaDibujo(c); return n; }
+
+  // ---- animación: duración y fotogramas ----
+  function segundos(v){                                      // "2s", "1500ms", "0.5" → segundos (NaN si no es un reloj simple)
+    var m = /^\s*(-?[0-9.]+)\s*(ms|s|min)?\s*$/.exec(v || '');
+    if (!m) return NaN;
+    var n = parseFloat(m[1]); return m[2] === 'ms' ? n / 1000 : m[2] === 'min' ? n * 60 : n;
+  }
+  // {dur, desde, repetir} de las animaciones del SVG limpio, o null si es fijo. Lo que se repite se graba un ciclo
+  // (mínimo común múltiplo de sus duraciones) a partir de que ya empezaron todas: así el bucle no salta. Tope: 6 s.
+  function animacion(el){
+    var anims = Array.prototype.slice.call(el.querySelectorAll('animate,animateTransform,animateMotion,set'));
+    var css = Array.prototype.map.call(el.querySelectorAll('style'), function(x){ return x.textContent; }).join(' ') +
+              Array.prototype.map.call(el.querySelectorAll('[style]'), function(x){ return x.getAttribute('style'); }).join(' ');
+    var conCss = /animation/i.test(css) && /@keyframes/i.test(css);
+    if (!anims.length && !conCss) return null;
+    var fin = 0, durs = [], desde = 0;
+    anims.forEach(function(a){
+      var dur = segundos(a.getAttribute('dur')), b = segundos(a.getAttribute('begin') || '0s');
+      var rc = a.getAttribute('repeatCount') || '';
+      if (!(dur > 0)) dur = a.localName === 'set' ? 0 : 1;
+      if (isNaN(b)) b = 0;
+      if (rc === 'indefinite' || a.getAttribute('repeatDur') === 'indefinite'){ durs.push(dur); desde = Math.max(desde, b); }
+      else fin = Math.max(fin, b + dur * Math.min(10, parseFloat(rc) || 1));
+    });
+    if (conCss){
+      var cd = (css.match(/([0-9.]+)\s*(ms|s)\b/g) || []).map(segundos).filter(function(n){ return n > 0 && n <= 30; });
+      if (/infinite/i.test(css)) durs = durs.concat(cd.length ? [Math.max.apply(null, cd)] : [2]);
+      else cd.forEach(function(n){ fin = Math.max(fin, n); });
+    }
+    if (!durs.length) return {dur: Math.min(6, Math.max(0.3, fin || 2)), desde: 0, repetir: false};
+    var dec = function(x){ return Math.max(1, Math.round(x * 10)); }, mcd = function(a, b){ return b ? mcd(b, a % b) : a; };
+    var ciclo = durs.map(dec).reduce(function(a, b){ return a / mcd(a, b) * b; }) / 10;
+    if (ciclo > 6) ciclo = Math.min(6, Math.max.apply(null, durs));
+    return {dur: Math.max(0.3, ciclo), desde: desde, repetir: true};
+  }
+  // El SVG en el instante t (s). SMIL: cada animación empieza t segundos antes (el SVG pasado a imagen se pinta en su
+  // instante 0). CSS: Chrome no anima el CSS de un SVG pasado a imagen, así que se mete escondido en la página, se
+  // lleva cada animación a t (Web Animations) y sus valores quedan fijos en el estilo antes de pasarlo a imagen.
+  function enInstante(el, t){
+    var c = el.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('animate,animateTransform,animateMotion,set'), function(a){
+      var b = segundos(a.getAttribute('begin') || '0s');
+      if (!isNaN(b)) a.setAttribute('begin', (b - t).toFixed(3) + 's');
+    });
+    if (!/@keyframes/i.test(Array.prototype.map.call(c.querySelectorAll('style'), function(x){ return x.textContent; }).join(' ')))
+      return new XMLSerializer().serializeToString(c);
+    var caja = document.createElement('div');
+    caja.style.cssText = 'position:fixed;left:-20000px;top:0;width:10px;height:10px;overflow:hidden;pointer-events:none';
+    document.body.appendChild(caja); caja.attachShadow({mode: 'open'}).appendChild(c);     // su CSS no toca el panel
+    try {
+      c.getAnimations({subtree: true}).forEach(function(an){
+        an.pause(); an.currentTime = t * 1000;
+        var obj = an.effect && an.effect.target, props = {};
+        if (!obj) return;
+        an.effect.getKeyframes().forEach(function(k){
+          Object.keys(k).forEach(function(n){ if (!/^(offset|computedOffset|easing|composite)$/.test(n)) props[n] = 1; });
+        });
+        var cs = getComputedStyle(obj);
+        Object.keys(props).forEach(function(n){
+          var css = n.replace(/[A-Z]/g, function(m){ return '-' + m.toLowerCase(); });
+          obj.style.setProperty(css, cs.getPropertyValue(css));
+        });
+      });
+      c.getAnimations({subtree: true}).forEach(function(an){ var obj = an.effect && an.effect.target; if (obj) obj.style.setProperty('animation', 'none'); });
+      return new XMLSerializer().serializeToString(c);
+    } finally { caja.remove(); }
+  }
 
   D.registrar('svg', async function(d, U){
     if (!d.r) throw new Error('svg necesita un objetivo donde encajarse');
@@ -391,9 +469,15 @@
     limpio.setAttribute('viewBox', vb.join(' ')); limpio.setAttribute('preserveAspectRatio', par);
     limpio.setAttribute('overflow', slice ? 'hidden' : 'visible');
     var s = d.escala || 1;
-    var cont = new XMLSerializer().serializeToString(limpio);
     var nota = d.texto ? U.nota(d, d.texto, {color: d.color}) : null;
     var caja = union([d.r].concat(nota ? [nota.caja] : []), (slice ? 4 : 28) * s);
-    return U.capa(d, caja, cont + (nota ? nota.svg : ''), {});
+    var an = animacion(limpio);
+    if (!an) return U.capa(d, caja, new XMLSerializer().serializeToString(limpio) + (nota ? nota.svg : ''), {});
+    // animado: la nota va fija en el fondo y el dibujo en fotogramas (≤ 60; menos si la capa es grande)
+    var k = U.recorte(d, caja), area = k ? k[2] * k[3] : 1;
+    var fps = Math.max(6, Math.min(15, Math.floor(14e6 / (area * an.dur)))), n = Math.max(2, Math.min(60, Math.round(an.dur * fps)));
+    fps = n / an.dur;
+    var fotos = await U.fotos(d, caja, n, function(i){ return enInstante(limpio, an.desde + Math.min(an.dur, i / fps)); });
+    return U.capa(d, caja, nota ? nota.svg : '', {fotos: fotos, fps: fps, duracion: Math.round(an.dur * 1000), repetir: an.repetir, pausa: 0});
   });
 })();

@@ -61,7 +61,9 @@ Comunes: "texto" (1 a 5 palabras), "decir" (frase corta que se lee en voz alta s
   {"tipo": "dibujo", "forma": "desarmar", "original": "=SUMA(B2:B9)/8", "partes": [{"texto": "SUMA(B2:B9)",
         "nota": "suma las ventas"}, {"texto": "/8", "nota": "entre 8 días"}], "id": 4}   explica un texto por partes
   {"tipo": "dibujo", "forma": "svg", "caja": [...], "svg": "<svg viewBox='0 0 100 40'>...</svg>"}   tu propio dibujo
-        (solo formas y texto; sin scripts ni imágenes), encajado en la caja
+        (solo formas y texto; sin scripts ni imágenes), encajado en la caja. PUEDE IR ANIMADO: <animate>,
+        <animateTransform>, <animateMotion> (con <mpath href='#id'/>) o CSS con @keyframes en un <style>; ciclos de
+        hasta 6 s y repeatCount='indefinite' para que se repita (p. ej. un punto que recorre una curva, barras que crecen)
 En Excel, con "celda": "formula" sin latex escribe la de la celda ("grafica": true añade una mini gráfica de sus
 datos), "rayos_x" anima de dónde salen los valores de la fórmula y "desarmar" sin "original" usa su fórmula.
 Úsalos cuando aclaren más que una flecha (máximo 2 o 3 por respuesta); para señalar un botón basta la flecha."""
@@ -343,6 +345,15 @@ class OjosApi:
 
     def capa_borrar(self):
         return self._ojos.borrar_capas()
+
+    def voz_audio(self, texto):
+        """Una frase con la voz natural (voz_natural.py, edge-tts) como data URL; ok False → voz.js usa la de Windows."""
+        try:
+            import voz_natural
+            url = voz_natural.audio(texto)
+        except Exception:
+            url = None
+        return {"ok": bool(url), "audio": url}
 
     def dib_recurso(self, nombre):
         """El código de una librería de vendor/ (MathJax pesa 2 MB: no cabe en la página, se carga al usarla)."""

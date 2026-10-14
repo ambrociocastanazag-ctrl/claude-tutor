@@ -1,4 +1,6 @@
-/* La voz del tutor: lee en voz alta con speechSynthesis (las voces de Windows/Edge, sin enviar nada fuera).
+/* La voz del tutor. Si el panel da voz natural (api.voz_audio → voz_natural.py, edge-tts: Dalia o Jorge de México), lee
+   con ella: Python genera el MP3 de cada trozo y aquí suena con un <audio>, pidiendo el siguiente mientras suena el
+   actual. Si no hay internet o falla, usa speechSynthesis (las voces de Windows, sin enviar nada fuera).
 
    Voz.activa()    → bool (apagada por defecto; se recuerda en localStorage)
    Voz.alternar()  → nuevo estado (al apagarla, calla)
@@ -11,6 +13,9 @@
   var CLAVE = 'voz_tutor_activa', MS_LETRA = 65, MAX_ESPERA = 8000;
   var sy = window.speechSynthesis || null;
   var activa = false, turno = 0, pendientes = [], botones = [], voz = null;
+  var fallosNatural = 0, sonando = null;           // tras 2 fallos seguidos se deja la natural (sin internet)
+  function api(){ return window.pywebview && window.pywebview.api; }
+  function natural(){ var a = api(); return !!(a && a.voz_audio) && fallosNatural < 2; }
   try { activa = localStorage.getItem(CLAVE) === '1'; } catch (e){}
 
   // ---- estilo mínimo del botón ----
@@ -68,9 +73,49 @@
     clearTimeout(p.timer); p.fin();
   }
 
+  // Para la voz natural: la primera frase sola (empieza antes) y el resto en trozos de hasta ~350 letras (menos cortes)
+  function bloques(partes){
+    var out = [], cur = '';
+    partes.forEach(function(f, i){
+      if (i === 0){ out.push(f); return; }
+      if (cur && (cur + ' ' + f).length > 350){ out.push(cur); cur = f; } else cur = cur ? cur + ' ' + f : f;
+    });
+    if (cur) out.push(cur);
+    return out;
+  }
+  function pedir(t){ return Promise.resolve(api().voz_audio(t)).then(function(r){ return r && r.ok ? r.audio : null; }, function(){ return null; }); }
+
+  // Lee los trozos con la voz natural; el que no se pueda generar se dice con la de Windows.
+  function decirNatural(partes, mio, ok){
+    var bs = bloques(partes), i = 0, prox = pedir(bs[0]);
+    (function siguiente(){
+      if (mio !== turno || i >= bs.length) return ok();
+      var esta = prox, texto = bs[i++];
+      prox = i < bs.length ? pedir(bs[i]) : null;            // el siguiente se pide mientras suena este
+      esta.then(function(url){
+        if (mio !== turno) return ok();
+        if (!url){ fallosNatural++; return decirSistema(trozos(texto), mio, siguiente); }
+        fallosNatural = 0;
+        var au = new Audio(url), hecho = false, p;
+        function listo(){ if (hecho) return; hecho = true; sonando = null; var k = pendientes.indexOf(p); if (k >= 0) pendientes.splice(k, 1); clearTimeout(p.timer); siguiente(); }
+        p = {fin: function(){ try { au.pause(); } catch (e){} listo(); }, timer: setTimeout(listo, Math.min(60000, texto.length * 160 + 6000))};
+        pendientes.push(p); sonando = au;
+        au.onended = listo; au.onerror = listo;
+        var r = au.play(); if (r && r.catch) r.catch(listo);
+      });
+    })();
+  }
+
   function decir(texto){
     var partes = trozos(texto), mio = turno;
     return new Promise(function(ok){
+      if (!partes.length) return ok();
+      if (natural()) return decirNatural(partes, mio, ok);
+      decirSistema(partes, mio, ok);
+    });
+  }
+
+  function decirSistema(partes, mio, ok){
       if (!partes.length) return ok();
       var hay = sy && sy.speak && typeof window.SpeechSynthesisUtterance === 'function' ? elegir() : 0;
       if (!hay){                                  // sin voces: espera proporcional al texto
@@ -90,12 +135,12 @@
         pendientes.push(p);
         try { sy.speak(u); } catch (e){ listo(); }
       })();
-    });
   }
 
   function callar(){
     turno++;
     try { if (sy && sy.cancel) sy.cancel(); } catch (e){}
+    try { if (sonando) sonando.pause(); } catch (e){}
     pendientes.slice().forEach(salir);
   }
 
