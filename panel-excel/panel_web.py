@@ -15,6 +15,11 @@ from pathlib import Path
 import motor
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
+try:        # los «ojos» (tutor-pantalla/): enseñarle al tutor otra ventana, con permiso. Sin ellos, el panel funciona igual
+    sys.path.insert(0, os.path.join(os.path.dirname(AQUI), "tutor-pantalla")); import ojos_panel
+    motor.REGLAS += ojos_panel.REGLAS_OJOS
+except Exception:
+    ojos_panel = None
 PISTA = "Pulsa Esc en Excel (puede que estés editando una celda o haya un aviso abierto) y vuelve a intentar."
 
 
@@ -44,10 +49,11 @@ class HiloExcel(threading.Thread):
         return caja["ok"]
 
 
-class Api:
-    """Lo que la página llama con window.pywebview.api.<método>()."""
+class Api(ojos_panel.OjosApi if ojos_panel else object):
+    """Lo que la página llama con window.pywebview.api.<método>() (con los ojos: ojos_ventanas, ojos_capturar…)."""
     def __init__(self, excel, tutor, curso):
         self._x, self._tutor, self._curso = excel, tutor, curso
+        self._ojos = ojos_panel.Ojos(apps=["EXCEL"], panel_hwnd=self._hwnd_panel) if ojos_panel else None
         self._m, self._n, self._texto, self._ventana = 0, 0, "", None
         self._huella, self._revision = None, None
         self._huella_ej = None          # la zona del ejercicio del tutor, para saber si cambió después de comprobar
@@ -107,6 +113,11 @@ class Api:
         if "solver" in pide and not motor.avanzado.solver_disponible(libro.xl):
             out.append("Este módulo usa Solver: actívalo en Archivo → Opciones → Complementos → Administrar: Complementos de Excel → Ir… → ☑ Solver.")
         return " ".join(out)
+
+    def _hwnd_panel(self):
+        """La ventana del panel: las flechas de los ojos van justo debajo de ella para no taparlo."""
+        try: return int(self._ventana.native.Handle.ToInt64())
+        except Exception: return None
 
     def _empujar(self, js):
         """Ejecuta JS en la ventana del panel, si está abierta."""
@@ -197,13 +208,17 @@ class Api:
         try: ctx = self._x.hacer(leer)
         except Exception: return {"texto": f"No pude leer la hoja. {PISTA}"}
         if self._notas: ctx = "[Del panel] " + " ".join(self._notas) + "\n" + ctx; self._notas = []
+        if self._ojos: ctx += ("\n" + self._ojos.contexto(adjuntos)).rstrip()     # la ventana y los controles de cada captura
         def trozo(t): self._empujar(f"window.trozoTutor({json.dumps(t)})")   # el texto llega a pedazos
         try: resp = self._tutor.preguntar(ctx, pregunta, trozo, adjuntos)
         except ValueError as e: return {"texto": str(e)}             # un adjunto que no se admite
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
+        pide = False
+        if self._ojos: resp, pide = ojos_panel.separar_pedido(resp)          # <pedir_ventana/> → botón en la página
         texto, marcas = motor.separar(resp)
         texto, prop, error = motor.separar_acciones(texto)     # varios bloques <acciones> → una sola propuesta
-        hechas = 0
+        hechas = en_ventana = 0
+        if self._ojos and marcas: marcas, en_ventana = self._ojos.marcar(marcas)   # "tipo": "ventana": encima de esa ventana
         if marcas:      # cada marca en su hoja (la que tiene al frente, o la que diga "hoja"); nada se pierde en silencio
             try: r = self._x.hacer(lambda libro: libro.dibujar_marcas(marcas, self._m))
             except Exception: texto += f"\n\n(No pude dibujar las marcas: {PISTA})"; r = None
@@ -217,7 +232,7 @@ class Api:
                 except Exception: frente = None
                 otras = [h for h in r["hojas"] if frente is None or h.lower() != frente.lower()]
                 if otras: texto += "\n\n(Las marcas están en la hoja " + " y ".join(f"«{h}»" for h in otras) + ": ábrela para verlas.)"
-        out = {"texto": texto, "marcas": hechas}
+        out = {"texto": texto, "marcas": hechas, "marcas_ventana": en_ventana, "pedir": pide}
         if prop:
             try:
                 out["propuesta"] = self._x.hacer(lambda libro: libro.preparar(prop, self._m))
@@ -288,11 +303,13 @@ class Api:
 
     def borrar_marcas(self):
         """Botón «Borrar marcas»: las del tutor en todas las hojas del libro del curso."""
+        if self._ojos: self._ojos.borrar()
         try: self._x.hacer(lambda libro: libro.borrar_marcas(self._m)); return {"ok": True}
         except Exception: return {"ok": False, "texto": f"No pude borrar las marcas. {PISTA}"}
 
     def cerrar(self):
         """Al cerrar: se borran las copias ocultas del modo libre (Deshacer ya no existirá) y se guarda."""
+        if self._ojos: self._ojos.cerrar()
         try: self._x.hacer(lambda libro: (libro.limpiar_copias(), libro.guardar()))
         except Exception: pass
 
@@ -1515,7 +1532,8 @@ def abrir_ventana(api):
     x0, y0, ancho, alto, _ = area_visible(); ancho_v = 460
     tema = preferencias().get("tema", "claro")
     html = Path(AQUI, "panel.html").read_text(encoding="utf-8").replace(
-        "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(tema)};</script>", 1)
+        "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(tema)}; window.APP_PANEL = 'Excel';</script>", 1)
+    if ojos_panel: html = ojos_panel.inyectar_ui(html)          # «Mirar ventana»: la lista y la vista previa
     api._ventana = webview.create_window(api._curso.titulo or "Clase en vivo", html=html, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
                                          on_top=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")

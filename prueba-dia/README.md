@@ -73,4 +73,4 @@ Se abren **Dia en vivo** y **el panel**:
 
 ## Dependencias
 
-Dia 0.97.2 de dia-installer.de (32 bits) en `C:\Program Files (x86)\Dia` (también su `dia.exe`, para dibujar sin plugin). Python con `pywebview`, `pywin32` y `Pillow` (las flechas encima de Dia; sin Pillow todo lo demás funciona). Claude Code (el comando `claude`) para el tutor. Para recompilar el plugin, MinGW en `C:\MinGW` (ver `plugin-dia/README.md`).
+Dia 0.97.2 de dia-installer.de (32 bits) en `C:\Program Files (x86)\Dia` (también su `dia.exe`, para dibujar sin plugin). Python con `pywebview`, `pywin32` y `Pillow` (las flechas encima de Dia; sin Pillow todo lo demás funciona). Opcional: `tutor-pantalla/` con `uiautomation` para el botón 📷 del tutor (enseñarle otra ventana con permiso: un diálogo de Dia, el PDF del enunciado; ver `../tutor-pantalla/README.md`). Lo del diagrama se sigue marcando dentro de Dia; las flechas encima son solo para lo que está fuera. Claude Code (el comando `claude`) para el tutor. Para recompilar el plugin, MinGW en `C:\MinGW` (ver `plugin-dia/README.md`).

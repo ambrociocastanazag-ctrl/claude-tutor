@@ -36,6 +36,10 @@ import curso_dia as cu                         # cursos con módulos: carga, pas
 import interfaz_dia as ui                      # la interfaz real de Dia: dónde está cada cosa y «hazlo por mí»
 import motor                                   # Tutor (sesión de Claude Code) y separar(<marcas>)
 import tutor_dia                               # cliente del plugin
+try:        # los «ojos» (tutor-pantalla/): enseñarle al tutor otra ventana, con permiso. Sin ellos, el panel funciona igual
+    sys.path.insert(0, str(AQUI.parent / "tutor-pantalla")); import ojos_panel
+except Exception:
+    ojos_panel = None
 
 DIAW = tutor_dia.DIAW
 LECCION = AQUI / "leccion_clase.json"
@@ -67,7 +71,9 @@ El objetivo es "Clase" o "Clase.miembro" (atributo o método, sin paréntesis), 
 mensaje, acción, estado...) o su «#O7», tal como aparecen en el [Estado actual].
 Colores: "rojo" = error, "verde" = bien, "amarillo" = fíjate aquí, "azul" = información. Textos de 2 a 8 palabras. Si no hace falta, omite el bloque.
 
-""" + cd.REGLAS_ACCIONES
+""" + cd.REGLAS_ACCIONES + (ojos_panel.REGLAS_OJOS + """
+En Dia, lo del diagrama se sigue marcando en tu bloque <marcas> de siempre (va dentro de Dia, en la capa «Tutor»); "tipo": "ventana" es
+solo para lo que está FUERA del diagrama: diálogos de Dia (Propiedades…), sus menús o barras, u otra ventana (un PDF, un enunciado).""" if ojos_panel else "")
 
 
 def _sin_tutor(t):
@@ -347,8 +353,9 @@ class DibujoDia:
         return texto
 
 
-class Api:
+class Api(ojos_panel.OjosApi if ojos_panel else object):
     def __init__(self, curso, tutor, dia, rutas=None):
+        self._ojos = ojos_panel.Ojos(apps=["diaw", "dia"], panel_hwnd=self._hwnd_panel) if ojos_panel else None
         self._curso = curso_de(curso)
         self._m, self._n = 0, 0
         self._tutor, self._dia, self._ventana = tutor, dia, None
@@ -735,17 +742,21 @@ class Api:
         ref = cd.referencia_libre(pregunta, ctx)       # propiedades de los tipos de Dia del modo libre, solo si vienen al caso
         if ref: ctx += "\n" + ref
         if self._notas: ctx = "[Del panel] " + " ".join(self._notas) + "\n" + ctx; self._notas = []
+        if self._ojos: ctx += ("\n" + self._ojos.contexto(adjuntos)).rstrip()     # la ventana y los controles de cada captura
         def trozo(t): self._empujar(f"window.trozoTutor({json.dumps(t)})")
         try: resp = self._tutor.preguntar(ctx, pregunta, trozo, adjuntos)
         except ValueError as e: return {"texto": str(e)}             # un adjunto que no se admite
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
+        pide = en_ventana = False
+        if self._ojos: resp, pide = ojos_panel.separar_pedido(resp)          # <pedir_ventana/> → botón en la página
         texto, marcas = motor.separar(resp)
         texto, prop, error = cd.separar_acciones(texto, self._curso.conv)
+        if self._ojos and marcas: marcas, en_ventana = self._ojos.marcar(marcas)   # "tipo": "ventana": encima de esa ventana
         if marcas:
             self._marcas = marcas
             self._empujar(f"window.mostrarDiagrama({json.dumps(self._svg())})")
             self._marcas_en_dia(marcas)               # y también dentro de Dia, en la capa «Tutor»
-        out = {"texto": texto, "marcas": len(marcas)}
+        out = {"texto": texto, "marcas": len(marcas), "marcas_ventana": en_ventana or 0, "pedir": pide}
         if prop:
             try:
                 with self._cerrojo_cambios: out["propuesta"] = self._cambios.preparar(prop, bool(self._turno()))
@@ -832,6 +843,7 @@ class Api:
     def borrar_marcas(self):
         """«Borrar marcas»: las quita del dibujo del panel y de Dia."""
         self._marcas = []; self._empujar(f"window.mostrarDiagrama({json.dumps(self._svg())})")
+        if self._ojos: self._ojos.borrar()
         self._quitar_marcas_dia(); return {"ok": True}
 
     def listo(self): print("ventana lista", flush=True); return True
@@ -845,6 +857,7 @@ class Api:
 
     def cerrar(self):
         self._overlay.cerrar()
+        if self._ojos: self._ojos.cerrar()
 
 
 def abrir_ventana(api):
@@ -856,6 +869,7 @@ def abrir_ventana(api):
     tema = panel_web.preferencias().get("tema", "claro")
     pagina = (EXCEL / "panel.html").read_text(encoding="utf-8").replace(
         "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(tema)}; window.OBJETO_PANEL = 'diagrama'; window.APP_PANEL = 'Dia';</script>", 1)
+    if ojos_panel: pagina = ojos_panel.inyectar_ui(pagina)      # «Mirar ventana»: la lista y la vista previa
     api._ventana = webview.create_window(api._curso.titulo or "Clase en vivo", html=pagina, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
                                          on_top=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")

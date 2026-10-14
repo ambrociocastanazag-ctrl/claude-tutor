@@ -7,74 +7,39 @@
                                                    el título o la app, pregunta dónde se guarda el archivo, dibuja las
                                                    flechas y guarda la captura con ellas (png) para revisarla
 
-Permiso: nada sale de la PC sin pasar por la vista previa. capturar() solo guarda la imagen en memoria y la muestra
-en el panel; enviar() es lo único que la manda, y solo lo llama el botón «Enviar al tutor». descartar() la tira.
+Permiso: nada sale de la PC sin pasar por la vista previa (ojos_panel y ojos_ui.js, los mismos de los tutores).
+«Adjuntar» deja la captura en el mensaje y solo sale cuando la persona lo envía (preguntar() con su ojos_id).
 Las flechas las dibuja ../prueba-dia/overlay_dia.py (el mismo de Dia, sin cambios): ventana transparente encima de
 la app, que deja pasar los clics y solo se ve con la app o el panel al frente."""
-import json, os, subprocess, sys, threading, time
+import json, os, sys, time
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
-import ojos, asistente                                                  # noqa: E402
+import ojos, asistente, ojos_panel                                      # noqa: E402
 
-OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"
 PREFERENCIAS = AQUI.parent / "panel-excel" / "preferencias.json"         # el tema de los paneles del tutor
 
 
-class Overlay:
-    """El proceso de las flechas (overlay_dia.py), con órdenes JSON por stdin. Si falla, el panel sigue sin flechas."""
+class Api(ojos_panel.OjosApi):
+    """Lo que llama la página (window.pywebview.api.*). Los métodos con _ no se ven desde la página.
+    La lista de ventanas, la vista previa y las flechas son de ojos_panel (los mismos de los tutores de Excel y Dia)."""
 
-    def __init__(self):
-        self.p = None; self.cerrojo = threading.Lock()
-
-    def orden(self, o):
-        with self.cerrojo:
-            try:
-                if self.p is None or self.p.poll() is not None:
-                    self.p = subprocess.Popen([sys.executable, str(OVERLAY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                              stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
-                                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-                    self.p.stdout.readline()                                    # {"listo": true}
-                self.p.stdin.write(json.dumps(o) + "\n"); self.p.stdin.flush()
-                return json.loads(self.p.stdout.readline() or "{}")
-            except (OSError, ValueError) as e:
-                self.p = None
-                return {"ok": False, "error": str(e)}
-
-    def cerrar(self):
-        if self.p and self.p.poll() is None:
-            try: self.orden({"cmd": "salir"}); self.p.wait(timeout=3)
-            except Exception: self.p.kill()
-
-
-class Api:
-    """Lo que llama la página (window.pywebview.api.*). Los métodos con _ no se ven desde la página."""
-
-    def __init__(self, sesion, overlay, puente=None):
-        self._sesion, self._ov = sesion, overlay
+    def __init__(self, sesion, puente=None):
+        self._sesion = sesion
         self._puente = puente           # modo puente: responde el chat de Claude Code (puente.LadoPanel), no la sesión
         self._esperando = {}            # id del mensaje → ya avisamos que lo está leyendo
         self._ventana = None            # la ventana de pywebview
         self._hwnd = None               # la ventana elegida
-        self._pendiente = None          # captura en vista previa (aún no enviada)
-        self._ultima = None             # la última captura que vio el asistente (a ella se refieren las marcas)
-        self._marcas = []               # las flechas puestas ahora
         self._mi_hwnd = None
+        self._ojos = ojos_panel.Ojos(panel_hwnd=self._panel_hwnd)
 
-    # --- ventanas ---
     def _panel_hwnd(self):
         """La ventana del panel (para poner las flechas justo debajo de ella y no taparlo)."""
         if not self._mi_hwnd and self._ventana:
             try: self._mi_hwnd = int(self._ventana.native.Handle.ToInt64())      # el Form de WinForms de pywebview
             except Exception: self._mi_hwnd = next(iter(ojos.ventanas_de(os.getpid())), None)
         return self._mi_hwnd
-
-    def ventanas(self):
-        return [dict(v, actual=v["hwnd"] == self._hwnd) for v in ojos.listar_ventanas(excluir_pids=[os.getpid()])]
-
-    def miniatura(self, hwnd):
-        return ojos.miniatura(int(hwnd))
 
     def elegir(self, hwnd):
         hwnd = int(hwnd)
@@ -83,66 +48,33 @@ class Api:
         self._hwnd = hwnd
         return {"ok": True, "titulo": ojos.titulo(hwnd), "app": ojos.app_de(ojos.pid_de(hwnd))}
 
-    # --- captura con permiso ---
-    def capturar(self):
-        if not self._hwnd or not ojos.u32.IsWindow(self._hwnd):
-            self._hwnd = None
-            return {"ok": False, "error": "Elige primero una ventana (la anterior se cerró)."}
-        try:
-            cap = ojos.capturar(self._hwnd, ignorar_pids=[os.getpid()])
-        except (ojos.Tapada, ojos.Minimizada) as e:
-            return {"ok": False, "error": str(e)}
-        except Exception as e:
-            return {"ok": False, "error": f"No se pudo capturar: {e}"}
-        self._pendiente = cap
-        self._marco_ventana(cap)
-        return {"ok": True, "img": ojos.a_data_url(cap.img, "PNG"), "w": cap.img.width, "h": cap.img.height,
-                "titulo": cap.titulo, "app": cap.app, "controles": len(cap.controles), "como": cap.como}
+    def _ventana_elegida(self):
+        if self._hwnd and ojos.u32.IsWindow(self._hwnd):
+            return {"titulo": ojos.titulo(self._hwnd), "app": ojos.app_de(ojos.pid_de(self._hwnd))}
 
-    def _marco_ventana(self, cap):
-        """Un borde naranja alrededor de la ventana mientras está la vista previa: «esta es la que se ve»."""
-        c = ojos.cliente(cap.hwnd)
-        if not c: return
-        x, y, w, h = c
-        self._ov.orden({"cmd": "mostrar", "pids": [cap.pid, os.getpid()], "panel": self._panel_hwnd(),
-                        "marcas": [{"hwnd": cap.hwnd, "ventana": list(c), "rect": [x + 8, y + 8, w - 16, h - 16], "color": "naranja"}]})
-
-    def descartar(self):
-        self._pendiente = None
-        self._poner(self._marcas)          # vuelven las flechas que hubiera (o nada)
-        return {"ok": True}
-
-    def enviar(self, texto, recorte=None):
-        """El único camino por el que sale una captura: lo llama el botón «Enviar al tutor» de la vista previa."""
-        cap, self._pendiente = self._pendiente, None
-        if cap is None: return {"ok": False, "error": "No hay captura en la vista previa."}
-        if recorte: cap.recortar(*recorte)
-        self._ultima = cap
-        texto = (texto or "").strip() or "¿Qué ves? Ayúdame con esto."
-        if self._puente: return self._al_chat(texto, cap)
-        ctx = (f"[Captura de la ventana «{cap.titulo}» ({cap.app}), {cap.img.width}×{cap.img.height} px]\n"
-               f"Controles de la ventana:\n{cap.texto_controles()}\n\nPersona: {texto}")
-        contenido = [{"type": "image", "source": {"type": "base64", "media_type": "image/png",
-                                                  "data": ojos.a_data_url(cap.img).split(",", 1)[1]}},
-                     {"type": "text", "text": ctx}]
-        return self._responder(contenido)
-
-    def preguntar(self, texto):
+    def preguntar(self, texto, adjuntos=None):
+        """adjuntos: [{"ojos_id", "nombre"}] de las capturas que la persona adjuntó (pasaron por la vista previa).
+        Es lo único por lo que sale una captura: el mensaje que la persona envía con ella dentro."""
         texto = (texto or "").strip()
-        if not texto: return {"ok": False, "error": "Escribe algo."}
-        if self._puente: return self._al_chat(texto)
-        v = f"(Ventana elegida: «{ojos.titulo(self._hwnd)}»; sin captura nueva.)\n" if self._hwnd and ojos.u32.IsWindow(self._hwnd) else ""
-        return self._responder(f"{v}Persona: {texto}")
+        caps = [self._ojos.capturas[a["ojos_id"]] for a in adjuntos or [] if a.get("ojos_id") in self._ojos.capturas]
+        if not texto and not caps: return {"ok": False, "error": "Escribe algo."}
+        texto = texto or "¿Qué ves? Ayúdame con esto."
+        if self._puente:
+            if caps: self._ojos.ultima = caps[-1]
+            return self._al_chat(texto, caps[-1] if caps else None)
+        if not caps:
+            v = self._ventana_elegida()
+            return self._responder(f"(Ventana elegida: «{v['titulo']}»; sin captura nueva.)\nPersona: {texto}" if v else f"Persona: {texto}")
+        ctx = self._ojos.contexto(adjuntos)
+        contenido = [{"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                                  "data": ojos.a_data_url(c.img).split(",", 1)[1]}} for c in caps]
+        return self._responder(contenido + [{"type": "text", "text": f"{ctx}\n\nPersona: {texto}"}])
 
     # --- modo puente ---
     def _al_chat(self, texto, cap=None):
         """El mensaje va al chat de Claude Code; la respuesta llega luego por _vigilar_puente()."""
-        v = None
-        if self._hwnd and ojos.u32.IsWindow(self._hwnd):
-            v = {"titulo": ojos.titulo(self._hwnd), "app": ojos.app_de(ojos.pid_de(self._hwnd))}
-        mid = self._puente.mandar(texto, v, cap)
+        mid = self._puente.mandar(texto, self._ventana_elegida(), cap)
         self._esperando[mid] = False
-        self._poner(self._marcas)               # quita el borde naranja de la vista previa
         return {"ok": True, "espera": True}
 
     def _js(self, funcion, dato):
@@ -159,12 +91,8 @@ class Api:
                     if d.get("tipo") == "pedir_captura":
                         self._js("pedirCaptura", d.get("texto") or "¿Me dejas ver la ventana?")
                         continue
-                    limpio, lista = asistente.separar(d.get("texto") or "")
-                    ms = asistente.marcas(lista, self._ultima) if self._ultima else []
-                    if ms: self._marcas = ms
-                    self._poner(self._marcas)
                     self._esperando.clear()
-                    self._js("respuestaPuente", {"ok": True, "texto": limpio, "marcas": len(ms)})
+                    self._js("respuestaPuente", self._leer_respuesta(d.get("texto") or ""))
             except Exception:
                 import traceback; traceback.print_exc()          # el vigía no se cae, pero el fallo queda a la vista
             time.sleep(0.4)
@@ -177,28 +105,19 @@ class Api:
         try:
             r = self._sesion.preguntar(contenido, trozo, aviso)
         except Exception as e:
-            self._poner(self._marcas)
             return {"ok": False, "error": f"El asistente no respondió: {e}"}
-        limpio, lista = asistente.separar(r)
-        ms = asistente.marcas(lista, self._ultima) if self._ultima else []
-        if ms: self._marcas = ms
-        self._poner(self._marcas)
-        return {"ok": True, "texto": limpio, "marcas": len(ms)}
+        return self._leer_respuesta(r)
 
-    # --- flechas ---
-    def _poner(self, ms):
-        cap = self._ultima
-        if not ms or not cap or not ojos.u32.IsWindow(cap.hwnd):
-            self._ov.orden({"cmd": "borrar"}); return {"ok": True, "dibujadas": 0}
-        c = ojos.cliente(cap.hwnd)
-        evitar = [cap.a_pantalla(k["caja"]) for k in cap.controles]
-        marcas = [{"hwnd": cap.hwnd, "ventana": list(c), "rect": cap.a_pantalla(m["caja"]), "texto": m["texto"],
-                   "color": m["color"], "n": m.get("n"), "evitar": evitar} for m in ms]
-        return self._ov.orden({"cmd": "mostrar", "pids": [cap.pid, os.getpid()], "panel": self._panel_hwnd(), "marcas": marcas})
+    def _leer_respuesta(self, r):
+        """Texto para la página: sin la línea MARCAS (son las flechas) ni <pedir_ventana/> (es un botón)."""
+        limpio, pide = ojos_panel.separar_pedido(r)           # primero: puede venir antes o después de MARCAS
+        limpio, lista = asistente.separar(limpio)
+        ms = asistente.marcas(lista, self._ojos.ultima) if self._ojos.ultima else []
+        if ms: self._ojos.mostrar(ms)
+        return {"ok": True, "texto": limpio, "marcas": len(ms), "pedir": pide}
 
     def borrar_flechas(self):
-        self._marcas = []
-        self._ov.orden({"cmd": "borrar"})
+        self._ojos.borrar()
         return {"ok": True}
 
     def abrir_enlace(self, url):
@@ -209,7 +128,7 @@ class Api:
         return {"ok": True}
 
     def nueva(self):
-        self.borrar_flechas(); self._ultima = None
+        self.borrar_flechas(); self._ojos.ultima = None
         if self._sesion: self._sesion.reiniciar(); self._sesion.calentar()
         return {"ok": True}
 
@@ -232,8 +151,8 @@ def abrir(api, al_abrir=None):
     import webview
     x0, y0, ancho, alto = area_visible(); ancho_v = 460; t = tema()
     modo = "puente" if api._puente else "asistente"
-    html = (AQUI / "panel.html").read_text(encoding="utf-8").replace(
-        "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(t)}; window.MODO_PANEL = {json.dumps(modo)};</script>", 1)
+    html = ojos_panel.inyectar_ui((AQUI / "panel.html").read_text(encoding="utf-8").replace(
+        "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(t)}; window.MODO_PANEL = {json.dumps(modo)};</script>", 1))
     api._ventana = webview.create_window("Claude Code (puente)" if api._puente else "Asistente", html=html, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
                                          on_top=True, min_size=(360, 300),
@@ -247,25 +166,27 @@ def probar(texto, png=None):
     v = next((v for v in ojos.listar_ventanas(excluir_pids=[os.getpid()])
               if texto.lower() in v["titulo"].lower() or texto.lower() in v["app"].lower()), None)
     if not v: sys.exit(f"No hay ninguna ventana con «{texto}».")
-    ses, ov = asistente.Sesion(), Overlay(); api = Api(ses, ov)
+    ses = asistente.Sesion(); api = Api(ses)
     try:
         t = time.time(); ses.calentar(); ses.preguntar("Responde solo: ok"); print(f"Arranque de la sesión: {time.time() - t:.1f}s")
         print(api.elegir(v["hwnd"]))
-        t = time.time(); c = api.capturar(); print(f"Captura: {c.get('w')}×{c.get('h')}, {c.get('controles')} controles, {c.get('como')} ({time.time() - t:.1f}s)" if c["ok"] else c)
+        t = time.time(); c = api.ojos_capturar(v["hwnd"])
+        print(f"Captura: {c.get('w')}×{c.get('h')}, {c.get('controles')} controles, {c.get('como')} ({time.time() - t:.1f}s)" if c["ok"] else c)
         if not c["ok"]: return
-        t = time.time(); r = api.enviar("¿Dónde está la opción para guardar este archivo? Señálamela.")
+        a = api.ojos_adjuntar()                    # lo que hace «Adjuntar» en la vista previa
+        t = time.time(); r = api.preguntar("¿Dónde está la opción para guardar este archivo? Señálamela.", [{"ojos_id": a["ojos_id"], "nombre": a["nombre"]}])
         print(f"Respuesta ({time.time() - t:.1f}s): {r}")
-        print("Marcas:", api._marcas)
+        print("Marcas:", api._ojos.marcas)
         if png:
             img, origen, _ = ojos.imagen_de(v["hwnd"])
-            d = ov.orden({"cmd": "volcar", "carpeta": str(Path(png).resolve().parent)})
+            d = api._ojos.ov.orden({"cmd": "volcar", "carpeta": str(Path(png).resolve().parent)})
             from PIL import Image
             for capa in d.get("capas", []):
                 im = Image.open(capa["png"]); x, y = capa["en"]
                 img.paste(im, (x - origen[0], y - origen[1]), im); os.remove(capa["png"])
             img.save(png); print("Guardada:", png)
     finally:
-        ov.cerrar(); ses.cerrar()
+        api._ojos.cerrar(); ses.cerrar()
 
 
 if __name__ == "__main__":
@@ -278,13 +199,13 @@ if __name__ == "__main__":
         import puente
         try: lado = puente.LadoPanel()
         except RuntimeError as e: sys.exit(str(e))
-        ov = Overlay(); api = Api(None, ov, lado)
+        api = Api(None, lado)
         try: abrir(api, api._vigilar_puente)
-        finally: ov.cerrar(); lado.cerrar()
+        finally: api._ojos.cerrar(); lado.cerrar()
     elif not a:
-        ses, ov = asistente.Sesion(), Overlay()
+        ses = asistente.Sesion(); api = Api(ses)
         ses.calentar()                              # la sesión arranca mientras eliges la ventana
-        try: abrir(Api(ses, ov))
-        finally: ov.cerrar(); ses.cerrar()
+        try: abrir(api)
+        finally: api._ojos.cerrar(); ses.cerrar()
     else:
         print(__doc__)

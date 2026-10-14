@@ -9,7 +9,7 @@ python tutor-pantalla/panel_pantalla.py
 ```
 
 1. **Elegir**: lista de ventanas abiertas con miniatura. Solo esa ventana, nunca toda la pantalla.
-2. **Que mire**: la captura aparece en una **vista previa**, con un borde naranja sobre la ventana. Ahí eliges **Enviar al tutor**, **Recortar** (arrastra para mandar solo una parte) o **Cancelar** (no sale nada).
+2. **Que mire**: la captura aparece en una **vista previa**, con un borde naranja sobre la ventana. Ahí eliges **Adjuntar**, **Recortar** (arrastra para adjuntar solo una parte) o **Cancelar** (no sale nada). La captura adjunta queda en la caja del mensaje (con ✕ para quitarla) y sale solo cuando envías.
 3. El asistente responde en el chat y dibuja flechas numeradas encima del programa. Las flechas dejan pasar los clics, siguen a la ventana y solo se ven con esa app o el panel al frente. **Borrar flechas** las quita.
 
 **Modo puente** (`python tutor-pantalla/panel_pantalla.py --puente`): el mismo panel, pero responde **el chat de Claude Code** que lo abrió. Lo que escribes le llega al chat; la respuesta y las flechas vuelven al panel. Claude Code también puede pedirte una captura, que igual pasa por la vista previa. Cómo lo usa el chat: ver `puente.py`.
@@ -35,10 +35,10 @@ Un solo núcleo (los «ojos») con cuatro formas de usarlo. Cambia quién respon
 |---|---|---|
 | **1. Asistente** | Una sesión de Claude que abre el panel; sin tarea fija | ✅ Hecho |
 | **2. Puente** | El chat de Claude Code: lo que escribes en el panel llega al chat y la respuesta vuelve al panel (con un proceso en segundo plano) | ✅ Hecho |
-| **3. Dentro de los tutores** | El tutor de Excel o de Dia, con ojos para lo que COM o el plugin no ven: diálogos, Power Query, el editor de VBA, un PDF. En Dia las marcas siguen dentro de Dia. | Después |
+| **3. Dentro de los tutores** | El tutor de Excel o de Dia, con ojos para lo que COM o el plugin no ven: diálogos, Power Query, el editor de VBA, un PDF. Botón de la cámara junto al clip; las ventanas de la app del curso salen primero; el tutor puede pedir ver una (botón «Mostrarle una ventana»). En Dia, lo del diagrama sigue dentro de Dia. | ✅ Hecho |
 | **4. Curso** | Un tutor nuevo con temario (lecciones en JSON, como Excel y Dia) para enseñar una app sin API | Al final |
 
-El **permiso vive en el núcleo**: ningún modo puede mandar una captura sin la vista previa y el clic en «Enviar al tutor».
+El **permiso vive en el núcleo**: ningún modo puede mandar una captura sin la vista previa, el clic en «Adjuntar» y el envío del mensaje.
 
 ## Archivos
 
@@ -46,15 +46,18 @@ El **permiso vive en el núcleo**: ningún modo puede mandar una captura sin la 
 |---|---|
 | `ojos.py` | El núcleo: lista de ventanas, miniaturas, captura de una ventana (`Captura`: imagen reducida a 1400 px de lado largo, controles en píxeles de la imagen, recorte y conversión a la pantalla). `python ojos.py --lista` / `--capturar "texto" salida.png`. |
 | `asistente.py` | La sesión `claude -p` (stream-json, sin MCP ni ajustes, como el tutor de Excel; con solo WebSearch y WebFetch), sus reglas y cómo se leen las marcas (`MARCAS: [...]` al final de la respuesta). |
-| `panel_pantalla.py` | El panel (pywebview): la API que llama la página, el proceso de las flechas y la prueba `--probar`. |
+| `ojos_panel.py` | Los ojos para cualquier panel: `Ojos` (capturas con permiso, adjuntos, contexto para el tutor, marcas `"ventana"` y flechas), `OjosApi` (lo que llama la página), `REGLAS_OJOS` (lo que se le explica al tutor), `inyectar_ui` y el proceso de las flechas. `python ojos_panel.py --probar` (sin ventanas ni IA). |
+| `ojos_ui.js` | La lista de ventanas con miniaturas y la vista previa (Cancelar / Recortar / Adjuntar), para la página de cualquier panel. |
+| `panel_pantalla.py` | El panel del asistente (pywebview): la API que llama la página, el modo puente y la prueba `--probar`. |
 | `puente.py` | El modo puente: los dos lados se pasan mensajes por una carpeta temporal (`%TEMP%	utor-pantalla-puente`, se borra al cerrar el panel, capturas incluidas). Desde el chat: `esperar` (en segundo plano: al llegar un mensaje termina y despierta al chat), `responder`, `pedir-captura`, `estado`. |
 | `panel.html` | La página: mismo diseño y tema que los paneles de Excel y Dia (el tema sale de `panel-excel/preferencias.json`). |
 
 ## Cómo cambiarlo
 
-1. Edita `ojos.py` (captura o controles), `asistente.py` (reglas o formato de marcas) o `panel.html` (la página).
+1. Edita `ojos.py` (captura o controles), `ojos_panel.py` / `ojos_ui.js` (lo compartido con los tutores: si los cambias, prueba también los paneles de Excel y Dia), `asistente.py` (reglas o formato de marcas) o `panel.html` (la página).
 2. Prueba sin panel, con una ventana abierta: `python tutor-pantalla/panel_pantalla.py --probar "Word" salida.png`. Captura, pregunta dónde se guarda el archivo, dibuja las flechas y guarda la captura con ellas. Revisa la imagen.
-3. Prueba con el panel abierto: Elegir → Que mire → Enviar, y Cancelar (que no salga nada).
+3. `python tutor-pantalla/ojos_panel.py --probar` hasta «Ojos: todo bien».
+4. Prueba con el panel abierto: Elegir → Que mire → Adjuntar → enviar, y Cancelar (que no salga nada).
 
 ## Dependencias
 

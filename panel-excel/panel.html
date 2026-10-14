@@ -102,6 +102,7 @@ h1{margin:0;font-size:21px;line-height:1.2;font-weight:700;letter-spacing:-.01em
 .turno .acc-t{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .comprobar{display:flex;align-items:center;gap:7px;height:34px;padding:0 16px;border:none;border-radius:9px;background:var(--acc);color:var(--on-acc);font-size:13.5px;font-weight:700;box-shadow:0 1px 0 oklch(0 0 0 / .08)}
 .comprobar:disabled{opacity:.6}
+.mostrar-ventana{align-self:flex-start}
 .turno .nota-t{margin:0;font-size:13px;font-weight:650;line-height:1.45;color:var(--ink2)} .turno .nota-t.aviso{color:var(--bad)}
 .turno.viejo .msg-t,.turno.viejo .items{opacity:.5}
 .turno.ejt .items{margin-top:2px}
@@ -337,6 +338,7 @@ textarea:focus-visible{outline:none}
         <div class="pendientes" id="adjuntos" hidden></div>
         <div class="escribir">
           <button class="icono-btn" id="clip" type="button" title="Adjuntar archivo · también puedes pegar (Ctrl+V) o arrastrar" aria-label="Adjuntar archivo"><span data-ic="clip"></span></button>
+          <button class="icono-btn" id="mirarVentana" type="button" hidden title="Enseñarle una ventana (verás la captura antes de adjuntarla)" aria-label="Enseñarle una ventana"><span data-ic="camera"></span></button>
           <textarea id="entrada" rows="1" placeholder="Pregunta o pega una captura (Ctrl+V)…"></textarea>
           <button class="enviar" id="enviar" type="button" title="Enviar (Enter) · Shift+Enter: nueva línea" aria-label="Enviar"><span data-ic="send"></span></button>
         </div>
@@ -375,9 +377,10 @@ textarea:focus-visible{outline:none}
     refresh:'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15', swap:'M7 7h12l-3-3M17 17H5l3 3',
     eye:'M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6zM12 14.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2z',
     open:'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
+    camera:'M4 8h3l2-2.5h6L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
     check:'M5 12.5l4.5 4.5L19 7.5', undo:'M9 14L4.5 9.5 9 5M4.5 9.5H14a5.5 5.5 0 0 1 0 11h-3'
   };
-  var TAM = {check:[16,2.4],book:[16,1.8],chat:[16,1.8],chev:[15,2],cursor:[15,1.8],copy:[13,1.9],left:[16,2],right:[16,2],clip:[18,1.8],send:[17,2.2],x:[10,3],upload:[26,2],pen:[15,1.8],spark:[13,2],erase:[14,1.8],hint:[14,1.8],refresh:[14,2],swap:[14,2],eye:[15,1.8],open:[14,1.8],undo:[15,2]};
+  var TAM = {camera:[17,1.8],check:[16,2.4],book:[16,1.8],chat:[16,1.8],chev:[15,2],cursor:[15,1.8],copy:[13,1.9],left:[16,2],right:[16,2],clip:[18,1.8],send:[17,2.2],x:[10,3],upload:[26,2],pen:[15,1.8],spark:[13,2],erase:[14,1.8],hint:[14,1.8],refresh:[14,2],swap:[14,2],eye:[15,1.8],open:[14,1.8],undo:[15,2]};
   function ic(nombre){
     var t = TAM[nombre] || [16, 1.8], relleno = nombre === 'spark' ? 'currentColor' : 'none';
     return '<svg class="ic" width="' + t[0] + '" height="' + t[0] + '" viewBox="0 0 24 24" fill="' + relleno + '" stroke="currentColor" stroke-width="' + t[1] + '" stroke-linecap="round" stroke-linejoin="round"><path d="' + P[nombre] + '"/></svg>';
@@ -680,6 +683,16 @@ textarea:focus-visible{outline:none}
     actualizarEnviar();
   }
   $('clip').onclick = function(){ $('archivo').click(); };
+  // «Mirar ventana» (ojos_ui.js, si el panel lo trae): lista de ventanas → vista previa → la captura queda como adjunto
+  function mirarVentana(){
+    if (!window.Ojos || !api || !api.ojos_ventanas || ocupado) return;
+    cambiarA('tutor');
+    Ojos.elegirYMirar(function(a){
+      if (adjuntos.length >= MAX_ADJ) return aviso('Máximo ' + MAX_ADJ + ' adjuntos por mensaje.', 3500);
+      a.listo = Promise.resolve(); adjuntos.push(a); pintarAdjuntos(); $('entrada').focus();
+    });
+  }
+  $('mirarVentana').onclick = mirarVentana;
   $('archivo').onchange = function(){ agregar(this.files); this.value = ''; };
   $('entrada').addEventListener('paste', function(e){
     var cd = e.clipboardData; if (!cd || !cd.files.length) return;
@@ -733,18 +746,24 @@ textarea:focus-visible{outline:none}
       var reloj = setInterval(function(){ var s = espera.querySelector('.seg-s'); if (s) s.textContent = Math.round((Date.now() - t0) / 1000) + ' s'; }, 500);
       var buffer = '';
       window.trozoTutor = function(t){  // el texto llega a trozos; los bloques <marcas> y <acciones> no se muestran
-        buffer += t; var visible = buffer.split(/<marcas>|<acciones>/)[0];
+        buffer += t; var visible = buffer.split(/<marcas>|<acciones>|<pedir_ventana/)[0];
         if (!visible.trim()) return;
         clearInterval(reloj);
         espera.innerHTML = cabTutor('· escribiendo…') + '<div class="bloques">' + bloques(visible, true) + '</div>';
         novedad('tutor'); $('chat').scrollTop = $('chat').scrollHeight;
       };
-      var datos = envio.map(function(a){ return {nombre: a.nombre, tipo: a.tipo, media_type: a.media_type, datos: a.datos}; });
+      var datos = envio.map(function(a){ return {nombre: a.nombre, tipo: a.tipo, media_type: a.media_type, datos: a.datos, ojos_id: a.ojos_id}; });
       api.preguntar(q, datos).then(function(r){
         espera.innerHTML = msgTutor(r.texto || (r.propuesta ? '' : 'No hubo respuesta.'), '· ' + ((Date.now() - t0) / 1000).toFixed(1).replace('.', ',') + ' s', r.marcas || 0);
         // Si propone cambiar el libro o el diagrama: tarjeta de permiso (solo si este panel sabe aplicar)
         if (r.propuesta && api.aplicar) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', tarjetaPermiso(r.propuesta));
         if (r.propuesta_error) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', '<div class="pm-error">' + esc(r.propuesta_error) + '</div>');
+        if (r.marcas_ventana) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', '<div class="marcas"><i></i><span>Te señalé <strong>' + r.marcas_ventana + '</strong> ' + (r.marcas_ventana === 1 ? 'cosa' : 'cosas') + ' encima de la ventana</span></div>');
+        if (r.pedir && window.Ojos && api.ojos_ventanas){       // el tutor pidió ver una ventana: él decide con el botón
+          var bv = document.createElement('button'); bv.type = 'button'; bv.className = 'comprobar mostrar-ventana';
+          bv.innerHTML = ic('camera') + 'Mostrarle una ventana'; bv.onclick = mirarVentana;
+          espera.querySelector('.bloques').appendChild(bv);
+        }
       }).catch(function(){ espera.innerHTML = msgTutor('No pude hablar con el tutor. Intenta otra vez.'); })
         .finally(function(){
           clearInterval(reloj); bloquear(false); novedad('tutor'); $('chat').scrollTop = $('chat').scrollHeight;
@@ -953,11 +972,12 @@ textarea:focus-visible{outline:none}
     api = a;
     if (api.listo) api.listo();
     agregarAlChat(msgTutor('Pregúntame lo que quieras del curso, o pulsa **Revisar mi ' + OBJ + '** cuando hagas el ejercicio. Si hace falta, te marco ' + (OBJ === 'diagrama' ? 'el diagrama' : 'la hoja') + ' con flechas y notas'
-      + (OBJ === 'diagrama' ? ', y si me lo pides te creo ejemplos o ejercicios en una pestaña nueva de Dia (siempre con tu permiso)' : '') + '. También puedes pasarme capturas: pégalas con **Ctrl+V**, arrástralas aquí o usa el clip.'), 'tutor-m');
+      + (OBJ === 'diagrama' ? ', y si me lo pides te creo ejemplos o ejercicios en una pestaña nueva de Dia (siempre con tu permiso)' : '') + '. También puedes pasarme capturas: pégalas con **Ctrl+V**, arrástralas aquí o usa el clip' + (api.ojos_ventanas ? ', o enséñame otra ventana con el botón de la cámara (verás la captura antes de mandarla).' : '.')), 'tutor-m');
     if (DEMO) conversacionDemo();
     api.estado().then(mostrar);
     if (/[?&]pestana=tutor/.test(location.search)) cambiarA('tutor');
     actualizarEnviar();
+    setTimeout(function(){ $('mirarVentana').hidden = !(window.Ojos && api.ojos_ventanas); }, 0);   // ojos_ui.js va después de este script
   }
   if (DEMO) iniciar(apiDemo());
   else if (window.pywebview && window.pywebview.api) iniciar(window.pywebview.api);

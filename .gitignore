@@ -79,6 +79,8 @@
 /tutor-pantalla/*
 !/tutor-pantalla/README.md
 !/tutor-pantalla/ojos.py
+!/tutor-pantalla/ojos_panel.py
+!/tutor-pantalla/ojos_ui.js
 !/tutor-pantalla/asistente.py
 !/tutor-pantalla/panel_pantalla.py
 !/tutor-pantalla/panel.html

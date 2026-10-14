@@ -70,6 +70,7 @@ En el chat se pueden mandar **capturas, PDF y archivos de texto** junto a la pre
 - **Pegar** una imagen con Ctrl+V en el cuadro de texto (una captura con Win+Shift+S). Si lo copiado también trae texto (por ejemplo, celdas de Excel, que se copian con texto y dibujo), se pega el texto y no se adjunta nada.
 - **Arrastrar y soltar** archivos en cualquier parte del panel: se abre la pestaña Tutor y quedan adjuntos.
 - El botón **📎** para elegirlos.
+- El botón **📷 (Mirar ventana)**, si está `tutor-pantalla/`: lista de ventanas (las de Excel primero: el editor de VBA, el de Power Query, un diálogo) → vista previa (Cancelar / Recortar / Adjuntar) → la captura queda adjunta. El tutor recibe además la lista de botones de esa ventana y puede señalar **encima de ella** (marca `"tipo": "ventana"`); si necesita ver algo, su respuesta trae el botón «Mostrarle una ventana». Ver `../tutor-pantalla/README.md`. Sin `tutor-pantalla/`, el panel funciona igual, sin ese botón.
 
 Antes de enviar se ven las miniaturas, cada una con una ✕ para quitarla; en la burbuja del mensaje queda la miniatura o el nombre del archivo.
 
@@ -382,4 +383,4 @@ Buscar objetivo, tablas de datos y escenarios se aplican con la copia de la hoja
 
 ## Dependencias
 
-Excel, Python con `pywin32` y `pywebview` (usa WebView2, que ya viene en Windows 11), y Claude Code instalado y con sesión iniciada (el comando `claude`). El tutor gasta del plan como un mensaje normal (más si lleva imágenes o PDF); la revisión automática no gasta nada.
+Excel, Python con `pywin32` y `pywebview` (usa WebView2, que ya viene en Windows 11), opcionalmente `tutor-pantalla/` con `Pillow` y `uiautomation` (el botón 📷), y Claude Code instalado y con sesión iniciada (el comando `claude`). El tutor gasta del plan como un mensaje normal (más si lleva imágenes o PDF); la revisión automática no gasta nada.
