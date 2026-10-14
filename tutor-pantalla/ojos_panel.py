@@ -28,7 +28,7 @@ SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js"
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
 FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
-CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta"}
+CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta", "en"}    # "en": objetivo de la interfaz de Dia
 MAX_DIBUJOS = 6
 MAX_CAPTURAS = 6                                                        # las que se guardan en memoria (adjuntas o en espera)
 
@@ -86,6 +86,47 @@ corrige o sigue desde ahí."""
 PREGUNTAS_RE = re.compile(r"\s*<preguntas>\s*(.*?)\s*(?:</preguntas>|$)", re.S | re.I)
 MAX_ADJUNTOS, MAX_MB, MAX_TEXTO = 5, 15, 60000
 IMAGENES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+
+def validar_dibujos(lista, donde="paso"):
+    """Los «dibujos» de un paso de lección (cursos de Excel, Dia y modo curso): se muestran sin IA con «Muéstramelo».
+    Devuelve la lista limpia (cada uno con "tipo": "dibujo") o lanza ValueError con el motivo."""
+    if not isinstance(lista, list) or not lista: raise ValueError(f"{donde}: «dibujos» es una lista de dibujos [{{\"forma\": ...}}]")
+    if len(lista) > MAX_DIBUJOS: raise ValueError(f"{donde}: máximo {MAX_DIBUJOS} dibujos por paso")
+    out = []
+    for k, m in enumerate(lista, 1):
+        if not isinstance(m, dict) or m.get("forma") not in FORMAS:
+            raise ValueError(f"{donde}, dibujo {k}: «forma» tiene que ser una de: {', '.join(sorted(FORMAS))}")
+        out.append(dict(m, tipo="dibujo"))
+    return out
+
+
+def atajo(ventana, hwnd, accion="window.atajoMirar && window.atajoMirar()"):
+    """Ctrl+Alt+M desde cualquier programa: trae el panel al frente y abre «Que mire» (lo mismo que pulsar el botón).
+    ventana(): la ventana de pywebview; hwnd(): su HWND. Si otro programa (u otro panel abierto) ya tiene el atajo, no hace
+    nada: el panel sigue igual sin él. Devuelve el hilo."""
+    def hilo():
+        import ctypes
+        from ctypes import wintypes as W
+        u = ctypes.WinDLL("user32", use_last_error=True)
+        MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, WM_HOTKEY, ID = 0x1, 0x2, 0x4000, 0x0312, 0x4D4D
+        if not u.RegisterHotKey(None, ID, MOD_ALT | MOD_CONTROL | MOD_NOREPEAT, ord("M")):
+            print("Ctrl+Alt+M ya lo usa otro programa o panel: el atajo queda sin activar.", flush=True); return
+        msg = W.MSG()
+        try:
+            while u.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+                if msg.message != WM_HOTKEY: continue
+                v, h = ventana(), hwnd()
+                if v is None: continue
+                if h:
+                    u.ShowWindow(W.HWND(h), 9 if u.IsIconic(W.HWND(h)) else 5)      # restaurar si está minimizado
+                    u.SetForegroundWindow(W.HWND(h))                               # el atajo da permiso para pasar al frente
+                try: v.evaluate_js(accion)
+                except Exception: pass
+        finally:
+            u.UnregisterHotKey(None, ID)
+    t = threading.Thread(target=hilo, daemon=True); t.start()
+    return t
 
 
 def separar_preguntas(texto):
@@ -517,6 +558,10 @@ def probar():
         "el resolver ubica la «celda» y trae sus datos (fuentes en coordenadas de cliente)")
     _, lote, av = o2.dibujos([{"tipo": "dibujo", "forma": "teclas", "teclas": ["Ctrl", "S"]}], ventana=esc)
     ver(lote and lote["dibujos"][0]["r"] is None and lote["dibujos"][0]["hwnd"] == esc, "sin objetivo, en la ventana dada")
+    ver(validar_dibujos([{"forma": "foco", "celda": "B2"}])[0]["tipo"] == "dibujo", "validar_dibujos: los de una lección quedan como «dibujo»")
+    try: validar_dibujos([{"forma": "rayo"}], "m1, paso 2"); malo = ""
+    except ValueError as e: malo = str(e)
+    ver("m1, paso 2, dibujo 1" in malo, "validar_dibujos: una forma que no existe da un error claro con el paso")
     html = inyectar_ui("<html><body><p>x</p></body></html>")
     ver("window.Ojos" in html and "window.Dibujante" in html and html.index("window.Dibujante") < html.index("</body>"),
         "inyectar_ui mete ojos_ui.js y el dibujante antes de </body>")

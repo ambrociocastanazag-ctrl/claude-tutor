@@ -108,6 +108,8 @@ El libro se crea junto a `curso.json`. El panel recuerda dónde te quedaste en `
 }
 ```
 
+**Dibujos en el paso** (opcional): `"dibujos": [{"forma": "rayos_x", "celda": "D5"}, {"forma": "foco", "celda": "B2:B9", "texto": "las ventas"}]` sale como botón «Muéstramelo en Excel» y los dibuja encima de Excel **sin IA** (celdas de la hoja que se está viendo). Los dibujos usan **el mismo formato que los tutores** (`tutor-pantalla/DIBUJOS.md`): se escriben en una línea, sin medir posiciones ni hacer capturas; el panel los resuelve y los dibuja al pulsar «Muéstramelo», con la voz si está encendida (cada `decir`). Formas: foco, mano, teclas, fantasma, guia, secuencia, formula, desarmar, svg (también animado), y en Excel también rayos_x. **«Léeme este paso»:** el botón 🔊 junto al título del paso lo lee con la voz natural. **Ctrl+Alt+M** abre «Mirar ventana» desde cualquier programa.
+
 `titulo` (del paso y del «Tu turno») y `donde` son opcionales: si faltan, el panel no los muestra. En `donde`, lo que va entre `**` sale como una tecla o un botón. `"requiere": ["vba"]` (o `"solver"`) en la lección hace que el panel avise en Lección, con un recuadro amarillo, si a este Excel le falta eso y cómo activarlo (también se deduce de los pasos).
 
 Cada paso **se suma** a los anteriores: el paso 3 es la hoja vacía más las acciones de los pasos 1, 2 y 3.

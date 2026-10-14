@@ -438,6 +438,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         elif self._tiene_ejemplo(): bs.append({"id": "paso", "etiqueta": "Ver el ejemplo en Dia" if vivo else "Ver este paso en Dia", "icono": "eye"})
         if vivo and p.get("_interfaz"): bs.append({"id": "senalar", "etiqueta": "Señálamelo en Dia", "icono": "cursor"})
         if vivo and p.get("_hazlo"): bs.append({"id": "hazlo", "etiqueta": p["_hazlo"]["etiqueta"], "icono": "spark"})
+        if vivo and p.get("dibujos") and self._ojos: bs.append({"id": "dibujos", "etiqueta": "Muéstramelo en Dia", "icono": "eye"})
         return bs
 
     def _estado(self, aviso=""):
@@ -674,6 +675,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
 
     def boton(self, cual):
         if cual == "senalar": return self._senalar()
+        if cual == "dibujos": return self._dibujos_paso()
         if cual == "hazlo": return self._hazlo()
         if self._dia.modo == "plugin":
             if cual == "paso": self._mover_dia()
@@ -701,6 +703,36 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         if not marcas: return {"ok": False, "aviso": "Ahora no veo eso en Dia: " + "; ".join(self._faltan[:2]) if self._faltan else "No hay nada que señalar."}
         falta = f" (falta: {self._faltan[0]})" if self._faltan else ""
         return {"ok": True, "aviso": f"Mira Dia: te señalé {len(marcas)} cosa{'s' if len(marcas) != 1 else ''}{falta}."}
+
+    def _dibujos_paso(self):
+        """«Muéstramelo en Dia»: los dibujos del paso encima de Dia, sin IA. El objetivo va en "en", con el mismo vocabulario
+        que «interfaz» ({"herramienta": ...}, {"pestana": ...}, {"objeto": "Libro"}...)."""
+        if self._dia.modo != "plugin" or self._dia.version() < VERSION_INTERFAZ: return {"ok": False, "aviso": "Para dibujar encima de Dia hace falta el plugin nuevo."}
+        try: marcas = ojos_panel.validar_dibujos(self._paso().get("dibujos"), f"paso {self._n + 1}")
+        except ValueError as e: return {"ok": False, "aviso": str(e)}
+        h, _ = self._dia.ventana()
+        if h: al_frente(h)
+        cache = {}
+        def resolver(m):
+            if not isinstance(m.get("en"), dict): return None
+            if "v" not in cache: cache["v"] = ui.leer_widgets(self._dia.orden("widgets"))
+            def pantalla(nombre):
+                pest = self._mio().name if self._turno() else self._en_vivo().name
+                for l in self._dia.orden(f'@{pest} pantalla "{nombre}"').splitlines():
+                    q = l.split("\t")
+                    if q[0] == "pantalla" and len(q) >= 6: return tuple(int(v) for v in q[2:6])
+                return None
+            mk, motivo = ui.resolver_uno(m["en"], cache["v"], pantalla)
+            if not mk: raise ValueError(motivo or "no se ve en Dia")
+            import ojos
+            c = ojos.cliente(int(mk["hwnd"]))
+            if not c: raise ValueError("no veo la ventana de Dia")
+            gx, gy, gw, gh = mk["ventana"]; s = c[2] / gw if gw else 1.0; sy = c[3] / gh if gh else s     # GTK → píxeles físicos
+            a_pant = lambda r: [c[0] + (r[0] - gx) * s, c[1] + (r[1] - gy) * sy, r[2] * s, r[3] * sy]
+            return {"hwnd": int(mk["hwnd"]), "r": a_pant(mk["rect"]), "evitar": [a_pant(e) for e in mk.get("evitar") or []]}
+        _, lote, avisos = self._ojos.dibujos(marcas, resolver, h)
+        if not lote: return {"ok": False, "aviso": "Ahora no lo veo en Dia: " + ("; ".join(avisos) or "nada que mostrar") + "."}
+        return {"ok": True, "dibujos": lote, "aviso": "Mira Dia." + (f" (No salió: {avisos[0]})" if avisos else "")}
 
     def _hazlo(self):
         """«Hazlo por mí»: la acción del paso, delante de la persona (en el diagrama de la lección; en el «Tu turno», en el suyo
@@ -1786,6 +1818,7 @@ if __name__ == "__main__":
         tutor = TutorDia(curso); tutor.calentar()
         api = Api(curso, tutor, dia); api.restaurar(m, n); api.recordar = True
         abrir_ventana(api)
+        if ojos_panel: ojos_panel.atajo(lambda: api._ventana, api._hwnd_panel)      # Ctrl+Alt+M: «Mirar ventana»
         webview.start(gui="edgechromium")
         api.cerrar(); tutor.cerrar()
         print(f"Dia: modo {dia.modo}{' (' + dia.motivo + ')' if dia.motivo else ''}. Dia queda abierto: tiene tu diagrama.", flush=True)

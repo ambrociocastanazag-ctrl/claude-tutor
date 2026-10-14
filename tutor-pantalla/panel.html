@@ -419,6 +419,7 @@ textarea:focus-visible{outline:none}
     Ojos.elegir(function(v){ api.elegir(v.hwnd).then(function(r){ if (r.ok) ponerVentana(v, r); else agregar(esc(r.error), 'aviso'); }); });
   };
   $('mirar').onclick = function(){ if (api && !ocupado) mostrarVentana(); };
+  window.atajoMirar = function(){ if (api && !ocupado) mostrarVentana(); };         // Ctrl+Alt+M (ojos_panel.atajo)
 
   $('chat').addEventListener('click', function(e){
     var a = e.target.closest('a[href]'); if (!a) return;

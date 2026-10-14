@@ -30,7 +30,8 @@ import cambios_dia as cd
 import interfaz_dia as ui
 
 VERSION_PASOS = "5.4"            # súbela si cambia cómo se arman los pasos: así se vuelven a armar
-CAMPOS_PASO = {"titulo", "texto", "en_dia", "donde", "diagrama", "cambios", "senalar", "interfaz", "hazlo", "turno", "resumen"}
+CAMPOS_PASO = {"titulo", "texto", "en_dia", "donde", "diagrama", "cambios", "senalar", "interfaz", "hazlo", "turno", "resumen",
+               "dibujos"}      # dibujos encima de Dia sin IA («Muéstramelo»; formato en tutor-pantalla/DIBUJOS.md, objetivo con "en")
 CAMPOS_TURNO = {"titulo", "al_empezar", "al_terminar", "clase", "clases", "relaciones", "objetos", "conexiones", "mensajes",
                 "sinonimos", "inicial", "solucion", "errores", "archivo"}
 NS = du.NS["dia"]
@@ -112,6 +113,8 @@ def validar_modulo(d, nombre="módulo", conv=None):
         sobra = set(p) - CAMPOS_PASO
         if sobra: raise ValueError(f"{donde}: campos que no conozco: {', '.join(sorted(sobra))}")
         if p.get("cambios") and "diagrama" in p: raise ValueError(f"{donde}: usa «cambios» (se suman) o «diagrama» (el del prototipo), no los dos")
+        if "dibujos" in p and (not isinstance(p["dibujos"], list) or not all(isinstance(x, dict) and isinstance(x.get("forma"), str) for x in p["dibujos"])):
+            raise ValueError(f"{donde}: «dibujos» es una lista de {{\"forma\": ..., \"en\": {{\"herramienta\": ...}}}}")
         q = dict(p)
         q["_cambios"] = _cambios(p.get("cambios"), donde, conv) if p.get("cambios") else None
         q["_interfaz"] = ui.validar_interfaz(p.get("interfaz"), donde)

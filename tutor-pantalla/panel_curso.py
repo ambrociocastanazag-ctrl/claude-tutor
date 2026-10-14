@@ -85,6 +85,7 @@ class Api(ojos_panel.OjosApi):
         if not self._app(): return [{"id": "abrir", "etiqueta": f"Abrir {nombre}", "icono": "open"}]
         bs = [{"id": "app", "etiqueta": f"Ir a {nombre}", "icono": "open"}]
         if self._paso().get("senalar"): bs.insert(0, {"id": "senalar", "etiqueta": f"Señálamelo en {nombre}", "icono": "cursor"})
+        if self._paso().get("dibujos"): bs.insert(0, {"id": "dibujos", "etiqueta": f"Muéstramelo en {nombre}", "icono": "spark"})
         return bs
 
     def _estado(self, aviso=""):
@@ -129,7 +130,18 @@ class Api(ojos_panel.OjosApi):
         if not v: return {"ok": False, "aviso": f"No encuentro {self._curso.app_nombre} abierto."}
         _al_frente(v["hwnd"])
         if cual == "senalar": return self._senalar(self._paso().get("senalar") or [])
+        if cual == "dibujos": return self._dibujos_paso(v)
         return {"ok": True}
+
+    def _dibujos_paso(self, v):
+        """«Muéstramelo»: los dibujos que trae el paso (por nombre de control), sin IA."""
+        try: marcas = ojos_panel.validar_dibujos(self._paso().get("dibujos"), f"paso {self._n + 1}")
+        except ValueError as e: return {"ok": False, "aviso": str(e)}
+        _, lote, avisos = self._ojos.dibujos(marcas, self._resolver_nombre(), v["hwnd"])
+        if not lote:
+            antes = self._paso().get("antes")
+            return {"ok": False, "aviso": f"{antes} y vuelve a pulsar «Muéstramelo»." if antes else "Ahora no lo veo: " + ("; ".join(avisos) or "nada que mostrar") + "."}
+        return {"ok": True, "dibujos": lote, "aviso": f"Mira {self._curso.app_nombre}." + (f" (No salió: {avisos[0]})" if avisos else "")}
 
     # ----- señalar por nombre -----
     def _senalar(self, objetivos, color="azul"):
@@ -314,6 +326,17 @@ def probar(curso):
                     if cp.buscar(est, o) is None and p.get("antes"):     # solo se ve después de abrir algo (un diálogo)
                         print(f"ℹ   paso {i + 1}: «{nombre}» no está a la vista ahora ({p['antes']})"); continue
                     ver(cp.buscar(est, o) is not None, f"  paso {i + 1}: «{nombre}» se encuentra en {curso.app_nombre}")
+            if p.get("dibujos"):                                         # «Muéstramelo»: bien escritos y, con la app abierta, se encuentran
+                try: dibs = ojos_panel.validar_dibujos(p["dibujos"], f"paso {i + 1}"); ver(True, f"  paso {i + 1}: {len(dibs)} dibujo(s) bien escritos")
+                except ValueError as e: dibs = []; ver(False, f"  {e}")
+                if est:
+                    for d in dibs:
+                        for o in [d] + [q for q in d.get("pasos") or [] if isinstance(q, dict)] + ([d["hasta"]] if isinstance(d.get("hasta"), dict) else []):
+                            if not o.get("nombre"): continue
+                            nombre = cp.lista(o["nombre"])[0]
+                            if cp.buscar(est, {"nombre": o["nombre"]}) is None and p.get("antes"):
+                                print(f"ℹ   paso {i + 1}: «{nombre}» (dibujo) no está a la vista ahora ({p['antes']})"); continue
+                            ver(cp.buscar(est, {"nombre": o["nombre"]}) is not None, f"  paso {i + 1}: «{nombre}» (dibujo «{d['forma']}») se encuentra en {curso.app_nombre}")
             t = p.get("turno")
             if not t: continue
             pide = t.get("pide") or []
@@ -346,5 +369,6 @@ if __name__ == "__main__":
     tutor = TutorCurso(curso); tutor.calentar()
     api = Api(curso, tutor); api.recordar = True
     abrir_ventana(api)
+    ojos_panel.atajo(lambda: api._ventana, api._hwnd_panel)                # Ctrl+Alt+M: «Mirar ventana»
     webview.start(gui="edgechromium")
     api.cerrar(); tutor.cerrar()

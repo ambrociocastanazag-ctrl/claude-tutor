@@ -14,6 +14,8 @@ python tutor-pantalla/panel_pantalla.py
 
 **Modo puente** (`python tutor-pantalla/panel_pantalla.py --puente`): el mismo panel, pero responde **el chat de Claude Code** que lo abrió. Lo que escribes le llega al chat; la respuesta y las flechas vuelven al panel. Claude Code también puede pedirte una captura, que igual pasa por la vista previa. Cómo lo usa el chat: ver `puente.py`.
 
+**Atajo:** **Ctrl+Alt+M** desde cualquier programa trae el panel al frente y abre «Que mire» (lo mismo que el botón). Lo tiene el primer panel que se abre (asistente o tutor); si otro programa ya usa ese atajo, el panel sigue igual sin él.
+
 **Adjuntos:** además de las capturas, se le pueden pasar archivos con el clip, pegándolos (Ctrl+V) o arrastrándolos: imágenes, PDF y texto (como en los tutores de Excel y Dia). En el modo puente llegan al chat de Claude Code como archivos que lee con Read.
 
 **Preguntas en el chat:** el asistente y todos los tutores pueden poner una tarjeta con botones cuando ayuda: opción única (un clic), varias opciones, abierta (caja de texto), con «Otra…» y «No sé». Si el tutor marca la correcta, se corrige al instante (✔/✘ y una explicación, sin IA); la respuesta le llega al tutor para que siga. Formato: bloque `<preguntas>[...]</preguntas>` (`REGLAS_PREGUNTAS` en `ojos_panel.py`).
@@ -105,6 +107,9 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 
 - **Nombres de los controles:** como los muestra la app, y en lista para otros idiomas de Windows (`["Pencil", "Lápiz"]`); se comparan sin mayúsculas ni acentos. Para verlos: abre la app y `python tutor-pantalla/ojos.py --capturar "<app>" salida.png` (imprime la lista).
 - **`senalar`:** `nombre` (o `empieza`, para nombres que cambian, como «Color 1: Red») y, si se repite, `tipo` (botón, elemento, opción, campo, casilla, menú, pestaña). Si solo existen con algo abierto (un diálogo), pon `antes` en el paso: «Señálamelo» lo dice y `--probar` no lo cuenta como fallo.
+- **`dibujos`** (opcional, en el paso): dibujos encima de la app **sin IA**, con el botón «Muéstramelo». El objetivo, por `nombre` como en `senalar`:
+  `"dibujos": [{"forma": "fantasma", "pasos": [{"accion": "clic", "nombre": ["Pencil", "Lápiz"], "decir": "Elige el lápiz"}]}, {"forma": "mano", "trazo": "circulo", "nombre": "Fill", "texto": "el relleno"}]`.
+  Los dibujos usan **el mismo formato que los tutores** (`tutor-pantalla/DIBUJOS.md`): se escriben en una línea, sin medir posiciones ni hacer capturas; el panel los resuelve y los dibuja al pulsar «Muéstramelo», con la voz si está encendida (cada `decir`). Formas: foco, mano, teclas, fantasma, guia, secuencia, formula, desarmar, svg (también animado). `--probar` revisa que estén bien escritos.
 - **`pide`** (se revisa sin IA al pulsar Comprobar): `activo` (herramienta u opción elegida), `nombre` (`empieza` + `es`), `texto` (de la ventana, p. ej. «800 × 600px»; `es` o `contiene`), `valor` (de un campo o deslizador), `titulo` (`contiene`: el archivo guardado), `existe` (un control o diálogo abierto).
 - **`errores`:** el primero cuyo `si` se cumple da su mensaje (mismos tipos que `pide`).
 - **`tutor`:** lo que solo se ve en la imagen. Si lo de `pide` está bien, Comprobar abre la vista previa de la app; con la captura adjunta, el tutor responde bien / casi / revisa.

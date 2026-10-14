@@ -93,7 +93,8 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
                 "hoja": lec.hoja + (f" · {t['rango']}" if t and t.get("rango") else ""),
                 "ejercicio": (t.get("titulo") or t.get("rango") or (f"macro {t['macro']}" if t.get("macro") else "")) if t else "",
                 "revision": (self._revision or self._pendiente(t)) if t else None, "requisito": self._requisito,
-                "tutor_ej": self._libro().estado_ejercicio() if self._libro() else None}
+                "tutor_ej": self._libro().estado_ejercicio() if self._libro() else None,
+                "botones": [{"id": "dibujos", "etiqueta": "Muéstramelo en Excel", "icono": "spark"}] if paso.get("dibujos") and self._ojos else []}
 
     def _libro(self): return getattr(self._x, "libro", None)
 
@@ -118,6 +119,15 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         """La ventana del panel: las flechas de los ojos van justo debajo de ella para no taparlo."""
         try: return int(self._ventana.native.Handle.ToInt64())
         except Exception: return None
+
+    def boton(self, cual):
+        """Botones del paso. «Muéstramelo»: los dibujos que trae el paso (sin IA), encima de Excel."""
+        if cual != "dibujos" or not self._ojos: return {"ok": False}
+        try: marcas = ojos_panel.validar_dibujos(self._lec().pasos[self._n].get("dibujos"), f"paso {self._n + 1}")
+        except ValueError as e: return {"ok": False, "aviso": str(e)}
+        _, lote, avisos = self._ojos.dibujos(marcas, self._resolver_celda, self._hwnd_excel())
+        if not lote: return {"ok": False, "aviso": "No pude dibujarlo: " + ("; ".join(avisos) or "nada que mostrar") + "."}
+        return {"ok": True, "dibujos": lote, "aviso": "Mira Excel." + (f" (No salió: {avisos[0]})" if avisos else "")}
 
     def _hwnd_excel(self):
         """La ventana de Excel (para los dibujos sin objetivo, como un atajo de teclado)."""
@@ -1588,5 +1598,6 @@ if __name__ == "__main__":
         import webview
         tutor.calentar()                 # la sesión del tutor arranca mientras miras el panel
         abrir_ventana(api)
+        if ojos_panel: ojos_panel.atajo(lambda: api._ventana, api._hwnd_panel)      # Ctrl+Alt+M: «Mirar ventana»
         webview.start(gui="edgechromium")
         x.vigia = None; api.cerrar(); tutor.cerrar()

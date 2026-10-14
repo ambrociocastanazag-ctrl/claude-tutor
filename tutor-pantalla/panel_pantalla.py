@@ -182,6 +182,7 @@ def abrir(api, al_abrir=None):
                                          on_top=True, min_size=(360, 300),
                                          background_color="#232631" if t == "oscuro" else "#F8F6F1")
     api._ventana.events.closed += lambda: setattr(api, "_ventana", None)
+    ojos_panel.atajo(lambda: api._ventana, api._panel_hwnd)                # Ctrl+Alt+M: «Que mire» desde cualquier programa
     webview.start(al_abrir, gui="edgechromium")
 
 

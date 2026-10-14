@@ -114,6 +114,9 @@ h1{margin:0;font-size:21px;line-height:1.2;font-weight:700;letter-spacing:-.01em
 .lienzo{margin:0 8px 8px;padding:6px;border-radius:8px;background-color:#fff;background-image:radial-gradient(#deddd7 1px,transparent 1.3px);background-size:14px 14px;border:1px solid var(--line2);overflow-x:auto}
 .lienzo svg{display:block;max-width:100%;height:auto}
 .botones{display:flex;flex-wrap:wrap;gap:8px}
+.leer-paso{margin-left:auto;flex-shrink:0;width:28px;height:28px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--ink2);display:grid;place-items:center;cursor:pointer}
+.leer-paso:hover{background:var(--line2)} .leer-paso.leyendo{background:var(--acc-soft);color:var(--acc-text)}
+.leer-paso svg{width:18px;height:18px}
 .botones button.trabajando{opacity:.7;cursor:progress} .botones .tres{margin-left:-3px;letter-spacing:1px}
 .confirma{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:10px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:13.5px;line-height:1.45}
 .confirma .acc{display:flex;gap:8px;flex-wrap:wrap}
@@ -271,7 +274,7 @@ textarea:focus-visible{outline:none}
     </div>
     <div class="cuerpo scroll" id="cuerpo">
       <div class="tarjeta">
-        <div class="ceja"><span class="n" id="pasoNum">Conectando con Excel…</span><span class="sep" id="pasoSep" hidden style="color:var(--ink3)">·</span><span class="t" id="pasoTit"></span></div>
+        <div class="ceja"><span class="n" id="pasoNum">Conectando con Excel…</span><span class="sep" id="pasoSep" hidden style="color:var(--ink3)">·</span><span class="t" id="pasoTit"></span><button class="leer-paso" id="leerPaso" type="button" hidden title="Léeme este paso" aria-label="Léeme este paso"></button></div>
         <p class="texto-paso" id="pasoTxt"></p>
       </div>
       <div class="aviso-error" id="aviso" hidden></div>
@@ -462,6 +465,7 @@ textarea:focus-visible{outline:none}
     if (modulos.length) $('moduloTxt').textContent = 'Módulo ' + (m + 1) + ' · ' + (modulos[m].titulo || modulos[m]);
     $('pasoNum').textContent = 'Paso ' + (n + 1) + ' de ' + total;
     $('pasoTit').textContent = e.paso_titulo || ''; $('pasoSep').hidden = !e.paso_titulo;
+    pasoActual = e; callarPaso();
     $('pasoTxt').innerHTML = enLinea(codigoExcel(esc(e.texto)));
     $('aviso').hidden = !e.aviso; $('aviso').textContent = e.aviso || '';
     $('requisito').hidden = !e.requisito; $('requisito').innerHTML = e.requisito ? '<span class="i">!</span><span>' + enLinea(esc(e.requisito)) + '</span>' : '';
@@ -489,6 +493,18 @@ textarea:focus-visible{outline:none}
     $('sigTxt').textContent = n === total - 1 ? (m < modulos.length - 1 ? 'Siguiente módulo' : 'Fin del curso') : 'Siguiente';
     pintarProgreso();
   }
+  // «Léeme este paso»: la voz (natural si hay) lee el título, el texto y el «dónde» del paso; otra vez = callar
+  var pasoActual = null, leyendoPaso = false;
+  var IC_LEER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor" fill-opacity=".15"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a8 8 0 0 1 0 11"/></svg>';
+  function plano(t){ return String(t || '').replace(/\{[^}]*\}/g, '').replace(/\*\*|__|`|#+ /g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim(); }
+  function callarPaso(){ if (leyendoPaso && window.Voz) Voz.callar(); leyendoPaso = false; $('leerPaso').classList.remove('leyendo'); }
+  $('leerPaso').onclick = function(){
+    if (!window.Voz || !pasoActual) return;
+    if (leyendoPaso) return callarPaso();
+    var e = pasoActual, t = [e.paso_titulo, e.texto, e.donde ? 'Dónde: ' + e.donde : ''].map(plano).filter(Boolean).join('. ');
+    Voz.callar(); leyendoPaso = true; $('leerPaso').classList.add('leyendo');
+    Voz.decir(t).then(function(){ if (pasoActual === e){ leyendoPaso = false; $('leerPaso').classList.remove('leyendo'); } });
+  };
   function ir(k){
     if (!api || moviendo) return;
     if (k >= total && m < modulos.length - 1) return irModulo(m + 1);
@@ -500,7 +516,10 @@ textarea:focus-visible{outline:none}
     if (!api || !api.boton || x.disabled) return;
     $('confirmaBoton').hidden = true;
     var antes = x.innerHTML; x.disabled = true; x.classList.add('trabajando'); x.innerHTML = antes + '<span class="tres">…</span>';
-    Promise.resolve(api.boton(b.id)).then(function(r){ if (r && r.aviso) aviso(r.aviso, 3000); },
+    Promise.resolve(api.boton(b.id)).then(function(r){
+        if (r && r.dibujos && window.Dibujante) Dibujante.mostrar(r.dibujos, '');      // «Muéstramelo»: los dibujos del paso
+        if (r && r.aviso) aviso(r.aviso, 3000);
+      },
       function(){ aviso('No pude hablar con ' + APP + '. Intenta otra vez.', 3000); })
       .finally(function(){ x.disabled = false; x.classList.remove('trabajando'); x.innerHTML = antes; });
   }
@@ -996,6 +1015,8 @@ textarea:focus-visible{outline:none}
     actualizarEnviar();
     setTimeout(function(){                    // ojos_ui.js, el dibujante y voz.js van después de este script
       $('mirarVentana').hidden = !(window.Ojos && api.ojos_ventanas);
+      if (window.Voz){ $('leerPaso').innerHTML = IC_LEER; $('leerPaso').hidden = false; }
+      window.atajoMirar = mirarVentana;                                   // Ctrl+Alt+M (ojos_panel.atajo)
       if (window.Voz && api.capa_poner && !document.querySelector('.cab-tutor .vz-btn')) document.querySelector('.cab-tutor').appendChild(Voz.boton());
     }, 0);
   }
