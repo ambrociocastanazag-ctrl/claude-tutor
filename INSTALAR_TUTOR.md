@@ -378,11 +378,11 @@ Si no se instala, borra esa línea de la plantilla. Si la persona la quiere más
 
 ### 4.9 Asistente que mira la pantalla (opcional)
 
-Un panel (`tutor-pantalla/`) con un asistente sin tarea fija. La persona elige **una** ventana de cualquier programa. Al pulsar «Que mire», ve la captura en una **vista previa** con Enviar / Recortar / Cancelar, y nada sale sin su clic. El asistente responde en el chat y dibuja flechas numeradas **encima del programa**. Las flechas dejan pasar los clics; las dibuja `prueba-dia/overlay_dia.py`, así que esa carpeta tiene que estar aunque no use Dia. También busca en la web y lee enlaces (solo WebSearch y WebFetch). Solo mira y señala: nunca mueve el ratón ni teclea.
+Un panel (`tutor-pantalla/`) con un asistente sin tarea fija. La persona elige **una** ventana de cualquier programa. Al pulsar «Que mire», ve la captura en una **vista previa** con Enviar / Recortar / Cancelar, y nada sale sin su clic. El asistente responde en el chat y dibuja flechas numeradas **encima del programa**. Las flechas dejan pasar los clics; las dibuja `prueba-dia/overlay_dia.py`, así que esa carpeta tiene que estar aunque no use Dia. También busca en la web y lee enlaces (solo WebSearch y WebFetch). Solo mira y señala: nunca mueve el ratón ni teclea. Con `--puente`, el mismo panel conecta con la sesión de Claude Code que lo abrió: lo que la persona escribe llega a ese chat y la respuesta vuelve al panel (`tutor-pantalla/puente.py`).
 
 Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edge y apps Electron (VS Code…). En lienzos, juegos o apps Java apunta por la imagen. Con apps abiertas como administrador no puede, salvo que el panel también se abra como administrador.
 
-1. **Los archivos ya están en `tutor-pantalla/`** (`ojos.py`, `asistente.py`, `panel_pantalla.py`, `panel.html`): no los reescribas. El tema sale de `panel-excel/preferencias.json`, como en los otros paneles; si no existe, créalo como en 4.6, paso 1.
+1. **Los archivos ya están en `tutor-pantalla/`** (`ojos.py`, `asistente.py`, `panel_pantalla.py`, `panel.html`, `puente.py`): no los reescribas. El tema sale de `panel-excel/preferencias.json`, como en los otros paneles; si no existe, créalo como en 4.6, paso 1.
 2. **Librerías:** `pywebview`, `Pillow` y `uiautomation` (en `paquete-tutor/requirements.txt`). Instala solo con su visto bueno.
 3. **Prueba (con su permiso: abre una ventana de prueba):**
    - Crea un archivo de prueba propio, `prueba_pantalla.txt`, con una línea de texto, y ábrelo con `notepad prueba_pantalla.txt`. No abras un Bloc de notas vacío: el de Windows 11 reabre las pestañas de la persona y su texto saldría en la captura.
@@ -397,6 +397,12 @@ Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edg
 - `python tutor-pantalla/panel_pantalla.py` abre el asistente: la persona elige **una** ventana, «Que mire» le enseña la captura en una **vista previa** (Enviar / Recortar / Cancelar) y el asistente responde con flechas numeradas encima del programa. Ver `tutor-pantalla/README.md`.
 - **Permiso siempre:** nunca toda la pantalla, nunca sola ni continua; ninguna captura sale sin la vista previa y su clic. Solo mira y señala.
 - Para probarlo, usa una ventana tuya (un Bloc de notas que abras tú), no las de la persona: `python tutor-pantalla/panel_pantalla.py --probar "<título o app>" salida.png` y mira la imagen.
+- **Puente** (si la persona pide hablar contigo desde el panel):
+  1. Abre `python tutor-pantalla/panel_pantalla.py --puente` en segundo plano.
+  2. Lanza `python tutor-pantalla/puente.py esperar` en segundo plano. Al terminar, trae su mensaje; si trae captura, léela con Read.
+  3. Responde con `python tutor-pantalla/puente.py responder -` y el texto por heredoc; una última línea `MARCAS: [...]` dibuja flechas.
+  4. Vuelve a lanzar `esperar`. Si dice «panel cerrado», se acabó.
+  - `puente.py pedir-captura "…"` solo le abre la vista previa: la persona decide si la manda.
 ````
 
 ## Paso 5. README de la carpeta

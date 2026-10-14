@@ -1,6 +1,8 @@
 """Panel del asistente que mira UNA ventana (con permiso) y señala encima de ella.
 
   python panel_pantalla.py                          abre el panel (modo asistente)
+  python panel_pantalla.py --puente                 abre el panel en modo puente: responde el chat de Claude Code
+                                                   (ver puente.py)
   python panel_pantalla.py --probar "Word" [png]    prueba sin ventana: captura la primera ventana con ese texto en
                                                    el título o la app, pregunta dónde se guarda el archivo, dibuja las
                                                    flechas y guarda la captura con ellas (png) para revisarla
@@ -49,8 +51,10 @@ class Overlay:
 class Api:
     """Lo que llama la página (window.pywebview.api.*). Los métodos con _ no se ven desde la página."""
 
-    def __init__(self, sesion, overlay):
+    def __init__(self, sesion, overlay, puente=None):
         self._sesion, self._ov = sesion, overlay
+        self._puente = puente           # modo puente: responde el chat de Claude Code (puente.LadoPanel), no la sesión
+        self._esperando = {}            # id del mensaje → ya avisamos que lo está leyendo
         self._ventana = None            # la ventana de pywebview
         self._hwnd = None               # la ventana elegida
         self._pendiente = None          # captura en vista previa (aún no enviada)
@@ -115,6 +119,7 @@ class Api:
         if recorte: cap.recortar(*recorte)
         self._ultima = cap
         texto = (texto or "").strip() or "¿Qué ves? Ayúdame con esto."
+        if self._puente: return self._al_chat(texto, cap)
         ctx = (f"[Captura de la ventana «{cap.titulo}» ({cap.app}), {cap.img.width}×{cap.img.height} px]\n"
                f"Controles de la ventana:\n{cap.texto_controles()}\n\nPersona: {texto}")
         contenido = [{"type": "image", "source": {"type": "base64", "media_type": "image/png",
@@ -125,8 +130,44 @@ class Api:
     def preguntar(self, texto):
         texto = (texto or "").strip()
         if not texto: return {"ok": False, "error": "Escribe algo."}
+        if self._puente: return self._al_chat(texto)
         v = f"(Ventana elegida: «{ojos.titulo(self._hwnd)}»; sin captura nueva.)\n" if self._hwnd and ojos.u32.IsWindow(self._hwnd) else ""
         return self._responder(f"{v}Persona: {texto}")
+
+    # --- modo puente ---
+    def _al_chat(self, texto, cap=None):
+        """El mensaje va al chat de Claude Code; la respuesta llega luego por _vigilar_puente()."""
+        v = None
+        if self._hwnd and ojos.u32.IsWindow(self._hwnd):
+            v = {"titulo": ojos.titulo(self._hwnd), "app": ojos.app_de(ojos.pid_de(self._hwnd))}
+        mid = self._puente.mandar(texto, v, cap)
+        self._esperando[mid] = False
+        self._poner(self._marcas)               # quita el borde naranja de la vista previa
+        return {"ok": True, "espera": True}
+
+    def _js(self, funcion, dato):
+        if self._ventana: self._ventana.evaluate_js(f"{funcion}({json.dumps(dato, ensure_ascii=False)})")
+
+    def _vigilar_puente(self):
+        """Hilo del modo puente: avisa cuando el chat leyó el mensaje y enseña lo que responde."""
+        while self._ventana is not None:
+            try:
+                for mid, avisado in list(self._esperando.items()):
+                    if not avisado and self._puente.leido(mid):
+                        self._esperando[mid] = True; self._js("avisoTrabajo", "Claude Code lo está leyendo…")
+                for d in self._puente.recibir():
+                    if d.get("tipo") == "pedir_captura":
+                        self._js("pedirCaptura", d.get("texto") or "¿Me dejas ver la ventana?")
+                        continue
+                    limpio, lista = asistente.separar(d.get("texto") or "")
+                    ms = asistente.marcas(lista, self._ultima) if self._ultima else []
+                    if ms: self._marcas = ms
+                    self._poner(self._marcas)
+                    self._esperando.clear()
+                    self._js("respuestaPuente", {"ok": True, "texto": limpio, "marcas": len(ms)})
+            except Exception:
+                import traceback; traceback.print_exc()          # el vigía no se cae, pero el fallo queda a la vista
+            time.sleep(0.4)
 
     def _responder(self, contenido):
         def trozo(t):
@@ -169,7 +210,7 @@ class Api:
 
     def nueva(self):
         self.borrar_flechas(); self._ultima = None
-        self._sesion.reiniciar(); self._sesion.calentar()
+        if self._sesion: self._sesion.reiniciar(); self._sesion.calentar()
         return {"ok": True}
 
 
@@ -186,15 +227,19 @@ def tema():
     except Exception: return "claro"
 
 
-def abrir(api):
+def abrir(api, al_abrir=None):
+    """al_abrir: función que corre en otro hilo con la ventana ya creada (el vigía del puente, las pruebas)."""
     import webview
     x0, y0, ancho, alto = area_visible(); ancho_v = 460; t = tema()
+    modo = "puente" if api._puente else "asistente"
     html = (AQUI / "panel.html").read_text(encoding="utf-8").replace(
-        "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(t)};</script>", 1)
-    api._ventana = webview.create_window("Asistente", html=html, js_api=api, width=ancho_v, height=int(alto),
-                                         x=int(x0 + ancho - ancho_v), y=int(y0), on_top=True, min_size=(360, 300),
+        "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(t)}; window.MODO_PANEL = {json.dumps(modo)};</script>", 1)
+    api._ventana = webview.create_window("Claude Code (puente)" if api._puente else "Asistente", html=html, js_api=api,
+                                         width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
+                                         on_top=True, min_size=(360, 300),
                                          background_color="#232631" if t == "oscuro" else "#F8F6F1")
-    webview.start(gui="edgechromium")
+    api._ventana.events.closed += lambda: setattr(api, "_ventana", None)
+    webview.start(al_abrir, gui="edgechromium")
 
 
 def probar(texto, png=None):
@@ -229,6 +274,13 @@ if __name__ == "__main__":
     a = sys.argv[1:]
     if a[:1] == ["--probar"] and len(a) >= 2:
         probar(a[1], a[2] if len(a) > 2 else None)
+    elif a == ["--puente"]:
+        import puente
+        try: lado = puente.LadoPanel()
+        except RuntimeError as e: sys.exit(str(e))
+        ov = Overlay(); api = Api(None, ov, lado)
+        try: abrir(api, api._vigilar_puente)
+        finally: ov.cerrar(); lado.cerrar()
     elif not a:
         ses, ov = asistente.Sesion(), Overlay()
         ses.calentar()                              # la sesión arranca mientras eliges la ventana

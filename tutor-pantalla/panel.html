@@ -199,6 +199,16 @@ textarea:focus-visible{outline:none}
   var TEMA = window.TEMA_PANEL || (location.search.match(/tema=(\w+)/) || [])[1] || 'claro';
   document.documentElement.classList.add('tema-' + TEMA);
   var api = null, ocupado = false, burbuja = null, recibido = '', recorte = null, previaDatos = null;
+  // Modo puente: responde el chat de Claude Code (los mensajes van y vienen por puente.py), no una sesión propia
+  var PUENTE = window.MODO_PANEL === 'puente', QUIEN = PUENTE ? 'Claude Code' : 'Asistente';
+  if (PUENTE){
+    document.title = 'Claude Code (puente)';
+    document.querySelector('.marca').innerHTML = '<b>Claude Code</b><span>tu chat, con ojos</span>';
+    $('nueva').hidden = true;
+    $('bienvenida').innerHTML = '<b>Conectado a tu chat de Claude Code.</b><span>Lo que escribas aquí le llega al chat y la respuesta vuelve a este panel. Para que mire un programa:</span>' +
+      '<ol><li><b>Elegir</b> la ventana (solo esa).</li><li><b>Que mire</b>: ves la captura antes de mandarla.</li><li>Te responde aquí y señala encima del programa.</li></ol>' +
+      '<span>Si Claude Code te pide una captura, igual sale la vista previa: tú decides si la mandas.</span>';
+  }
 
   // ---- Iconos ----
   var P = {
@@ -266,7 +276,7 @@ textarea:focus-visible{outline:none}
   }
   function empezarRespuesta(){
     recibido = '';
-    burbuja = agregar('<div class="cab-m"><span class="chispa">' + ic('spark') + '</span><b>Asistente</b><span class="seg"></span></div>' +
+    burbuja = agregar('<div class="cab-m"><span class="chispa">' + ic('spark') + '</span><b>' + QUIEN + '</b><span class="seg"></span></div>' +
                       '<div class="bloques"><div class="puntos"><span></span><span></span><span></span></div></div>', 'tutor-m');
     burbuja._t0 = Date.now();
   }
@@ -303,6 +313,20 @@ textarea:focus-visible{outline:none}
     $('chat').scrollTop = $('chat').scrollHeight;
   }
 
+  // En el puente, enviar solo deja el mensaje: la respuesta llega después por respuestaPuente()
+  function alResponder(r){
+    if (r && r.espera){ window.avisoTrabajo('Enviado. Esperando a Claude Code…'); return; }
+    terminar(r);
+  }
+  window.respuestaPuente = function(r){ if (!burbuja) empezarRespuesta(); terminar(r); };
+  // Claude Code pide una captura: se enseña su mensaje y se abre la vista previa (o la lista, si no hay ventana)
+  window.pedirCaptura = function(t){
+    if (!burbuja) empezarRespuesta();
+    terminar({ok: true, texto: t, marcas: 0});
+    if (!$('ventana').dataset.hwnd){ agregar('Elige la ventana y luego pulsa <b>Que mire</b>.', 'senal'); $('elegir').click(); }
+    else $('mirar').click();
+  };
+
   function pintarEnviar(){
     var hay = $('entrada').value.trim().length > 0;
     $('enviar').classList.toggle('listo', hay && !ocupado); $('enviar').disabled = ocupado;
@@ -313,7 +337,7 @@ textarea:focus-visible{outline:none}
     if (!t || ocupado || !api) return;
     ocupado = true; $('entrada').value = ''; crecer(); pintarEnviar();
     agregar(msgYo(t), 'yo'); empezarRespuesta();
-    api.preguntar(t).then(terminar, function(e){ terminar({ok: false, error: String(e)}); });
+    api.preguntar(t).then(alResponder, function(e){ terminar({ok: false, error: String(e)}); });
   }
   function crecer(){ var e = $('entrada'); e.style.height = '33px'; e.style.height = Math.min(117, e.scrollHeight) + 'px'; }
   $('entrada').addEventListener('input', function(){ crecer(); pintarEnviar(); });
@@ -406,7 +430,7 @@ textarea:focus-visible{outline:none}
     ocupado = true; $('entrada').value = ''; crecer(); pintarEnviar();
     // la miniatura del globo: la parte recortada, si la hay
     var mostrar = function(src){ agregar(msgYo(t || '¿Qué ves? Ayúdame con esto.', src, d.titulo), 'yo'); empezarRespuesta();
-      api.enviar(t, rec).then(terminar, function(e){ terminar({ok: false, error: String(e)}); }); };
+      api.enviar(t, rec).then(alResponder, function(e){ terminar({ok: false, error: String(e)}); }); };
     if (!rec) return mostrar(img);
     var im = new Image(); im.onload = function(){
       var c = document.createElement('canvas'); c.width = rec[2]; c.height = rec[3];
