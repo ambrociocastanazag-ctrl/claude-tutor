@@ -3,4 +3,5 @@
 pywin32>=312        # manejar el Excel real por COM (panel de Excel)
 pywebview>=6.2      # ventana del panel (usa WebView2, que ya trae Windows 11)
 openpyxl>=3.1       # crear libros de Excel sin abrir Excel
-pillow>=10          # flechas del panel de Dia encima de su ventana (opcional: sin Pillow el panel funciona igual)
+pillow>=10          # flechas encima de las ventanas (panel de Dia, opcional; asistente de pantalla) y sus capturas
+uiautomation>=2.0.29  # asistente de pantalla: dónde está cada botón de la ventana (UI Automation de Windows)

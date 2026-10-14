@@ -6,11 +6,11 @@
 
 > **Si eres un agente de IA (Claude Code) y la persona te pidió "lee INSTALAR_TUTOR.md y síguelo", este archivo es para ti.** Aquí no hay temas de estudio de nadie: solo la forma de trabajar de un tutor y sus herramientas. Tu trabajo es dejar esta carpeta convertida en un **tutor de estudio personalizado** para quien te lo pidió, y al final dejarle claro cómo actualizar las herramientas.
 
-> **Esta carpeta es un repositorio git** (`tutor-de-estudio`). Junto a este archivo hay archivos ya hechos y probados: `panel-excel/` (panel de clase en vivo para Excel), `prueba-dia/` (panel de clase en vivo para el editor de diagramas Dia, con su plugin y un curso de ejemplo), `herramientas/` (capturas de páginas con Chrome) y `paquete-tutor/requirements.txt` (las librerías de Python). Úsalos tal cual: no los reescribas ni los copies a mano. Si falta algo, pídele a la persona que clone el repositorio completo.
+> **Esta carpeta es un repositorio git** (`tutor-de-estudio`). Junto a este archivo hay archivos ya hechos y probados: `panel-excel/` (panel de clase en vivo para Excel), `prueba-dia/` (panel de clase en vivo para el editor de diagramas Dia, con su plugin y un curso de ejemplo), `tutor-pantalla/` (un asistente que mira una ventana de cualquier programa, con permiso, y señala encima), `herramientas/` (capturas de páginas con Chrome) y `paquete-tutor/requirements.txt` (las librerías de Python). Úsalos tal cual: no los reescribas ni los copies a mano. Si falta algo, pídele a la persona que clone el repositorio completo.
 >
 > **Lo de la persona no va al repositorio.** Su `CLAUDE.md`, `contexto.md`, `README.md`, `panel-excel/preferencias.json`, sus diagramas y su progreso en los cursos de Dia, y sus carpetas de temas o cursos quedan fuera (el `.gitignore` es una lista blanca: solo versiona los archivos del tutor, uno por uno). No hagas commits ni cambies archivos del repositorio: así `git pull` actualiza las herramientas sin chocar con lo suyo.
 >
-> **Dónde va cada cosa de la persona:** cada tema y cada curso, en **su propia carpeta en la raíz** de esta carpeta, una por tema (por ejemplo `calculo-integral/`, `curso-excel/`, `curso-uml/`), con su `README.md`. Nunca dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, que son del repositorio.
+> **Dónde va cada cosa de la persona:** cada tema y cada curso, en **su propia carpeta en la raíz** de esta carpeta, una por tema (por ejemplo `calculo-integral/`, `curso-excel/`, `curso-uml/`), con su `README.md`. Nunca dentro de `panel-excel/`, `prueba-dia/`, `tutor-pantalla/` ni `herramientas/`, que son del repositorio.
 
 Reglas mientras lo haces:
 - **Trabaja siempre con la carpeta donde está este archivo como directorio actual** (`cd` a ella al empezar): todos los comandos y scripts de aquí usan rutas relativas a esa carpeta.
@@ -51,7 +51,8 @@ Comprueba con un comando cada una (no instales todavía) y apunta cuáles existe
 | `pywin32` | `python -c "import win32com.client"` |
 | `pywebview` | `python -c "import webview"` (solo para los paneles de Excel y de Dia) |
 | Dia | existe `C:\Program Files (x86)\Dia\bin\diaw.exe`; la versión, como dice 4.7 (solo para el panel de Dia) |
-| Pillow | `python -c "import PIL"` (solo para las flechas del panel de Dia encima de su ventana) |
+| Pillow | `python -c "import PIL"` (flechas encima de las ventanas: panel de Dia y asistente de pantalla) |
+| `uiautomation` | `python -c "import uiautomation"` (solo para el asistente de pantalla, 4.9: dónde está cada botón) |
 | PyMuPDF | `python -c "import pymupdf"` (opcional: leer PDFs con fórmulas como imagen) |
 | Claude Code en terminal | `claude --version` (el tutor de los paneles de Excel y de Dia lo usa) |
 | Skill `anatomy` | existe `~/.claude/skills/anatomy/SKILL.md` (opcional: figuras realistas de aparatos; ver 4.8) |
@@ -71,6 +72,7 @@ Usa la plantilla del paso 4 y haz esto con la sección "Herramientas":
 - **Excel por COM:** solo si tiene Excel y Python (o si aprueba instalar `pywin32`).
 - **Panel de clase en vivo para Excel** (4.6): solo si va a estudiar Excel y tiene (o aprueba instalar) `pywin32` y `pywebview`. Si no, la sección de Excel queda sin su parte del panel (el bloque B de 4.4).
 - **Panel de clase en vivo para Dia** (4.7): solo si va a estudiar diagramas UML (o cualquier diagrama) en Dia y tiene Dia 0.97.2 (o aprueba instalarlo). Si no, no pongas la sección de Dia.
+- **Asistente que mira la pantalla** (4.9): opcional y para cualquier materia, en Windows. Ofrécelo si va a aprender o usar programas (Word, un programa de diseño, un formulario) o si quiere un asistente que vea una ventana y le señale dónde hacer las cosas. Necesita `pywebview`, `Pillow`, `uiautomation` y Claude Code en la terminal.
 - **Falstad y verificación en Chrome:** la herramienta queda **guardada** en el `CLAUDE.md`, pero **se aplica solo si estudia electricidad o circuitos** (la sección dice esa condición). Si `herramientas/` no se crea ahora (no estudia electricidad o no aprueba descargar `puppeteer-core`), añade al final de la sección la línea de _pendiente_ que da 4.5.
 - **Plotly 3D girable:** entra como línea dentro de "Artefactos" (sirve para cualquier superficie o figura 3D).
 - **Skill `anatomy`** (figuras isométricas realistas e interactivas de aparatos: un circuito armado, un motor, un instrumento): opcional, sobre todo para física, electrónica o ingeniería. Si se instala (4.8), entra como línea dentro de "Artefactos"; si no, esa línea de la plantilla se borra.
@@ -136,6 +138,8 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 
 {{SECCIÓN DIA, solo si aplica; ver 4.7}}
 
+{{SECCIÓN ASISTENTE DE PANTALLA, solo si aplica; ver 4.9}}
+
 {{SECCIÓN FALSTAD Y CHROME; ver 4.5}}
 
 ### Artefactos y archivos
@@ -145,7 +149,7 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 - **Tutor dentro de las guías completas:** toda guía de un curso o tema completo lleva un tutor integrado (capacidad `sample` del artefacto; carga antes la skill `artifact-capabilities`, si existe en la cuenta) para preguntar mientras estudia. Sabe en qué módulo está y qué tocó por último, y sigue las reglas de "Cómo enseñar": primero la idea y luego la cuenta, señala el paso exacto del error y en ejercicios sin resolver solo da pistas. Las **pruebas rápidas** y los artefactos sueltos no lo llevan.
 - **3D girable** (superficies, sólidos, campos): Plotly dentro del artefacto.
 {{LÍNEA ANATOMY, solo si se instaló (ver 4.8); si no, borra esta línea}}
-- **Archivos** para lo que va a repasar: resúmenes, hojas de fórmulas, listas de ejercicios con solución. Van en esta carpeta, en una subcarpeta por tema en la raíz (también sus cursos de Excel o de Dia), nunca dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, que son del repositorio.
+- **Archivos** para lo que va a repasar: resúmenes, hojas de fórmulas, listas de ejercicios con solución. Van en esta carpeta, en una subcarpeta por tema en la raíz (también sus cursos de Excel o de Dia), nunca dentro de `panel-excel/`, `prueba-dia/`, `tutor-pantalla/` ni `herramientas/`, que son del repositorio.
 - Los PDFs o imágenes que pase se leen directamente.
 - **Cada carpeta de proyecto lleva un `README.md`**: se escribe al crear la carpeta y se actualiza cada vez que cambian sus archivos o su forma de uso. Debe decir qué es el proyecto y su enlace publicado si lo tiene, su **historia y decisiones** (estado, diagnóstico, qué se eligió y qué se descartó, y por qué), qué es cada archivo (incluidos los que se generan y no se editan a mano), cómo cambiarlo paso a paso (editar, construir, verificar y publicar) y qué dependencias usa. Corto y en español.
 
@@ -372,9 +376,32 @@ No viene en este repositorio: se clona del repositorio de su autor, así `git pu
 
 Si no se instala, borra esa línea de la plantilla. Si la persona la quiere más adelante, el tutor puede proponerla entonces (regla «Si falta una herramienta, búscala»).
 
+### 4.9 Asistente que mira la pantalla (opcional)
+
+Un panel (`tutor-pantalla/`) con un asistente sin tarea fija. La persona elige **una** ventana de cualquier programa. Al pulsar «Que mire», ve la captura en una **vista previa** con Enviar / Recortar / Cancelar, y nada sale sin su clic. El asistente responde en el chat y dibuja flechas numeradas **encima del programa**. Las flechas dejan pasar los clics; las dibuja `prueba-dia/overlay_dia.py`, así que esa carpeta tiene que estar aunque no use Dia. También busca en la web y lee enlaces (solo WebSearch y WebFetch). Solo mira y señala: nunca mueve el ratón ni teclea.
+
+Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edge y apps Electron (VS Code…). En lienzos, juegos o apps Java apunta por la imagen. Con apps abiertas como administrador no puede, salvo que el panel también se abra como administrador.
+
+1. **Los archivos ya están en `tutor-pantalla/`** (`ojos.py`, `asistente.py`, `panel_pantalla.py`, `panel.html`): no los reescribas. El tema sale de `panel-excel/preferencias.json`, como en los otros paneles; si no existe, créalo como en 4.6, paso 1.
+2. **Librerías:** `pywebview`, `Pillow` y `uiautomation` (en `paquete-tutor/requirements.txt`). Instala solo con su visto bueno.
+3. **Prueba (con su permiso: abre una ventana de prueba):**
+   - Crea un archivo de prueba propio, `prueba_pantalla.txt`, con una línea de texto, y ábrelo con `notepad prueba_pantalla.txt`. No abras un Bloc de notas vacío: el de Windows 11 reabre las pestañas de la persona y su texto saldría en la captura.
+   - Ejecuta `python tutor-pantalla/panel_pantalla.py --probar "prueba_pantalla" prueba_pantalla.png`. Captura esa ventana, pregunta dónde se guarda el archivo y guarda la imagen con las flechas. Tiene que decir cuántos controles leyó y dar una respuesta.
+   - Mira la imagen con Read: la flecha debe caer en el menú Archivo (File).
+   - Cierra esa ventana del Bloc de notas (sin guardar nada) y borra `prueba_pantalla.txt` y `prueba_pantalla.png`.
+4. Si la prueba salió bien, pega esta sección en el lugar de `{{SECCIÓN ASISTENTE DE PANTALLA}}` de su `CLAUDE.md`; si no, no la pongas y explícale qué falló:
+
+````markdown
+### Asistente que mira la pantalla (`tutor-pantalla/`)
+
+- `python tutor-pantalla/panel_pantalla.py` abre el asistente: la persona elige **una** ventana, «Que mire» le enseña la captura en una **vista previa** (Enviar / Recortar / Cancelar) y el asistente responde con flechas numeradas encima del programa. Ver `tutor-pantalla/README.md`.
+- **Permiso siempre:** nunca toda la pantalla, nunca sola ni continua; ninguna captura sale sin la vista previa y su clic. Solo mira y señala.
+- Para probarlo, usa una ventana tuya (un Bloc de notas que abras tú), no las de la persona: `python tutor-pantalla/panel_pantalla.py --probar "<título o app>" salida.png` y mira la imagen.
+````
+
 ## Paso 5. README de la carpeta
 
-Crea un `README.md` corto con: qué es la carpeta (un tutor de estudio con `CLAUDE.md` y `contexto.md`), qué hace cada archivo (incluido lo que se genera solo, como `panel-excel/__pycache__/`, `herramientas/node_modules/` o, en `prueba-dia/`, `pasos/`, `tutor/`, `mis_diagramas/`, `progreso.json`, `mi_diagrama.dia` y `__pycache__/`), que `contexto.md` se actualiza solo con cada sesión, y las dependencias instaladas. Añade cómo actualizar las herramientas: `git pull` en esta carpeta (si dice que hay cambios locales en archivos del repositorio, no los fuerces: avisa) y, si se instaló la skill `anatomy`, `git -C "$HOME/.claude/skills/anatomy" pull`.
+Crea un `README.md` corto con: qué es la carpeta (un tutor de estudio con `CLAUDE.md` y `contexto.md`), qué hace cada archivo (incluido lo que se genera solo, como `panel-excel/__pycache__/`, `herramientas/node_modules/` o, en `prueba-dia/`, `pasos/`, `tutor/`, `mis_diagramas/`, `progreso.json`, `mi_diagrama.dia` y `__pycache__/`; en `tutor-pantalla/`, `__pycache__/`), que `contexto.md` se actualiza solo con cada sesión, y las dependencias instaladas. Añade cómo actualizar las herramientas: `git pull` en esta carpeta (si dice que hay cambios locales en archivos del repositorio, no los fuerces: avisa) y, si se instaló la skill `anatomy`, `git -C "$HOME/.claude/skills/anatomy" pull`.
 
 ## Paso 6. Verificar
 
@@ -384,8 +411,9 @@ Antes de terminar, comprueba y arregla:
 - [ ] No hay datos de otra persona: ningún correo, ruta de usuario ajena ni curso que la persona no haya mencionado.
 - [ ] Cada herramienta anotada en `CLAUDE.md` fue probada o está marcada como _pendiente de instalar_.
 - [ ] Si se instaló el panel de Excel: los archivos de `panel-excel/` están, `--probar --rapido` terminó con «Revisión automática: todo bien» (o con «Lo básico del panel: todo bien» y cada bloque opcional que falló anotado como _pendiente_ en `CLAUDE.md` y en `contexto.md`) y con «Libro de prueba cerrado sin guardar», y Excel no quedó con libros de la prueba abiertos.
-- [ ] Sus temas y cursos (si ya hay alguno) están en carpetas propias en la raíz, no dentro de `panel-excel/`, `prueba-dia/` ni `herramientas/`, y `git status` sale limpio.
+- [ ] Sus temas y cursos (si ya hay alguno) están en carpetas propias en la raíz, no dentro de `panel-excel/`, `prueba-dia/`, `tutor-pantalla/` ni `herramientas/`, y `git status` sale limpio.
 - [ ] Si se instaló el panel de Dia: los dos `--probar` de 4.7 terminaron en «todo bien» y su `CLAUDE.md` tiene la sección de Dia.
+- [ ] Si se instaló el asistente de pantalla: la prueba de 4.9 dejó las flechas en su sitio, se borró la imagen, se cerró solo el Bloc de notas de la prueba y su `CLAUDE.md` tiene la sección del asistente.
 - [ ] Si se instaló la skill `anatomy`: existe `~/.claude/skills/anatomy/SKILL.md` y su `CLAUDE.md` tiene la línea de 4.8; si no, esa línea no quedó.
 
 ## Paso 7. Despedirte

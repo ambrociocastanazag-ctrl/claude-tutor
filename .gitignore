@@ -73,3 +73,12 @@
 !/prueba-dia/plugin-dia/compilar.py
 !/prueba-dia/plugin-dia/tutor_dia.py
 !/prueba-dia/plugin-dia/catalogo.py
+
+# Asistente que mira la pantalla: el código y la página (sin capturas ni cachés)
+!/tutor-pantalla/
+/tutor-pantalla/*
+!/tutor-pantalla/README.md
+!/tutor-pantalla/ojos.py
+!/tutor-pantalla/asistente.py
+!/tutor-pantalla/panel_pantalla.py
+!/tutor-pantalla/panel.html
