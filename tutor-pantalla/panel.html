@@ -123,7 +123,7 @@ textarea:focus-visible{outline:none}
     </div>
     <div class="acciones">
       <button class="btn prim" id="mirar" type="button" disabled><span data-ic="camera"></span>Que mire</button>
-      <button class="btn" id="borrar" type="button" title="Quita las flechas de encima de la ventana"><span data-ic="erase"></span>Borrar flechas</button>
+      <button class="btn" id="borrar" type="button" title="Quita las flechas y los dibujos de encima de la ventana"><span data-ic="erase"></span>Borrar marcas</button>
     </div>
   </header>
 
@@ -262,7 +262,9 @@ textarea:focus-visible{outline:none}
     var tr = burbuja.querySelector('.trabajo'); if (tr) tr.remove();
     if (r && r.ok){
       burbuja.querySelector('.bloques').innerHTML = bloques(r.texto);
-      if (r.marcas) agregar('<i></i>Te lo señalé encima de la ventana (' + r.marcas + (r.marcas === 1 ? ' marca' : ' marcas') + ')', 'senal');
+      var nd = r.dibujos && r.dibujos.dibujos ? r.dibujos.dibujos.length : 0;
+      if (r.marcas || nd) agregar('<i></i>Te lo ' + (nd ? 'dibujé' : 'señalé') + ' encima de la ventana (' + (r.marcas + nd) + ((r.marcas + nd) === 1 ? ' marca' : ' marcas') + ')', 'senal');
+      if (window.Dibujante && (nd || (window.Voz && Voz.activa()))) Dibujante.mostrar(r.dibujos || [], r.texto);
       if (r.pedir){
         var b = document.createElement('button'); b.type = 'button'; b.className = 'mostrar-btn';
         b.innerHTML = ic('camera') + 'Mostrarle una ventana'; b.onclick = mostrarVentana;
@@ -348,13 +350,16 @@ textarea:focus-visible{outline:none}
   });
 
   // ---- Otros ----
-  $('borrar').onclick = function(){ if (api) api.borrar_flechas(); };
+  $('borrar').onclick = function(){ if (window.Dibujante) Dibujante.borrar(); if (api) api.borrar_flechas(); };
   $('nueva').onclick = function(){
     if (!api || ocupado) return;
     api.nueva(); $('chat').innerHTML = ''; agregar('Conversación nueva.', 'senal');
   };
 
-  function listo(){ api = window.pywebview.api; pintarEnviar(); $('entrada').focus(); }
+  function listo(){
+    api = window.pywebview.api; pintarEnviar(); $('entrada').focus();
+    if (window.Voz && !document.querySelector('.cab .vz-btn')) $('nueva').before(Voz.boton());      // 🔊 leer en voz alta
+  }
   if (window.pywebview && window.pywebview.api) listo(); else window.addEventListener('pywebviewready', listo);
 })();
 </script>

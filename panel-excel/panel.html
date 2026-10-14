@@ -770,6 +770,9 @@ textarea:focus-visible{outline:none}
         if (r.propuesta && api.aplicar) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', tarjetaPermiso(r.propuesta));
         if (r.propuesta_error) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', '<div class="pm-error">' + esc(r.propuesta_error) + '</div>');
         if (r.marcas_ventana) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', '<div class="marcas"><i></i><span>Te señalé <strong>' + r.marcas_ventana + '</strong> ' + (r.marcas_ventana === 1 ? 'cosa' : 'cosas') + ' encima de la ventana</span></div>');
+        var nd = r.dibujos && r.dibujos.dibujos ? r.dibujos.dibujos.length : 0;       // dibujos encima de la app (dibujante.js)
+        if (nd) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', '<div class="marcas"><i></i><span>Te lo dibujé encima de ' + esc(APP) + ' (<strong>' + nd + '</strong>)</span></div>');
+        if (window.Dibujante && (nd || (window.Voz && Voz.activa()))) Dibujante.mostrar(r.dibujos || [], r.texto || '');
         if (r.pedir && window.Ojos && api.ojos_ventanas){       // el tutor pidió ver una ventana: él decide con el botón
           var bv = document.createElement('button'); bv.type = 'button'; bv.className = 'comprobar mostrar-ventana';
           bv.innerHTML = ic('camera') + 'Mostrarle una ventana'; bv.onclick = mirarVentana;
@@ -856,6 +859,7 @@ textarea:focus-visible{outline:none}
   Array.prototype.forEach.call(document.querySelectorAll('.chip[data-q]'), function(c){ c.onclick = function(){ preguntar(c.dataset.q); }; });
   $('borrar').onclick = function(){
     if (!api) return;
+    if (window.Dibujante) Dibujante.borrar();
     api.borrar_marcas().then(function(r){
       if (!r.ok) return agregarAlChat(msgTutor(r.texto), 'tutor-m');
       agregarAlChat('Marcas borradas · ' + hora(), 'nota'); aviso('Marcas borradas');
@@ -988,7 +992,10 @@ textarea:focus-visible{outline:none}
     api.estado().then(mostrar);
     if (/[?&]pestana=tutor/.test(location.search)) cambiarA('tutor');
     actualizarEnviar();
-    setTimeout(function(){ $('mirarVentana').hidden = !(window.Ojos && api.ojos_ventanas); }, 0);   // ojos_ui.js va después de este script
+    setTimeout(function(){                    // ojos_ui.js, el dibujante y voz.js van después de este script
+      $('mirarVentana').hidden = !(window.Ojos && api.ojos_ventanas);
+      if (window.Voz && api.capa_poner && !document.querySelector('.cab-tutor .vz-btn')) document.querySelector('.cab-tutor').appendChild(Voz.boton());
+    }, 0);
   }
   if (DEMO) iniciar(apiDemo());
   else if (window.pywebview && window.pywebview.api) iniciar(window.pywebview.api);

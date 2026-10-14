@@ -9,7 +9,9 @@ Cómo se usa en un panel:
   3. Al preguntar: ctx += ojos.contexto(adjuntos)  (la lista de controles de cada captura adjunta y viva)
   4. Al responder: marcas = ojos.marcar(marcas)    (las de "tipo": "ventana" se dibujan encima de la ventana
      y se devuelven las demás); texto, pide = separar_pedido(texto)  (<pedir_ventana/> → botón en la página).
-  5. Reglas del tutor: + REGLAS_OJOS. Al cerrar: ojos.cerrar().
+  5. Reglas del tutor: + REGLAS_OJOS (+ REGLAS_DIBUJOS). Al cerrar: ojos.cerrar().
+  6. Dibujos ricos (DIBUJOS.md): resto, lote, avisos = ojos.dibujos(marcas, resolver) saca las "tipo": "dibujo"; la
+     respuesta lleva "dibujos": lote y la página llama Dibujante.mostrar(lote, texto) → api.capa_poner() → capa.py.
 
 Permiso: ojos_capturar() solo guarda la captura en memoria y la enseña en la vista previa; ojos_adjuntar() la pasa a
 la lista de adjuntos del mensaje (lo pulsa la persona) y solo sale cuando envía ese mensaje con ella dentro."""
@@ -21,6 +23,13 @@ sys.path.insert(0, str(AQUI))
 import ojos                                                             # noqa: E402
 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
+CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
+SCRIPTS_UI = ["ojos_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "voz.js"]
+VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
+FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
+CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
+CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta"}
+MAX_DIBUJOS = 6
 MAX_CAPTURAS = 6                                                        # las que se guardan en memoria (adjuntas o en espera)
 
 REGLAS_OJOS = """
@@ -34,6 +43,29 @@ Si para ayudar necesitas VER algo que no está en tu contexto (un diálogo abier
 pídeselo en una frase y escribe al final <pedir_ventana/>: el panel le dará un botón para enseñártela (él decide). No lo
 pidas si no hace falta."""
 
+REGLAS_DIBUJOS = r"""
+DIBUJOS: además de las flechas, puedes dibujar ENCIMA de la app (junto a tus otras marcas) con "tipo": "dibujo" y una
+"forma". Objetivo como en las demás marcas: "id"/"caja" de la última captura, "celda" en Excel, "nombre" en un curso.
+Comunes: "texto" (1 a 5 palabras), "decir" (frase corta que se lee en voz alta si la voz está encendida), "color".
+  {"tipo": "dibujo", "forma": "foco", "id": 12, "texto": "Aquí"}            oscurece todo menos eso
+  {"tipo": "dibujo", "forma": "mano", "trazo": "circulo", "id": 12, "texto": "¡Este!"}   trazo de profe: circulo |
+        subrayado | flecha | tache | check
+  {"tipo": "dibujo", "forma": "teclas", "teclas": ["Ctrl", "S"], "id": 12}  atajo de teclado (objetivo opcional)
+  {"tipo": "dibujo", "forma": "lupa", "caja": [x, y, w, h], "aumento": 3}   aumenta algo pequeño (en vivo)
+  {"tipo": "dibujo", "forma": "fantasma", "pasos": [{"accion": "clic", "id": 5, "decir": "Primero aquí"},
+        {"accion": "arrastrar", "caja": [...], "hasta": {"caja": [...]}}, {"accion": "escribir", "id": 9, "texto": "=SUMA("}]}
+        cursor animado que hace los pasos (mover | clic | doble | derecho | arrastrar | escribir)
+  {"tipo": "dibujo", "forma": "guia", "figura": "rect", "caja": [...], "texto": "Dibújalo aquí"}   rect | elipse | linea | flecha
+  {"tipo": "dibujo", "forma": "secuencia", "pasos": [{"id": 3, "texto": "Inicio"}, {"id": 8, "texto": "Insertar"}]}
+  {"tipo": "dibujo", "forma": "formula", "latex": "\frac{a}{b}", "id": 4}  fórmula bien escrita junto al objetivo
+  {"tipo": "dibujo", "forma": "desarmar", "original": "=SUMA(B2:B9)/8", "partes": [{"texto": "SUMA(B2:B9)",
+        "nota": "suma las ventas"}, {"texto": "/8", "nota": "entre 8 días"}], "id": 4}   explica un texto por partes
+  {"tipo": "dibujo", "forma": "svg", "caja": [...], "svg": "<svg viewBox='0 0 100 40'>...</svg>"}   tu propio dibujo
+        (solo formas y texto; sin scripts ni imágenes), encajado en la caja
+En Excel, con "celda": "formula" sin latex escribe la de la celda ("grafica": true añade una mini gráfica de sus
+datos), "rayos_x" anima de dónde salen los valores de la fórmula y "desarmar" sin "original" usa su fórmula.
+Úsalos cuando aclaren más que una flecha (máximo 2 o 3 por respuesta); para señalar un botón basta la flecha."""
+
 PEDIDO_RE = re.compile(r"\s*<pedir_ventana\s*/?>\s*", re.I)
 
 
@@ -44,23 +76,27 @@ def separar_pedido(texto):
 
 
 def inyectar_ui(html):
-    """La página del panel con ojos_ui.js dentro (antes de </body>)."""
-    js = (AQUI / "ojos_ui.js").read_text(encoding="utf-8")
+    """La página del panel con ojos_ui.js, el dibujante, sus formas y la voz dentro (antes de </body>)."""
+    js = "\n".join((AQUI / n).read_text(encoding="utf-8") for n in SCRIPTS_UI if (AQUI / n).exists())
     i = html.rfind("</body>")
     return html[:i] + "<script>\n" + js + "\n</script>\n" + html[i:] if i >= 0 else html + "<script>\n" + js + "\n</script>"
 
 
 class Overlay:
-    """El proceso de las flechas (overlay_dia.py), con órdenes JSON por stdin. Si falla, el panel sigue sin flechas."""
+    """Un proceso de dibujo (overlay_dia.py: las flechas; capa.py: los dibujos), con órdenes JSON por stdin.
+    Si falla, el panel sigue sin ellos."""
 
-    def __init__(self):
-        self.p = None; self.cerrojo = threading.Lock()
+    def __init__(self, script=OVERLAY):
+        self.script = script; self.p = None; self.cerrojo = threading.Lock()
+
+    def vivo(self):
+        return self.p is not None and self.p.poll() is None
 
     def orden(self, o):
         with self.cerrojo:
             try:
                 if self.p is None or self.p.poll() is not None:
-                    self.p = subprocess.Popen([sys.executable, str(OVERLAY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    self.p = subprocess.Popen([sys.executable, str(self.script)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                               stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
                                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                     self.p.stdout.readline()                                    # {"listo": true}
@@ -84,6 +120,8 @@ class Ojos:
         self.apps = {a.lower() for a in apps}
         self.panel_hwnd = panel_hwnd                 # función: la ventana del panel (las flechas van justo debajo)
         self.ov = Overlay()
+        self.capa = Overlay(CAPA)                    # los dibujos ricos
+        self.aprobadas = set()                       # ventanas que la persona ya enseñó (la lupa solo va en ellas)
         self.capturas = {}                           # id → Captura (en vista previa o adjunta)
         self.pendiente = None                        # id de la que está en vista previa
         self.ultima = None                           # la última que vio el tutor: a ella se refieren las marcas "ventana"
@@ -133,6 +171,7 @@ class Ojos:
         self._poner()
         if cap is None: return {"ok": False, "error": "No hay captura en la vista previa."}
         if recorte: cap.recortar(*recorte)
+        self.aprobadas.add(cap.hwnd)
         b = io.BytesIO(); cap.img.save(b, "PNG"); datos = base64.b64encode(b.getvalue()).decode()
         app = re.sub(r"[^\w-]+", "_", cap.app or "ventana")[:20]
         return {"ok": True, "ojos_id": cid, "nombre": f"{app}_{cid}.png", "tipo": "imagen", "media_type": "image/png",
@@ -178,12 +217,102 @@ class Ojos:
              "color": m["color"], "n": m.get("n"), "evitar": evitar} for m in self.marcas]})
         return r.get("dibujadas", 0)
 
+    # --- dibujos ricos (DIBUJOS.md) ---
+    def dibujos(self, marcas, resolver=None, ventana=None):
+        """Saca de las marcas las "tipo": "dibujo" y arma el lote para la página (DIBUJOS.md §2).
+        resolver(m) → {"hwnd", "r": caja de PANTALLA o None, ...campos extra} | None: ubica lo que los ojos no saben
+        ("celda" de Excel, "nombre" de un curso); lanza ValueError si no puede. ventana: dónde dibujar lo que no
+        tiene objetivo (si no, la de la última captura). Devuelve (las demás marcas, lote o None, avisos)."""
+        mias = [m for m in marcas or [] if isinstance(m, dict) and m.get("tipo") == "dibujo"]
+        resto = [m for m in marcas or [] if not (isinstance(m, dict) and m.get("tipo") == "dibujo")]
+        lote, avisos = [], []
+        for m in mias[:MAX_DIBUJOS]:
+            try: d = self._dibujo(m, resolver, ventana)
+            except ValueError as e: avisos.append(f"«{m.get('forma')}»: {e}"); continue
+            except Exception as e: avisos.append(f"«{m.get('forma')}»: {type(e).__name__}: {e}"); continue
+            d["id"] = f"d{len(lote) + 1}"; lote.append(d)
+        return resto, ({"dibujos": lote} if lote else None), avisos
+
+    def _donde(self, m, resolver, ventana):
+        """(hwnd, caja en pantalla o None, campos extra) del objetivo de una marca o de un paso."""
+        if resolver:
+            r = resolver(m)
+            if r: r = dict(r); return r.pop("hwnd", None), r.pop("r", None), r
+        cap = self.ultima
+        if "id" in m or "caja" in m:
+            if not cap: raise ValueError("no hay ninguna captura a la que se refiera")
+            caja = None
+            if "id" in m:
+                try: c = cap.control(int(m["id"]))
+                except (TypeError, ValueError): c = None
+                if c: caja = c["caja"]
+            if caja is None and isinstance(m.get("caja"), list) and len(m["caja"]) == 4:
+                try: caja = [float(v) for v in m["caja"]]
+                except (TypeError, ValueError): caja = None
+            if caja is None or caja[2] <= 0 or caja[3] <= 0: raise ValueError("ese control no está en la última captura")
+            return cap.hwnd, cap.a_pantalla(caja), {}
+        if m.get("celda") or m.get("nombre"): raise ValueError(f"no sé ubicar «{m.get('celda') or m.get('nombre')}» aquí")
+        h = ventana or (cap.hwnd if cap else None)
+        return h, None, {}
+
+    def _dibujo(self, m, resolver, ventana):
+        forma = str(m.get("forma") or "")
+        if forma not in FORMAS: raise ValueError("esa forma no existe")
+        hwnd, caja, extra = self._donde(m, resolver, ventana)
+        pasos = []
+        for p in (m.get("pasos") or [])[:8]:
+            if not isinstance(p, dict): continue
+            ph, pc, _ = self._donde(p, resolver, ventana)
+            hwnd = hwnd or ph
+            q = {k: v for k, v in p.items() if k not in CLAVES_OBJETIVO}; q["_r"] = pc
+            if p.get("hasta") is not None:
+                h2 = p["hasta"] if isinstance(p["hasta"], dict) else {"caja": p["hasta"]}
+                q["_hasta"] = self._donde(h2, resolver, ventana)[1]
+            pasos.append(q)
+        if not hwnd or not ojos.u32.IsWindow(hwnd): raise ValueError("no hay ventana donde dibujarlo: pídele que te la enseñe")
+        cli = ojos.cliente(hwnd)
+        a_cli = lambda b: None if b is None else [round(b[0] - cli[0]), round(b[1] - cli[1]), round(b[2]), round(b[3])]
+        d = dict(extra)
+        for k, v in m.items():                       # lo que escribió el tutor gana, salvo la gráfica ya calculada
+            if k in CLAVES_OBJETIVO or (k == "grafica" and isinstance(d.get("grafica"), dict)): continue
+            d[k] = v
+        for f in d.get("fuentes") or []: f["r"] = a_cli(f.get("r"))
+        try: dpi = ojos.u32.GetDpiForWindow(hwnd) or 96
+        except Exception: dpi = 96
+        d.update(forma=forma, hwnd=hwnd, cliente=[cli[2], cli[3]], escala=round(dpi / 96, 3), r=a_cli(caja),
+                 color=m.get("color") if m.get("color") in ("azul", "verde", "rojo", "naranja", "amarillo", "morado") else "azul",
+                 texto=str(m.get("texto") or "")[:60], decir=str(m.get("decir") or "")[:300])
+        for q in pasos:
+            q["r"] = a_cli(q.pop("_r"))
+            if "_hasta" in q: q["hasta_r"] = a_cli(q.pop("_hasta"))
+        if pasos: d["pasos"] = pasos
+        elif forma in ("fantasma", "secuencia"): raise ValueError("le faltan los pasos")
+        if forma in CON_OBJETIVO and not d["r"]: raise ValueError("le falta el objetivo (id, caja, celda o nombre)")
+        if forma == "lupa":
+            if hwnd not in self.aprobadas: raise ValueError("la lupa solo va en una ventana que ya te enseñó con su permiso")
+            d["en_vivo"] = True
+        cap = self.ultima
+        d["evitar"] = [a_cli(b) for b in extra.get("evitar") or []]          # p. ej. las celdas con datos de Excel
+        if cap and cap.hwnd == hwnd: d["evitar"] += [a_cli(cap.a_pantalla(c["caja"])) for c in cap.controles[:300]]
+        return d
+
+    def poner_capas(self, capas):
+        """Las capas que dibujó la página → capa.py (quita las de antes)."""
+        capas = [c for c in capas or [] if isinstance(c, dict) and c.get("hwnd")]
+        if not capas: return self.borrar_capas()
+        pids = sorted({ojos.pid_de(int(c["hwnd"])) for c in capas} | {os.getpid()})
+        return self.capa.orden({"cmd": "poner", "pids": pids, "panel": self.panel_hwnd(), "capas": capas})
+
+    def borrar_capas(self):
+        return self.capa.orden({"cmd": "borrar"}) if self.capa.vivo() else {"ok": True}
+
     def borrar(self):
         self.marcas = []
         self.ov.orden({"cmd": "borrar"})
+        self.borrar_capas()
 
     def cerrar(self):
-        self.ov.cerrar()
+        self.ov.cerrar(); self.capa.cerrar()
 
 
 class OjosApi:
@@ -203,6 +332,44 @@ class OjosApi:
 
     def ojos_adjuntar(self, recorte=None):
         return self._ojos.adjuntar(recorte)
+
+    # --- dibujos (dibujante.js) ---
+    def capa_poner(self, datos):
+        return self._ojos.poner_capas((datos or {}).get("capas"))
+
+    def capa_reproducir(self, cid, desde=None, hasta=None):
+        if not self._ojos.capa.vivo(): return {"ok": False}
+        return self._ojos.capa.orden({"cmd": "reproducir", "id": cid, "desde": desde, "hasta": hasta})
+
+    def capa_borrar(self):
+        return self._ojos.borrar_capas()
+
+    def dib_recurso(self, nombre):
+        """El código de una librería de vendor/ (MathJax pesa 2 MB: no cabe en la página, se carga al usarla)."""
+        f = VENDOR.get(nombre)
+        return (AQUI / "vendor" / f).read_text(encoding="utf-8") if f and (AQUI / "vendor" / f).exists() else ""
+
+
+def resolver_excel(xl, m):
+    """Una marca con "celda" en un Excel (COM, solo lectura) → {"hwnd", "r" (pantalla), ...} para Ojos.dibujos.
+    rayos_x, formula y desarmar traen además sus datos (panel-excel/rayos_x.py). Sin "celda": None."""
+    if not m.get("celda"): return None
+    rx = rayos_x()
+    if m.get("forma") in ("rayos_x", "formula", "desarmar"):
+        d = dict(rx.resolver(xl, m))
+    else:
+        d = {"r": rx.caja_celda(xl, str(m["celda"]), m.get("hoja"))}
+    if not d.get("r") and m.get("forma") != "formula": raise ValueError(f"{m['celda']} no se ve en la pantalla")
+    d["hwnd"] = int(xl.Hwnd)
+    d["evitar"] = rx.celdas_con_datos(xl)                    # que las tarjetas y notas no tapen los datos
+    return d
+
+
+def rayos_x():
+    """panel-excel/rayos_x.py (lo que lee de Excel para los dibujos)."""
+    sys.path.insert(0, str(AQUI.parent / "panel-excel"))
+    import rayos_x as rx
+    return rx
 
 
 def probar():
@@ -235,8 +402,40 @@ def probar():
         "marcar(): la «ventana» con id que existe se dibuja; la de id inexistente se descarta; la nota sigue para la hoja")
     ver(o.contexto([{"ojos_id": "v9"}]) == "", "una captura que no está (cancelada o vieja) no añade nada")
     o.pendiente = None; ver(not o.adjuntar()["ok"], "adjuntar() sin vista previa no adjunta nada")
+    # dibujos: con una ventana de verdad (el escritorio: cliente en (0, 0)) y una captura falsa encima
+    esc = ojos.u32.GetDesktopWindow()
+    class CapEsc(CapFalsa):
+        hwnd = esc
+        def a_pantalla(self, caja): return [caja[0] * 2, caja[1] * 2, caja[2] * 2, caja[3] * 2]     # k = 0.5
+    o2 = Ojos(); o2.ov.orden = lambda d: {"ok": True}; o2.ultima = CapEsc()
+    resto, lote, av = o2.dibujos([{"tipo": "dibujo", "forma": "foco", "id": 3, "texto": "Aceptar", "color": "rojo"},
+                                  {"tipo": "nota", "celda": "B2"}])
+    d = lote["dibujos"][0] if lote else {}
+    ver(resto == [{"tipo": "nota", "celda": "B2"}] and d.get("forma") == "foco" and d.get("r") == [20, 40, 60, 80]
+        and d.get("hwnd") == esc and d.get("color") == "rojo" and d.get("id") == "d1" and d.get("evitar") == [[20, 40, 60, 80]] and not av,
+        "dibujos(): el «dibujo» sale del resto con su objetivo en píxeles de cliente, sus datos y lo que debe evitar")
+    _, lote, av = o2.dibujos([{"tipo": "dibujo", "forma": "lupa", "caja": [0, 0, 10, 10]}])
+    ver(lote is None and av and "permiso" in av[0], "la lupa no va en una ventana que no se aprobó")
+    o2.aprobadas.add(esc)
+    _, lote, av = o2.dibujos([{"tipo": "dibujo", "forma": "lupa", "caja": [0, 0, 10, 10]}])
+    ver(lote and lote["dibujos"][0].get("en_vivo") and not av, "…y sí en una aprobada (en vivo)")
+    _, lote, av = o2.dibujos([{"tipo": "dibujo", "forma": "fantasma", "pasos": [{"accion": "clic", "id": 3},
+        {"accion": "arrastrar", "caja": [0, 0, 5, 5], "hasta": {"caja": [10, 10, 5, 5]}}]},
+        {"tipo": "dibujo", "forma": "rayo_laser", "id": 3}, {"tipo": "dibujo", "forma": "foco", "id": 99}, {"tipo": "dibujo", "forma": "secuencia"}])
+    ps = lote["dibujos"][0]["pasos"] if lote else []
+    ver(len(ps) == 2 and ps[0]["r"] == [20, 40, 60, 80] and ps[1]["hasta_r"] == [20, 20, 10, 10] and "caja" not in ps[1] and len(av) == 3,
+        "pasos con su r (y hasta_r al arrastrar); forma desconocida, id inexistente y secuencia sin pasos → avisos")
+    _, lote, av = o2.dibujos([{"tipo": "dibujo", "forma": "rayos_x", "celda": "D5"}],
+                             resolver=lambda m: {"hwnd": esc, "r": [100, 50, 60, 20], "valor": "45", "fuentes": [{"ref": "B2", "r": [10, 10, 5, 5]}, {"ref": "H!A1", "r": None}]} if m.get("celda") else None)
+    d = lote["dibujos"][0] if lote else {}
+    ver(d.get("r") == [100, 50, 60, 20] and d.get("valor") == "45" and d["fuentes"][1]["r"] is None and "celda" not in d and not av,
+        "el resolver ubica la «celda» y trae sus datos (fuentes en coordenadas de cliente)")
+    _, lote, av = o2.dibujos([{"tipo": "dibujo", "forma": "teclas", "teclas": ["Ctrl", "S"]}], ventana=esc)
+    ver(lote and lote["dibujos"][0]["r"] is None and lote["dibujos"][0]["hwnd"] == esc, "sin objetivo, en la ventana dada")
     html = inyectar_ui("<html><body><p>x</p></body></html>")
-    ver("window.Ojos" in html and html.index("window.Ojos") < html.index("</body>"), "inyectar_ui mete ojos_ui.js antes de </body>")
+    ver("window.Ojos" in html and "window.Dibujante" in html and html.index("window.Dibujante") < html.index("</body>"),
+        "inyectar_ui mete ojos_ui.js y el dibujante antes de </body>")
+    ver(len(html) < 1_500_000, f"la página sigue cabiendo en WebView2 ({len(html) // 1000} KB; MathJax va aparte)")
     print("Ojos: todo bien" if not malos else f"Ojos: {malos} fallo(s)")
     return malos
 

@@ -17,7 +17,7 @@ import motor
 AQUI = os.path.dirname(os.path.abspath(__file__))
 try:        # los «ojos» (tutor-pantalla/): enseñarle al tutor otra ventana, con permiso. Sin ellos, el panel funciona igual
     sys.path.insert(0, os.path.join(os.path.dirname(AQUI), "tutor-pantalla")); import ojos_panel
-    motor.REGLAS += ojos_panel.REGLAS_OJOS
+    motor.REGLAS += ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS
 except Exception:
     ojos_panel = None
 PISTA = "Pulsa Esc en Excel (puede que estés editando una celda o haya un aviso abierto) y vuelve a intentar."
@@ -119,6 +119,16 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         try: return int(self._ventana.native.Handle.ToInt64())
         except Exception: return None
 
+    def _hwnd_excel(self):
+        """La ventana de Excel (para los dibujos sin objetivo, como un atajo de teclado)."""
+        try: return self._x.hacer(lambda libro: int(libro.xl.Hwnd))
+        except Exception: return None
+
+    def _resolver_celda(self, m):
+        """Los dibujos con "celda": la celda en pantalla y sus datos, leídos en el hilo de Excel (solo lectura)."""
+        if not m.get("celda"): return None
+        return self._x.hacer(lambda libro: ojos_panel.resolver_excel(libro.xl, m))
+
     def _empujar(self, js):
         """Ejecuta JS en la ventana del panel, si está abierta."""
         if self._ventana:
@@ -218,6 +228,10 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         texto, marcas = motor.separar(resp)
         texto, prop, error = motor.separar_acciones(texto)     # varios bloques <acciones> → una sola propuesta
         hechas = en_ventana = 0
+        lote = None
+        if self._ojos and any(isinstance(m, dict) and m.get("tipo") == "dibujo" for m in marcas):    # "tipo": "dibujo": encima de Excel o de la ventana capturada (dibujante.js + capa.py)
+            marcas, lote, avisos = self._ojos.dibujos(marcas, self._resolver_celda, self._hwnd_excel())
+            if avisos: self._notas.append("Estos dibujos tuyos no se pudieron hacer: " + "; ".join(avisos) + ".")
         if self._ojos and marcas: marcas, en_ventana = self._ojos.marcar(marcas)   # "tipo": "ventana": encima de esa ventana
         if marcas:      # cada marca en su hoja (la que tiene al frente, o la que diga "hoja"); nada se pierde en silencio
             try: r = self._x.hacer(lambda libro: libro.dibujar_marcas(marcas, self._m))
@@ -232,7 +246,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
                 except Exception: frente = None
                 otras = [h for h in r["hojas"] if frente is None or h.lower() != frente.lower()]
                 if otras: texto += "\n\n(Las marcas están en la hoja " + " y ".join(f"«{h}»" for h in otras) + ": ábrela para verlas.)"
-        out = {"texto": texto, "marcas": hechas, "marcas_ventana": en_ventana, "pedir": pide}
+        out = {"texto": texto, "marcas": hechas, "marcas_ventana": en_ventana, "pedir": pide, "dibujos": lote}
         if prop:
             try:
                 out["propuesta"] = self._x.hacer(lambda libro: libro.preparar(prop, self._m))

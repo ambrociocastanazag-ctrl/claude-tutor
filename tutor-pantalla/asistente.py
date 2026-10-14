@@ -42,13 +42,15 @@ def separar(texto):
     if not m: return (texto or "").strip(), []
     try: lista = json.loads(m.group(1))
     except ValueError: lista = []
-    return texto[:m.start()].strip(), [x for x in lista if isinstance(x, dict)][:4]
+    return texto[:m.start()].strip(), [x for x in lista if isinstance(x, dict)][:10]      # flechas (4) y dibujos (6)
 
 
 def marcas(lista, cap):
     """Las marcas de Claude → cajas en píxeles de la captura [x, y, w, h], con su texto. Descarta lo que no exista."""
     out = []
     for m in lista:
+        if len(out) == 4: break
+        if m.get("tipo") == "dibujo": continue                  # los dibujos van aparte (ojos_panel.Ojos.dibujos)
         caja = None
         if "id" in m:
             try: c = cap.control(int(m["id"]))

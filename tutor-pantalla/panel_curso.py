@@ -39,7 +39,7 @@ class TutorCurso(motor.Tutor):
 
     def _intro(self):
         c = self.curso
-        partes = [REGLAS_CURSO.format(app=c.app_nombre) + ojos_panel.REGLAS_OJOS, f"\nCurso: {c.titulo}. Módulos:"]
+        partes = [REGLAS_CURSO.format(app=c.app_nombre) + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS, f"\nCurso: {c.titulo}. Módulos:"]
         for k, mod in enumerate(c.modulos):
             pasos = "; ".join(f"{p.get('titulo', '')}: {re.sub(r'[*]', '', p['texto'])[:140]}" for p in mod.pasos)
             partes.append(f"\nMódulo {k + 1}: {mod.titulo}. Tema: {mod.d.get('tema_tutor', '')}\n  Pasos: {pasos}\n"
@@ -230,6 +230,10 @@ class Api(ojos_panel.OjosApi):
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
         resp, pide = ojos_panel.separar_pedido(resp)
         texto, marcas = motor.separar(resp)
+        lote = avisos = None
+        if any(isinstance(m, dict) and m.get("tipo") == "dibujo" for m in marcas):    # encima de la app (dibujante.js + capa.py)
+            marcas, lote, avisos = self._ojos.dibujos(marcas, self._resolver_nombre(), (self._app() or {}).get("hwnd"))
+        if avisos: self._notas.append("Estos dibujos tuyos no se pudieron hacer: " + "; ".join(avisos) + ".")
         marcas, en_ventana = self._ojos.marcar(marcas)            # las "ventana" (sobre una captura)
         hechas = 0
         por_nombre = [m for m in marcas if isinstance(m, dict) and m.get("tipo") == "app" and m.get("nombre")]
@@ -241,7 +245,21 @@ class Api(ojos_panel.OjosApi):
                 if c: ms.append({"c": c, "texto": str(m.get("texto") or "")[:40], "n": m.get("n"), "color": m.get("color") or "azul"})
                 else: self._notas.append(f"Tu marca en «{m['nombre']}» no se dibujó: ese control no está a la vista.")
             if ms and not en_ventana: hechas = self._pintar(ms) and len(ms)
-        return {"texto": texto, "marcas": 0, "marcas_ventana": en_ventana + hechas, "pedir": pide}
+        return {"texto": texto, "marcas": 0, "marcas_ventana": en_ventana + hechas, "pedir": pide, "dibujos": lote}
+
+    def _resolver_nombre(self):
+        """Para Ojos.dibujos: los "dibujo" con "nombre" se ubican por UI Automation en la ventana de la app (el estado
+        se lee una sola vez por respuesta, aunque haya varios pasos)."""
+        est = {}
+        def resolver(m):
+            if not m.get("nombre"): return None
+            if "e" not in est: est["e"] = cp.estado(self._curso.app["exe"])
+            c = cp.buscar(est["e"], {"nombre": m["nombre"]}) if est["e"] else None
+            v = self._app()
+            if not c or not v: raise ValueError(f"«{m['nombre']}» no está a la vista")
+            a, b, x1, y1 = c["caja"]
+            return {"hwnd": v["hwnd"], "r": [a, b, x1 - a, y1 - b]}
+        return resolver
 
     def borrar_marcas(self):
         self._ojos.borrar(); self._senalando = []

@@ -1,0 +1,387 @@
+{
+ "dibujos": [
+  {
+   "r": [
+    346,
+    423,
+    104,
+    25
+   ],
+   "valor": "115",
+   "formula": "=B2+Hoja2!A1",
+   "fuentes": [
+    {
+     "ref": "B2",
+     "r": [
+      137,
+      350,
+      104,
+      24
+     ],
+     "valor": "15"
+    },
+    {
+     "ref": "Hoja2!A1",
+     "r": null,
+     "valor": "100"
+    }
+   ],
+   "pasos": [
+    {
+     "decir": "Esta celda, B2, vale 15."
+    },
+    {
+     "decir": "Esta celda, Hoja2!A1, vale 100."
+    },
+    {
+     "decir": "Con todo eso, la fórmula da 115."
+    }
+   ],
+   "id": "x_d5",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "rayos_x",
+   "color": "azul"
+  },
+  {
+   "r": [
+    346,
+    350,
+    104,
+    24
+   ],
+   "valor": "22,75",
+   "formula": "=PROMEDIO(B2:B9)",
+   "fuentes": [
+    {
+     "ref": "B2:B9",
+     "r": [
+      137,
+      350,
+      104,
+      193
+     ],
+     "valor": "8 valores"
+    }
+   ],
+   "pasos": [
+    {
+     "decir": "Estas celdas, B2:B9, son 8 valores."
+    },
+    {
+     "decir": "Con todo eso, la fórmula da 22,75."
+    }
+   ],
+   "id": "x_d2",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "rayos_x",
+   "color": "rojo"
+  },
+  {
+   "r": [
+    346,
+    374,
+    104,
+    25
+   ],
+   "latex": "\\frac{\\sum_{i=2}^{9} B_{i}}{\\operatorname{CONTAR}\\left(\\text{B2}{:}\\text{B9}\\right)}",
+   "grafica": {
+    "valores": [
+     15.0,
+     20.0,
+     12.0,
+     30.0,
+     25.0,
+     18.0,
+     40.0,
+     22.0
+    ],
+    "etiquetas": [
+     "ENE",
+     "FEB",
+     "MAR",
+     "ABR",
+     "MAY",
+     "JUN",
+     "JUL",
+     "AGO"
+    ],
+    "linea": null
+   },
+   "id": "f_d3",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "formula",
+   "color": "azul"
+  },
+  {
+   "r": [
+    346,
+    350,
+    104,
+    24
+   ],
+   "latex": "\\operatorname{PROMEDIO}\\left(\\text{B2}{:}\\text{B9}\\right)",
+   "grafica": {
+    "valores": [
+     15.0,
+     20.0,
+     12.0,
+     30.0,
+     25.0,
+     18.0,
+     40.0,
+     22.0
+    ],
+    "etiquetas": [
+     "ENE",
+     "FEB",
+     "MAR",
+     "ABR",
+     "MAY",
+     "JUN",
+     "JUL",
+     "AGO"
+    ],
+    "linea": {
+     "valor": 22.75,
+     "texto": "promedio"
+    }
+   },
+   "id": "f_d2",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "formula",
+   "color": "verde"
+  },
+  {
+   "r": [
+    346,
+    399,
+    104,
+    24
+   ],
+   "latex": "\\begin{cases} \\text{“Alto”} & \\text{si } \\text{B2} > 10 \\\\ \\text{“Bajo”} & \\text{en otro caso} \\end{cases}",
+   "grafica": null,
+   "id": "f_d4",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "formula",
+   "color": "morado"
+  },
+  {
+   "r": [
+    346,
+    374,
+    104,
+    25
+   ],
+   "original": "=SUMA(B2:B9)/CONTAR(B2:B9)",
+   "id": "d_d3",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "desarmar",
+   "color": "azul",
+   "partes": [
+    {
+     "texto": "SUMA(B2:B9)",
+     "nota": "suma las 8 ventas"
+    },
+    {
+     "texto": "/",
+     "nota": "dividido entre"
+    },
+    {
+     "texto": "CONTAR(B2:B9)",
+     "nota": "cuántas ventas hay (8)"
+    }
+   ]
+  },
+  {
+   "id": "f_solo",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "formula",
+   "latex": "\\sigma = \\sqrt{\\frac{\\sum_{i=1}^{n}(x_i-\\bar{x})^2}{n}}",
+   "color": "naranja"
+  },
+  {
+   "id": "d_vba",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "desarmar",
+   "original": "If x > 10 Then MsgBox \"Alto\"",
+   "partes": [
+    {
+     "texto": "If",
+     "nota": "Si pasa esto..."
+    },
+    {
+     "texto": "x > 10",
+     "nota": "la condición: x mayor que 10"
+    },
+    {
+     "texto": "Then",
+     "nota": "entonces"
+    },
+    {
+     "texto": "MsgBox \"Alto\"",
+     "nota": "muestra un cuadro con el texto Alto"
+    }
+   ]
+  },
+  {
+   "r": [
+    346,
+    374,
+    104,
+    25
+   ],
+   "latex": "\\frac{\\sum_{i=2}^{9} B_{i}}{\\operatorname{CONTAR}\\left(\\text{B2}{:}\\text{B9}\\right)}",
+   "grafica": {
+    "valores": [
+     15.0,
+     20.0,
+     12.0,
+     30.0,
+     25.0,
+     18.0,
+     40.0,
+     22.0
+    ],
+    "etiquetas": [
+     "ENE",
+     "FEB",
+     "MAR",
+     "ABR",
+     "MAY",
+     "JUN",
+     "JUL",
+     "AGO"
+    ],
+    "linea": null
+   },
+   "id": "j_formula",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "formula",
+   "color": "azul"
+  },
+  {
+   "r": [
+    346,
+    423,
+    104,
+    25
+   ],
+   "valor": "115",
+   "formula": "=B2+Hoja2!A1",
+   "fuentes": [
+    {
+     "ref": "B2",
+     "r": [
+      137,
+      350,
+      104,
+      24
+     ],
+     "valor": "15"
+    },
+    {
+     "ref": "Hoja2!A1",
+     "r": null,
+     "valor": "100"
+    }
+   ],
+   "pasos": [
+    {
+     "decir": "Esta celda, B2, vale 15."
+    },
+    {
+     "decir": "Esta celda, Hoja2!A1, vale 100."
+    },
+    {
+     "decir": "Con todo eso, la fórmula da 115."
+    }
+   ],
+   "id": "j_rayos",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "rayos_x",
+   "color": "azul"
+  },
+  {
+   "r": [
+    346,
+    399,
+    104,
+    24
+   ],
+   "original": "=SI(B2>10;\"Alto\";\"Bajo\")",
+   "id": "j_desarmar",
+   "hwnd": 8390970,
+   "cliente": [
+    1422,
+    730
+   ],
+   "escala": 1.25,
+   "forma": "desarmar",
+   "color": "azul",
+   "partes": [
+    {
+     "texto": "B2>10",
+     "nota": "la condición"
+    },
+    {
+     "texto": "\"Alto\"",
+     "nota": "si se cumple"
+    },
+    {
+     "texto": "\"Bajo\"",
+     "nota": "si no"
+    }
+   ]
+  }
+ ]
+}
