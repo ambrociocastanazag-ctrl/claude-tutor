@@ -14,6 +14,10 @@ python tutor-pantalla/panel_pantalla.py
 
 **Modo puente** (`python tutor-pantalla/panel_pantalla.py --puente`): el mismo panel, pero responde **el chat de Claude Code** que lo abrió. Lo que escribes le llega al chat; la respuesta y las flechas vuelven al panel. Claude Code también puede pedirte una captura, que igual pasa por la vista previa. Cómo lo usa el chat: ver `puente.py`.
 
+**Adjuntos:** además de las capturas, se le pueden pasar archivos con el clip, pegándolos (Ctrl+V) o arrastrándolos: imágenes, PDF y texto (como en los tutores de Excel y Dia). En el modo puente llegan al chat de Claude Code como archivos que lee con Read.
+
+**Preguntas en el chat:** el asistente y todos los tutores pueden poner una tarjeta con botones cuando ayuda: opción única (un clic), varias opciones, abierta (caja de texto), con «Otra…» y «No sé». Si el tutor marca la correcta, se corrige al instante (✔/✘ y una explicación, sin IA); la respuesta le llega al tutor para que siga. Formato: bloque `<preguntas>[...]</preguntas>` (`REGLAS_PREGUNTAS` en `ojos_panel.py`).
+
 Sin captura, también se le puede escribir como a un chat normal. **Investiga:** busca en internet y lee los enlaces que le pegues (WebSearch y WebFetch, solo lectura); mientras tanto el panel dice «Buscando en la web…» o «Leyendo la página…». Los enlaces de sus respuestas se abren en tu navegador.
 
 ## ¿Sirve con cualquier programa?
@@ -114,6 +118,7 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 | `asistente.py` | La sesión `claude -p` (stream-json, sin MCP ni ajustes, como el tutor de Excel; con solo WebSearch y WebFetch), sus reglas y cómo se leen las marcas (`MARCAS: [...]` al final de la respuesta). |
 | `ojos_panel.py` | Los ojos para cualquier panel: `Ojos` (capturas con permiso, adjuntos, contexto para el tutor, marcas `"ventana"` y flechas), `OjosApi` (lo que llama la página), `REGLAS_OJOS` (lo que se le explica al tutor), `inyectar_ui` y el proceso de las flechas. `python ojos_panel.py --probar` (sin ventanas ni IA). |
 | `ojos_ui.js` | La lista de ventanas con miniaturas y la vista previa (Cancelar / Recortar / Adjuntar), para la página de cualquier panel. |
+| `preguntas_ui.js` | Las tarjetas de preguntas del tutor en el chat (opción única o múltiple, abiertas, «Otra…», «No sé»), con la corrección al instante. |
 | `panel_pantalla.py` | El panel del asistente (pywebview): la API que llama la página, el modo puente y la prueba `--probar`. |
 | `curso_pantalla.py` | El modo curso: cargar el curso, leer el estado de la app, revisar el «Tu turno» sin IA, buscar lo que se señala y el estado en texto para el tutor. |
 | `panel_curso.py` | El panel de un curso (la página de los tutores): pasos, «Señálamelo», Comprobar (sin IA y con el tutor), el tutor del curso y `--probar`. |

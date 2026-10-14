@@ -75,7 +75,8 @@ Colores: "rojo" = error, "verde" = bien, "amarillo" = fíjate aquí, "azul" = in
 En Dia, lo del diagrama se sigue marcando en tu bloque <marcas> de siempre (va dentro de Dia, en la capa «Tutor»); "tipo": "ventana" es
 solo para lo que está FUERA del diagrama: diálogos de Dia (Propiedades…), sus menús o barras, u otra ventana (un PDF, un enunciado).""" +
      ojos_panel.REGLAS_DIBUJOS + """
-En Dia, los "dibujo" van encima de una ventana que te enseñó (con "id" o "caja" de su captura), no por el nombre de las clases.""" if ojos_panel else "")
+En Dia, los "dibujo" van encima de una ventana que te enseñó (con "id" o "caja" de su captura), no por el nombre de las clases.""" +
+     ojos_panel.REGLAS_PREGUNTAS if ojos_panel else "")
 
 
 def _sin_tutor(t):
@@ -750,8 +751,9 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         except ValueError as e: return {"texto": str(e)}             # un adjunto que no se admite
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
         pide = en_ventana = False
-        lote = None
+        lote, preguntas = None, []
         if self._ojos: resp, pide = ojos_panel.separar_pedido(resp)          # <pedir_ventana/> → botón en la página
+        if self._ojos: resp, preguntas = ojos_panel.separar_preguntas(resp)  # <preguntas> → tarjeta con botones
         texto, marcas = motor.separar(resp)
         texto, prop, error = cd.separar_acciones(texto, self._curso.conv)
         if self._ojos and marcas:       # "tipo": "dibujo": encima de la ventana capturada (dibujante.js + capa.py)
@@ -762,7 +764,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
             self._marcas = marcas
             self._empujar(f"window.mostrarDiagrama({json.dumps(self._svg())})")
             self._marcas_en_dia(marcas)               # y también dentro de Dia, en la capa «Tutor»
-        out = {"texto": texto, "marcas": len(marcas), "marcas_ventana": en_ventana or 0, "pedir": pide, "dibujos": lote}
+        out = {"texto": texto, "marcas": len(marcas), "marcas_ventana": en_ventana or 0, "pedir": pide, "dibujos": lote, "preguntas": preguntas}
         if prop:
             try:
                 with self._cerrojo_cambios: out["propuesta"] = self._cambios.preparar(prop, bool(self._turno()))

@@ -24,7 +24,7 @@ import ojos                                                             # noqa: 
 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
-SCRIPTS_UI = ["ojos_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "voz.js"]
+SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "voz.js"]
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
 FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
@@ -67,6 +67,68 @@ Comunes: "texto" (1 a 5 palabras), "decir" (frase corta que se lee en voz alta s
 En Excel, con "celda": "formula" sin latex escribe la de la celda ("grafica": true añade una mini gráfica de sus
 datos), "rayos_x" anima de dónde salen los valores de la fórmula y "desarmar" sin "original" usa su fórmula.
 Úsalos cuando aclaren más que una flecha (máximo 2 o 3 por respuesta); para señalar un botón basta la flecha."""
+
+REGLAS_PREGUNTAS = """
+PREGUNTAS EN EL CHAT: cuando ayude, en vez de preguntar en texto, añade al final un bloque que el panel convierte en una
+tarjeta con botones:
+<preguntas>[{"pregunta": "¿Qué hace SUMA(B2:B9)?", "opciones": ["Suma esas celdas", "Las cuenta", "Las promedia"],
+  "correcta": 0, "explicacion": "SUMA suma los números del rango."}]</preguntas>
+- Opción única: "opciones" (2 a 6, cortas). Con "correcta" (índice desde 0) se corrige al instante y se muestra
+  "explicacion" (una frase). Sin "correcta" es una encuesta: para que elija (qué quiere hacer, cómo lo prefiere).
+- Varias respuestas: "multiple": true (y "correcta": [0, 2] si la hay).
+- Abierta: sin "opciones" (sale una caja de texto), para una respuesta corta, un número o una fórmula.
+- "otra": true añade «Otra…» con caja de texto; "no_se": true añade «No sé» (úsalo en diagnósticos).
+- Hasta 4 preguntas por bloque. No repitas en tu texto lo que ya dice la tarjeta.
+Úsalo para comprobar que entendió (una pregunta corta después de explicar), para un diagnóstico o para que elija entre
+caminos; no en cada respuesta. Sus respuestas te llegan en un mensaje que empieza por «Mi respuesta» o «Mis respuestas»:
+corrige o sigue desde ahí."""
+
+PREGUNTAS_RE = re.compile(r"\s*<preguntas>\s*(.*?)\s*(?:</preguntas>|$)", re.S | re.I)
+MAX_ADJUNTOS, MAX_MB, MAX_TEXTO = 5, 15, 60000
+IMAGENES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+
+def separar_preguntas(texto):
+    """(texto sin el bloque <preguntas>, lista de preguntas válidas para Preguntas.tarjeta). Lo que no se entiende se tira."""
+    m = PREGUNTAS_RE.search(texto or "")
+    if not m: return texto or "", []
+    limpio = (texto[:m.start()] + " " + texto[m.end():]).strip()
+    try: datos = json.loads(m.group(1))
+    except ValueError: return limpio, []
+    out = []
+    for q in (datos if isinstance(datos, list) else [datos])[:4]:
+        if not isinstance(q, dict) or not str(q.get("pregunta") or "").strip(): continue
+        ops = [str(o)[:160] for o in (q.get("opciones") or []) if str(o).strip()][:8] if isinstance(q.get("opciones"), list) else []
+        d = {"pregunta": str(q["pregunta"])[:400], "opciones": ops, "multiple": bool(q.get("multiple")) and len(ops) > 1,
+             "otra": bool(q.get("otra")) and bool(ops), "no_se": bool(q.get("no_se")) and bool(ops),
+             "explicacion": str(q.get("explicacion") or "")[:400]}
+        corr = q.get("correcta")
+        corr = [c for c in (corr if isinstance(corr, list) else [corr]) if isinstance(c, int) and not isinstance(c, bool) and 0 <= c < len(ops)]
+        if corr: d["correcta"] = corr if d["multiple"] else corr[0]
+        out.append(d)
+    return limpio, out
+
+
+def bloques_adjuntos(adjuntos):
+    """Los archivos que manda la página ({"nombre", "tipo": "imagen" | "pdf" | "texto", "media_type", "datos"}) → (bloques
+    image/document para Claude, texto de los archivos de texto, nombres). Como motor.mensaje del panel de Excel.
+    Lanza ValueError con un mensaje para la persona si algo no se admite."""
+    if len(adjuntos or []) > MAX_ADJUNTOS: raise ValueError(f"Máximo {MAX_ADJUNTOS} adjuntos por mensaje.")
+    bloques, textos, nombres = [], [], []
+    for a in adjuntos or []:
+        tipo, nombre, datos = a.get("tipo"), str(a.get("nombre") or "archivo")[:120], a.get("datos") or ""
+        if not isinstance(datos, str) or not datos: raise ValueError(f"«{nombre}» llegó vacío.")
+        if tipo == "texto":
+            textos.append(f"\n\n[Archivo adjunto: {nombre}]\n{datos[:MAX_TEXTO]}"); continue
+        if len(datos) * 3 / 4 > MAX_MB * 1024 * 1024: raise ValueError(f"«{nombre}» pesa demasiado (máximo {MAX_MB} MB).")
+        if tipo == "imagen" and a.get("media_type") in IMAGENES:
+            bloques.append({"type": "image", "source": {"type": "base64", "media_type": a["media_type"], "data": datos}})
+        elif tipo == "pdf":
+            bloques.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": datos}, "title": nombre})
+        else: raise ValueError(f"«{nombre}»: no se admite ese tipo de archivo (solo imágenes, PDF y texto).")
+        nombres.append(nombre)
+    return bloques, "".join(textos), nombres
+
 
 PEDIDO_RE = re.compile(r"\s*<pedir_ventana\s*/?>\s*", re.I)
 
@@ -392,6 +454,18 @@ def probar():
         nonlocal malos
         malos += not c; print(ok(c), txt)
 
+    t, qs = separar_preguntas('Mira. <preguntas>[{"pregunta": "¿2+2?", "opciones": ["3", "4"], "correcta": 1, "explicacion": "Suma."},'
+                              '{"pregunta": "¿Qué prefieres?", "opciones": ["A", "B", "C"], "multiple": true, "correcta": [0, 9]},'
+                              '{"pregunta": "Escribe la fórmula", "opciones": "nada"}, {"sin": 1}]</preguntas>')
+    ver(t == "Mira." and len(qs) == 3 and qs[0]["correcta"] == 1 and qs[1]["correcta"] == [0] and qs[1]["multiple"]
+        and qs[2]["opciones"] == [] and "correcta" not in qs[2], "separar_preguntas: bloque fuera del texto, correcta válida, abierta y lo raro descartado")
+    ver(separar_preguntas("Hola <preguntas>[roto") == ("Hola", []), "un bloque roto se quita sin romper la respuesta")
+    b, tx, ns = bloques_adjuntos([{"tipo": "imagen", "media_type": "image/png", "datos": "iVBO", "nombre": "a.png"},
+                                  {"tipo": "pdf", "datos": "JVBE", "nombre": "b.pdf"}, {"tipo": "texto", "datos": "hola", "nombre": "c.txt"}])
+    ver([x["type"] for x in b] == ["image", "document"] and "c.txt" in tx and ns == ["a.png", "b.pdf"], "bloques_adjuntos: imagen, PDF y texto")
+    try: bloques_adjuntos([{"tipo": "exe", "datos": "x", "nombre": "v.exe"}]); malo = False
+    except ValueError: malo = True
+    ver(malo, "un tipo de archivo que no se admite da un aviso claro")
     t, p = separar_pedido("¿Me enseñas el diálogo?\n<pedir_ventana/>")
     ver(p and t == "¿Me enseñas el diálogo?", "separar_pedido quita <pedir_ventana/> y avisa")
     ver(separar_pedido("Sin pedido") == ("Sin pedido", False), "sin pedido, el texto queda igual")

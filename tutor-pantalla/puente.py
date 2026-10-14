@@ -17,7 +17,7 @@ Uso desde Claude Code (el chat):
                                                         una línea final  MARCAS: [...]  dibuja flechas, igual que el asistente
   python tutor-pantalla/puente.py pedir-captura "texto" le pide una captura (sale la vista previa en el panel)
   python tutor-pantalla/puente.py estado                ¿hay panel abierto? ¿mensajes sin leer?"""
-import ctypes, json, os, shutil, sys, tempfile, time
+import base64, ctypes, json, os, re, shutil, sys, tempfile, time
 from pathlib import Path
 
 CARPETA = Path(tempfile.gettempdir()) / "tutor-pantalla-puente"
@@ -64,10 +64,19 @@ class LadoPanel:
         _escribir(PANEL, {"pid": os.getpid(), "inicio": inicio_de(os.getpid())})
         self.n = 0
 
-    def mandar(self, texto, ventana=None, cap=None):
-        """Un mensaje para el chat. cap: la Captura ya aprobada en la vista previa (o None). Devuelve su id."""
+    def mandar(self, texto, ventana=None, cap=None, archivos=()):
+        """Un mensaje para el chat. cap: la Captura ya aprobada en la vista previa (o None). archivos: los que adjuntó
+        la persona ({"nombre", "tipo", "datos"}: base64, o el texto tal cual); se guardan junto al mensaje. Devuelve su id."""
         self.n += 1; mid = f"m{self.n:04d}"
         d = {"id": mid, "hora": time.strftime("%H:%M:%S"), "texto": texto, "ventana": ventana}
+        rutas = []
+        for k, a in enumerate(archivos or []):
+            nombre = re.sub(r"[^\w.\-]+", "_", str(a.get("nombre") or "archivo"))[:80]
+            f = ENTRADA / f"{mid}_{k}_{nombre}"
+            if a.get("tipo") == "texto": f.write_text(str(a.get("datos") or ""), encoding="utf-8")
+            else: f.write_bytes(base64.b64decode(a.get("datos") or ""))
+            rutas.append({"ruta": str(f), "tipo": a.get("tipo")})
+        if rutas: d["archivos"] = rutas
         if cap is not None:
             png = ENTRADA / f"{mid}.png"; cap.img.save(png)
             d.update(captura=str(png), tam=list(cap.img.size), controles=cap.texto_controles())
@@ -100,6 +109,8 @@ def _formatear(d):
         w, h = d.get("tam") or ("?", "?")
         partes.append(f"Captura aprobada: {d['captura']} ({w}×{h} px). Léela con Read.")
         partes.append("Controles de la ventana:\n" + (d.get("controles") or ""))
+    for a in d.get("archivos") or []:
+        partes.append(f"Archivo adjunto ({a.get('tipo')}): {a['ruta']}. Léelo con Read.")
     return "\n".join(partes)
 
 

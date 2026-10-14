@@ -39,7 +39,7 @@ class TutorCurso(motor.Tutor):
 
     def _intro(self):
         c = self.curso
-        partes = [REGLAS_CURSO.format(app=c.app_nombre) + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS, f"\nCurso: {c.titulo}. Módulos:"]
+        partes = [REGLAS_CURSO.format(app=c.app_nombre) + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS + ojos_panel.REGLAS_PREGUNTAS, f"\nCurso: {c.titulo}. Módulos:"]
         for k, mod in enumerate(c.modulos):
             pasos = "; ".join(f"{p.get('titulo', '')}: {re.sub(r'[*]', '', p['texto'])[:140]}" for p in mod.pasos)
             partes.append(f"\nMódulo {k + 1}: {mod.titulo}. Tema: {mod.d.get('tema_tutor', '')}\n  Pasos: {pasos}\n"
@@ -229,6 +229,7 @@ class Api(ojos_panel.OjosApi):
         except ValueError as e: return {"texto": str(e)}
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
         resp, pide = ojos_panel.separar_pedido(resp)
+        resp, preguntas = ojos_panel.separar_preguntas(resp)          # <preguntas> → tarjeta con botones
         texto, marcas = motor.separar(resp)
         lote = avisos = None
         if any(isinstance(m, dict) and m.get("tipo") == "dibujo" for m in marcas):    # encima de la app (dibujante.js + capa.py)
@@ -245,7 +246,7 @@ class Api(ojos_panel.OjosApi):
                 if c: ms.append({"c": c, "texto": str(m.get("texto") or "")[:40], "n": m.get("n"), "color": m.get("color") or "azul"})
                 else: self._notas.append(f"Tu marca en «{m['nombre']}» no se dibujó: ese control no está a la vista.")
             if ms and not en_ventana: hechas = self._pintar(ms) and len(ms)
-        return {"texto": texto, "marcas": 0, "marcas_ventana": en_ventana + hechas, "pedir": pide, "dibujos": lote}
+        return {"texto": texto, "marcas": 0, "marcas_ventana": en_ventana + hechas, "pedir": pide, "dibujos": lote, "preguntas": preguntas}
 
     def _resolver_nombre(self):
         """Para Ojos.dibujos: los "dibujo" con "nombre" se ubican por UI Automation en la ventana de la app (el estado

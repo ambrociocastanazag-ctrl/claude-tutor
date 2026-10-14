@@ -757,7 +757,7 @@ textarea:focus-visible{outline:none}
       var reloj = setInterval(function(){ var s = espera.querySelector('.seg-s'); if (s) s.textContent = Math.round((Date.now() - t0) / 1000) + ' s'; }, 500);
       var buffer = '';
       window.trozoTutor = function(t){  // el texto llega a trozos; los bloques <marcas> y <acciones> no se muestran
-        buffer += t; var visible = buffer.split(/<marcas>|<acciones>|<pedir_ventana/)[0];
+        buffer += t; var visible = buffer.split(/<marcas>|<acciones>|<pedir_ventana|<preguntas/)[0];
         if (!visible.trim()) return;
         clearInterval(reloj);
         espera.innerHTML = cabTutor('· escribiendo…') + '<div class="bloques">' + bloques(visible, true) + '</div>';
@@ -773,6 +773,8 @@ textarea:focus-visible{outline:none}
         var nd = r.dibujos && r.dibujos.dibujos ? r.dibujos.dibujos.length : 0;       // dibujos encima de la app (dibujante.js)
         if (nd) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', '<div class="marcas"><i></i><span>Te lo dibujé encima de ' + esc(APP) + ' (<strong>' + nd + '</strong>)</span></div>');
         if (window.Dibujante && (nd || (window.Voz && Voz.activa()))) Dibujante.mostrar(r.dibujos || [], r.texto || '');
+        if (r.preguntas && r.preguntas.length && window.Preguntas)            // encuesta o preguntas: la respuesta vuelve al tutor
+          espera.querySelector('.bloques').appendChild(Preguntas.tarjeta(r.preguntas, function(t){ preguntar(t); }));
         if (r.pedir && window.Ojos && api.ojos_ventanas){       // el tutor pidió ver una ventana: él decide con el botón
           var bv = document.createElement('button'); bv.type = 'button'; bv.className = 'comprobar mostrar-ventana';
           bv.innerHTML = ic('camera') + 'Mostrarle una ventana'; bv.onclick = mirarVentana;

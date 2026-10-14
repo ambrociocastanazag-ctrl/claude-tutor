@@ -17,7 +17,7 @@ import motor
 AQUI = os.path.dirname(os.path.abspath(__file__))
 try:        # los «ojos» (tutor-pantalla/): enseñarle al tutor otra ventana, con permiso. Sin ellos, el panel funciona igual
     sys.path.insert(0, os.path.join(os.path.dirname(AQUI), "tutor-pantalla")); import ojos_panel
-    motor.REGLAS += ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS
+    motor.REGLAS += ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS + ojos_panel.REGLAS_PREGUNTAS
 except Exception:
     ojos_panel = None
 PISTA = "Pulsa Esc en Excel (puede que estés editando una celda o haya un aviso abierto) y vuelve a intentar."
@@ -223,8 +223,9 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         try: resp = self._tutor.preguntar(ctx, pregunta, trozo, adjuntos)
         except ValueError as e: return {"texto": str(e)}             # un adjunto que no se admite
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
-        pide = False
+        pide, preguntas = False, []
         if self._ojos: resp, pide = ojos_panel.separar_pedido(resp)          # <pedir_ventana/> → botón en la página
+        if self._ojos: resp, preguntas = ojos_panel.separar_preguntas(resp)  # <preguntas> → tarjeta con botones
         texto, marcas = motor.separar(resp)
         texto, prop, error = motor.separar_acciones(texto)     # varios bloques <acciones> → una sola propuesta
         hechas = en_ventana = 0
@@ -246,7 +247,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
                 except Exception: frente = None
                 otras = [h for h in r["hojas"] if frente is None or h.lower() != frente.lower()]
                 if otras: texto += "\n\n(Las marcas están en la hoja " + " y ".join(f"«{h}»" for h in otras) + ": ábrela para verlas.)"
-        out = {"texto": texto, "marcas": hechas, "marcas_ventana": en_ventana, "pedir": pide, "dibujos": lote}
+        out = {"texto": texto, "marcas": hechas, "marcas_ventana": en_ventana, "pedir": pide, "dibujos": lote, "preguntas": preguntas}
         if prop:
             try:
                 out["propuesta"] = self._x.hacer(lambda libro: libro.preparar(prop, self._m))

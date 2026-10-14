@@ -105,6 +105,11 @@ textarea:focus-visible{outline:none}
 .pendientes{display:flex;flex-wrap:wrap;gap:10px;padding:6px 6px 2px}
 .pend{position:relative} .pend .mini{width:88px;height:56px;border-radius:7px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)}
 .pend .mini img{display:block;width:100%;height:100%;object-fit:cover;object-position:top left}
+.pend .arch{height:50px;max-width:190px;display:flex;align-items:center;gap:8px;padding:0 10px 0 6px;border-radius:7px;border:1px solid var(--line);background:var(--sunk)}
+.pend .arch .ext{flex-shrink:0;width:28px;height:34px;border-radius:5px;display:grid;place-items:center;font-family:var(--mono);font-size:9px;font-weight:700;background:var(--acc-soft);color:var(--acc-text)}
+.pend .arch div{min-width:0;display:flex;flex-direction:column} .pend .arch b{font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pend .arch small{font-size:11px;color:var(--ink3)} .pend.cargando{opacity:.55}
+.globo .arch-yo{display:inline-block;margin:0 6px 4px 0;padding:3px 8px;border-radius:6px;background:var(--sunk);font-size:12px;font-weight:600}
 .pend .x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;border-radius:50%;border:2px solid var(--surface);background:var(--ink);color:var(--bg);display:grid;place-items:center}
 .mostrar-btn{align-self:flex-start;display:flex;align-items:center;gap:7px;height:34px;padding:0 13px;border:none;border-radius:9px;background:var(--acc);color:var(--on-acc);font-size:13.5px;font-weight:700}
 </style>
@@ -143,6 +148,8 @@ textarea:focus-visible{outline:none}
     <div class="caja">
       <div class="pendientes" id="adjuntos" hidden></div>
       <div class="escribir">
+        <button class="icono-btn" id="clip" type="button" title="Adjuntar archivo · también puedes pegar (Ctrl+V) o arrastrar" aria-label="Adjuntar archivo"><span data-ic="clip"></span></button>
+        <input type="file" id="archivo" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/*,.txt,.md,.csv,.json,.py,.m">
         <textarea id="entrada" rows="1" placeholder="Pregúntale lo que sea…"></textarea>
         <button class="enviar" id="enviar" type="button" title="Enviar (Enter) · Shift+Enter: nueva línea" aria-label="Enviar"><span data-ic="send"></span></button>
       </div>
@@ -174,9 +181,10 @@ textarea:focus-visible{outline:none}
     refresh:'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15', spark:'M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z',
     win:'M4 5h16v14H4zM4 9h16', target:'M12 4v3M12 17v3M4 12h3M17 12h3M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
     camera:'M4 8h3l2-2.5h6L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
-    crop:'M7 3v14h14M3 7h14v14'
+    crop:'M7 3v14h14M3 7h14v14',
+    clip:'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.4 3.4 0 0 1 4.8 4.8l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4'
   };
-  var TAM = {send:[17,2.2],x:[11,3],erase:[14,1.8],refresh:[15,2],spark:[13,2],win:[16,1.8],target:[15,1.9],camera:[16,1.8],crop:[14,2],lock:[14,2]};
+  var TAM = {send:[17,2.2],x:[11,3],erase:[14,1.8],refresh:[15,2],spark:[13,2],win:[16,1.8],target:[15,1.9],camera:[16,1.8],crop:[14,2],lock:[14,2],clip:[17,1.8]};
   function ic(n){
     var t = TAM[n] || [16, 1.8];
     return '<svg class="ic" width="' + t[0] + '" height="' + t[0] + '" viewBox="0 0 24 24" fill="' + (n === 'spark' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="' + t[1] + '" stroke-linecap="round" stroke-linejoin="round"><path d="' + P[n] + '"/></svg>';
@@ -227,9 +235,10 @@ textarea:focus-visible{outline:none}
     var d = document.createElement('div'); d.className = clase; d.innerHTML = html;
     $('chat').appendChild(d); $('chat').scrollTop = $('chat').scrollHeight; return d;
   }
-  function msgYo(texto, img, cap){
+  function msgYo(texto, img, cap, archivos){
     return '<span class="quien">Tú · ' + hora() + '</span><div class="globo">' +
       (img ? '<figure><img src="' + img + '" alt=""><figcaption>' + esc(cap || '') + '</figcaption></figure>' : '') +
+      (archivos || []).map(function(n){ return '<span class="arch-yo">📎 ' + esc(n) + '</span>'; }).join('') +
       (texto ? '<p>' + esc(texto).replace(/\n/g, '<br>') + '</p>' : '') + '</div>';
   }
   function empezarRespuesta(){
@@ -252,7 +261,7 @@ textarea:focus-visible{outline:none}
     if (!burbuja) return;
     var a = burbuja.querySelector('.trabajo'); if (a && t.trim()) a.remove();
     recibido += t;
-    burbuja.querySelector('.bloques').innerHTML = bloques(recibido.split(/\n?\s*MARCAS:/)[0], true);
+    burbuja.querySelector('.bloques').innerHTML = bloques(recibido.split(/\n?\s*MARCAS:|<preguntas/)[0], true);
     $('chat').scrollTop = $('chat').scrollHeight;
   };
   function terminar(r){
@@ -265,6 +274,8 @@ textarea:focus-visible{outline:none}
       var nd = r.dibujos && r.dibujos.dibujos ? r.dibujos.dibujos.length : 0;
       if (r.marcas || nd) agregar('<i></i>Te lo ' + (nd ? 'dibujé' : 'señalé') + ' encima de la ventana (' + (r.marcas + nd) + ((r.marcas + nd) === 1 ? ' marca' : ' marcas') + ')', 'senal');
       if (window.Dibujante && (nd || (window.Voz && Voz.activa()))) Dibujante.mostrar(r.dibujos || [], r.texto);
+      if (r.preguntas && r.preguntas.length && window.Preguntas)             // encuesta o preguntas: la respuesta vuelve al asistente
+        burbuja.appendChild(Preguntas.tarjeta(r.preguntas, function(t){ enviar(t, []); }));
       if (r.pedir){
         var b = document.createElement('button'); b.type = 'button'; b.className = 'mostrar-btn';
         b.innerHTML = ic('camera') + 'Mostrarle una ventana'; b.onclick = mostrarVentana;
@@ -300,27 +311,92 @@ textarea:focus-visible{outline:none}
   function enviarTexto(){
     var t = $('entrada').value.trim(), envio = adjuntos;
     if ((!t && !envio.length) || ocupado || !api) return;
-    ocupado = true; adjuntos = []; pintarAdjuntos(); $('entrada').value = ''; crecer(); pintarEnviar();
-    agregar(msgYo(t || (envio.length ? '¿Qué ves? Ayúdame con esto.' : ''), envio.length ? envio[envio.length - 1].vista : null,
-                  envio.length ? envio[envio.length - 1].titulo : null), 'yo');
+    if (envio.some(function(a){ return !a.ojos_id && !a.datos; })) return aviso('Espera a que terminen de cargar los adjuntos.');
+    adjuntos = []; pintarAdjuntos(); $('entrada').value = ''; crecer();
+    enviar(t, envio);
+  }
+  // Manda un mensaje (lo escrito, o la respuesta de una tarjeta de preguntas) con sus adjuntos
+  function enviar(t, envio){
+    if (ocupado || !api) return;
+    ocupado = true; pintarEnviar();
+    var imgs = envio.filter(function(a){ return a.vista; }), ult = imgs[imgs.length - 1];
+    agregar(msgYo(t || (envio.length ? (envio.some(function(a){ return a.ojos_id; }) ? '¿Qué ves? Ayúdame con esto.' : 'Mira lo que te adjunto.') : ''),
+                  ult ? ult.vista : null, ult ? (ult.titulo || ult.nombre) : null,
+                  envio.filter(function(a){ return !a.vista; }).map(function(a){ return a.nombre; })), 'yo');
     empezarRespuesta();
-    api.preguntar(t, envio.map(function(a){ return {ojos_id: a.ojos_id, nombre: a.nombre}; }))
+    api.preguntar(t, envio.map(function(a){ return a.ojos_id ? {ojos_id: a.ojos_id, nombre: a.nombre} : {nombre: a.nombre, tipo: a.tipo, media_type: a.media_type, datos: a.datos}; }))
       .then(alResponder, function(e){ terminar({ok: false, error: String(e)}); });
   }
+  function aviso(t){ agregar(esc(t), 'aviso'); }
 
-  // ---- Adjuntos: las capturas que aprobó en la vista previa (ojos_ui.js). Salen solo al enviar ----
+  // ---- Adjuntos: las capturas que aprobó en la vista previa (ojos_ui.js) y archivos (clip, Ctrl+V o arrastrar:
+  //      imágenes, PDF y texto, como en los paneles de Excel y Dia). Salen solo al enviar ----
+  var MAX_ADJ = 5, LADO = 1600, MAX_MB = {imagen: 15, pdf: 5, texto: 0.3};
+  var EXT_TEXTO = /\.(txt|md|csv|tsv|json|py|m|js|ts|html?|css|xml|ya?ml|ini|log|sql|tex|c|cpp|h|java|cs|r)$/i;
+  function tipoDe(f){
+    if (/^image\/(png|jpeg|gif|webp)$/.test(f.type)) return 'imagen';
+    if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) return 'pdf';
+    if (/^text\//.test(f.type) || EXT_TEXTO.test(f.name)) return 'texto';
+    return null;
+  }
+  function tamano(b){ return b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+  function leer(f, como){ return new Promise(function(ok, mal){ var r = new FileReader(); r.onload = function(){ ok(r.result); }; r.onerror = mal; r['readAs' + como](f); }); }
+  function reducir(url, tipo){          // lado mayor ≤ 1600 px; las pequeñas pasan tal cual
+    return new Promise(function(ok, mal){
+      var im = new Image();
+      im.onload = function(){
+        var k = Math.min(1, LADO / Math.max(im.naturalWidth, im.naturalHeight));
+        if (k === 1 && url.length < 2.8e6) return ok(url);
+        var c = document.createElement('canvas'), g = c.getContext('2d');
+        c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+        var png = tipo === 'image/jpeg' ? '' : c.toDataURL('image/png');
+        ok(png && png.length < 2.8e6 ? png : c.toDataURL('image/jpeg', 0.88));
+      };
+      im.onerror = function(){ mal(new Error('imagen dañada')); }; im.src = url;
+    });
+  }
+  function agregarArchivos(lista){
+    Array.prototype.forEach.call(lista, function(f){
+      var tipo = tipoDe(f), nombre = f.name && f.name !== 'image.png' ? f.name : 'captura_' + hora().replace(':', '-') + '.png';
+      if (!tipo) return aviso('«' + nombre + '» no se admite: solo imágenes (png, jpg, gif, webp), PDF y texto.');
+      if (adjuntos.length >= MAX_ADJ) return aviso('Máximo ' + MAX_ADJ + ' adjuntos por mensaje.');
+      if (f.size > MAX_MB[tipo] * 1048576) return aviso('«' + nombre + '» pesa demasiado (máximo ' + (tipo === 'texto' ? '300 KB' : MAX_MB[tipo] + ' MB') + ').');
+      var a = {nombre: nombre, tipo: tipo, tam: tamano(f.size)};
+      (tipo === 'texto'
+        ? leer(f, 'Text').then(function(t){ a.datos = t; a.media_type = 'text/plain'; })
+        : leer(f, 'DataURL').then(function(url){ return tipo === 'imagen' ? reducir(url, f.type) : url; }).then(function(url){
+            a.media_type = url.slice(5, url.indexOf(';')); a.datos = url.slice(url.indexOf(',') + 1);
+            if (tipo === 'imagen') a.vista = url;
+          })
+      ).then(pintarAdjuntos, function(){ adjuntos = adjuntos.filter(function(x){ return x !== a; }); pintarAdjuntos(); aviso('No pude leer «' + nombre + '».'); });
+      adjuntos.push(a);
+    });
+    pintarAdjuntos();
+  }
   function pintarAdjuntos(){
     var c = $('adjuntos'); c.hidden = !adjuntos.length; c.innerHTML = '';
     adjuntos.forEach(function(a){
-      var d = document.createElement('div'); d.className = 'pend';
-      d.innerHTML = '<div class="mini"><img alt="" src="' + a.vista + '"></div><button class="x" type="button" title="Quitar" aria-label="Quitar captura">' + ic('x') + '</button>';
+      var d = document.createElement('div'); d.className = 'pend' + (a.ojos_id || a.datos ? '' : ' cargando');
+      var ext = a.tipo === 'pdf' ? 'PDF' : (a.nombre.split('.').pop() || 'TXT').toUpperCase().slice(0, 4);
+      d.innerHTML = (a.vista ? '<div class="mini"><img alt="" src="' + a.vista + '"></div>'
+          : '<div class="arch"><span class="ext">' + esc(ext) + '</span><div><b>' + esc(a.nombre) + '</b><small>' + (a.datos ? a.tam : 'cargando…') + '</small></div></div>') +
+        '<button class="x" type="button" title="Quitar" aria-label="Quitar adjunto">' + ic('x') + '</button>';
       d.title = a.titulo || a.nombre;
       d.querySelector('.x').onclick = function(){ adjuntos = adjuntos.filter(function(x){ return x !== a; }); pintarAdjuntos(); };
       c.appendChild(d);
     });
     pintarEnviar();
   }
-  function adjuntar(a){ adjuntos = adjuntos.concat([a]).slice(-3); pintarAdjuntos(); $('entrada').focus(); }
+  function adjuntar(a){ adjuntos = adjuntos.concat([a]).slice(-MAX_ADJ); pintarAdjuntos(); $('entrada').focus(); }
+  $('clip').onclick = function(){ $('archivo').click(); };
+  $('archivo').onchange = function(){ agregarArchivos(this.files); this.value = ''; };
+  $('entrada').addEventListener('paste', function(e){
+    var cd = e.clipboardData; if (!cd || !cd.files.length || (cd.getData('text/plain') || '').trim()) return;
+    e.preventDefault(); agregarArchivos(cd.files);
+  });
+  document.addEventListener('dragover', function(e){ e.preventDefault(); });       // soltar un archivo lo adjunta (y la ventana no navega)
+  document.addEventListener('drop', function(e){ e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) agregarArchivos(e.dataTransfer.files); });
   function ponerVentana(v, r){
     $('ventana').dataset.hwnd = v.hwnd; $('ventana').classList.remove('vacia');
     $('ventanaTxt').textContent = r.titulo; $('ventanaTxt').title = r.titulo + ' (' + r.app + ')';

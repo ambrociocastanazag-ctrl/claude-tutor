@@ -19,7 +19,8 @@ sys.path.insert(0, str(AQUI))
 import ojos, asistente, ojos_panel                                      # noqa: E402
 
 PREFERENCIAS = AQUI.parent / "panel-excel" / "preferencias.json"         # el tema de los paneles del tutor
-REGLAS = asistente.REGLAS + ojos_panel.REGLAS_DIBUJOS.replace("(junto a tus otras marcas)", "(en la misma línea MARCAS: [...])")
+REGLAS = (asistente.REGLAS + ojos_panel.REGLAS_DIBUJOS.replace("(junto a tus otras marcas)", "(en la misma línea MARCAS: [...])")
+          + ojos_panel.REGLAS_PREGUNTAS + "\nEl bloque <preguntas> va antes de la línea MARCAS.")
 
 
 class Api(ojos_panel.OjosApi):
@@ -55,28 +56,34 @@ class Api(ojos_panel.OjosApi):
             return {"titulo": ojos.titulo(self._hwnd), "app": ojos.app_de(ojos.pid_de(self._hwnd))}
 
     def preguntar(self, texto, adjuntos=None):
-        """adjuntos: [{"ojos_id", "nombre"}] de las capturas que la persona adjuntó (pasaron por la vista previa).
-        Es lo único por lo que sale una captura: el mensaje que la persona envía con ella dentro."""
+        """adjuntos: [{"ojos_id", "nombre"}] de las capturas que la persona adjuntó (pasaron por la vista previa) y
+        archivos que adjuntó ella ({"nombre", "tipo": imagen | pdf | texto, "media_type", "datos"}: clip, pegar o
+        arrastrar). Una captura solo sale así: en el mensaje que la persona envía con ella dentro."""
         texto = (texto or "").strip()
         caps = [self._ojos.capturas[a["ojos_id"]] for a in adjuntos or [] if a.get("ojos_id") in self._ojos.capturas]
-        if not texto and not caps: return {"ok": False, "error": "Escribe algo."}
-        texto = texto or "¿Qué ves? Ayúdame con esto."
+        archivos = [a for a in adjuntos or [] if not a.get("ojos_id") and a.get("datos")]
+        if not texto and not caps and not archivos: return {"ok": False, "error": "Escribe algo."}
+        texto = texto or ("¿Qué ves? Ayúdame con esto." if caps else "Mira lo que te adjunto.")
         if self._notas and not self._puente: texto = "[Del panel] " + " ".join(self._notas) + "\n" + texto; self._notas = []
         if self._puente:
             if caps: self._ojos.ultima = caps[-1]
-            return self._al_chat(texto, caps[-1] if caps else None)
+            return self._al_chat(texto, caps[-1] if caps else None, archivos)
+        try: bloques, textos, nombres = ojos_panel.bloques_adjuntos(archivos)
+        except ValueError as e: return {"ok": False, "error": str(e)}
+        extra = (f"\n(Adjuntos: {', '.join(nombres)})" if nombres else "") + textos
         if not caps:
             v = self._ventana_elegida()
-            return self._responder(f"(Ventana elegida: «{v['titulo']}»; sin captura nueva.)\nPersona: {texto}" if v else f"Persona: {texto}")
+            t = f"(Ventana elegida: «{v['titulo']}»; sin captura nueva.)\nPersona: {texto}" if v else f"Persona: {texto}"
+            return self._responder(bloques + [{"type": "text", "text": t + extra}] if bloques or extra else t)
         ctx = self._ojos.contexto(adjuntos)
         contenido = [{"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                                   "data": ojos.a_data_url(c.img).split(",", 1)[1]}} for c in caps]
-        return self._responder(contenido + [{"type": "text", "text": f"{ctx}\n\nPersona: {texto}"}])
+        return self._responder(contenido + bloques + [{"type": "text", "text": f"{ctx}\n\nPersona: {texto}{extra}"}])
 
     # --- modo puente ---
-    def _al_chat(self, texto, cap=None):
+    def _al_chat(self, texto, cap=None, archivos=()):
         """El mensaje va al chat de Claude Code; la respuesta llega luego por _vigilar_puente()."""
-        mid = self._puente.mandar(texto, self._ventana_elegida(), cap)
+        mid = self._puente.mandar(texto, self._ventana_elegida(), cap, archivos)
         self._esperando[mid] = False
         return {"ok": True, "espera": True}
 
@@ -114,12 +121,13 @@ class Api(ojos_panel.OjosApi):
     def _leer_respuesta(self, r):
         """Texto para la página: sin la línea MARCAS (flechas y dibujos) ni <pedir_ventana/> (es un botón)."""
         limpio, pide = ojos_panel.separar_pedido(r)           # primero: puede venir antes o después de MARCAS
+        limpio, preguntas = ojos_panel.separar_preguntas(limpio)            # <preguntas> → tarjeta con botones
         limpio, lista = asistente.separar(limpio)
         lista, lote, avisos = self._ojos.dibujos(lista, self._resolver, self._hwnd)
         if avisos: self._notas.append("Estos dibujos tuyos no se pudieron hacer: " + "; ".join(avisos) + ".")
         ms = asistente.marcas(lista, self._ojos.ultima) if self._ojos.ultima else []
         if ms: self._ojos.mostrar(ms)
-        return {"ok": True, "texto": limpio, "marcas": len(ms), "pedir": pide, "dibujos": lote, "avisos": avisos}
+        return {"ok": True, "texto": limpio, "marcas": len(ms), "pedir": pide, "dibujos": lote, "avisos": avisos, "preguntas": preguntas}
 
     def _resolver(self, m):
         """Las marcas con "celda": solo si la ventana es un Excel (se lee por COM, nunca se escribe)."""
