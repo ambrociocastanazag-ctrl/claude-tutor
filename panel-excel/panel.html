@@ -572,6 +572,17 @@ textarea:focus-visible{outline:none}
       if (r.revision) window.estadoTurno(r.revision, true);
       if (r.svg) window.mostrarDiagrama(r.svg);
       $('turnoAviso').hidden = !r.aviso; $('turnoAviso').textContent = r.aviso || '';
+      // Cursos de una app (tutor-pantalla): lo que solo se ve en la imagen lo revisa el tutor con la captura que la persona adjunte
+      if (r.necesita_captura && r.hwnd && window.Ojos && api.comprobar_tutor){
+        Ojos.mirar(r.hwnd, function(a){
+          b.disabled = true; $('comprobarTxt').textContent = 'El tutor lo está revisando…';
+          api.comprobar_tutor(a.ojos_id).then(function(q){
+            q = q || {};
+            if (q.revision) window.estadoTurno(q.revision, true);
+            $('turnoAviso').hidden = !q.aviso; $('turnoAviso').textContent = q.aviso || '';
+          }).finally(function(){ b.disabled = false; $('comprobarTxt').textContent = 'Comprobar'; });
+        });
+      }
     }).finally(function(){ b.disabled = false; $('comprobarTxt').textContent = 'Comprobar'; });
   };
   window.mostrarDiagrama = function(svg, titulo, archivo){
@@ -971,7 +982,7 @@ textarea:focus-visible{outline:none}
   function iniciar(a){
     api = a;
     if (api.listo) api.listo();
-    agregarAlChat(msgTutor('Pregúntame lo que quieras del curso, o pulsa **Revisar mi ' + OBJ + '** cuando hagas el ejercicio. Si hace falta, te marco ' + (OBJ === 'diagrama' ? 'el diagrama' : 'la hoja') + ' con flechas y notas'
+    agregarAlChat(msgTutor('Pregúntame lo que quieras del curso, o pulsa **Revisar mi ' + OBJ + '** cuando hagas el ejercicio. Si hace falta, te marco ' + (OBJ === 'diagrama' ? 'el diagrama' : OBJ === 'ventana' ? 'la ventana de ' + APP : 'la hoja') + ' con flechas y notas'
       + (OBJ === 'diagrama' ? ', y si me lo pides te creo ejemplos o ejercicios en una pestaña nueva de Dia (siempre con tu permiso)' : '') + '. También puedes pasarme capturas: pégalas con **Ctrl+V**, arrástralas aquí o usa el clip' + (api.ojos_ventanas ? ', o enséñame otra ventana con el botón de la cámara (verás la captura antes de mandarla).' : '.')), 'tutor-m');
     if (DEMO) conversacionDemo();
     api.estado().then(mostrar);

@@ -232,6 +232,47 @@ def leer_controles(h, caja, limite=400):
     return out
 
 
+UIA_ACTIVADO, UIA_SELECCIONADO, UIA_VALOR = 30086, 30079, 30045       # ToggleState, SelectionItem.IsSelected, Value.Value
+UIA_TEXTO = 50020
+
+
+def leer_estado(h):
+    """El estado de una ventana sin imagen: [{"tipo", "nombre", "caja", "activo", "valor"}] de sus controles con nombre
+    (activo: botón activado o elemento seleccionado; valor: el de campos, listas y deslizadores) y sus textos (tipo
+    "texto"). Para revisar un «Tu turno» sin IA y para contárselo al tutor. Como leer_controles: todo de una vez."""
+    try:
+        import uiautomation as auto
+        import uiautomation.uiautomation as uia
+    except ImportError:
+        return []
+    out = []
+    try:
+        with auto.UIAutomationInitializerInThread():
+            ia = uia._AutomationClient.instance().IUIAutomation
+            cr = ia.CreateCacheRequest()
+            for p in (UIA_NOMBRE, UIA_TIPO, UIA_CAJA, UIA_OCULTO, UIA_ACTIVADO, UIA_SELECCIONADO, UIA_VALOR): cr.AddProperty(p)
+            els = ia.ElementFromHandle(h).FindAllBuildCache(4, ia.CreateTrueCondition(), cr)
+            for i in range(els.Length):
+                e = els.GetElement(i)
+                t = e.CachedControlType
+                tipo = TIPOS.get(t) or ("texto" if t == UIA_TEXTO else None)
+                if not tipo or e.CachedIsOffscreen: continue
+                nombre = (e.CachedName or "").strip().replace("\n", " ")
+                def prop(pid):
+                    try: v = e.GetCachedPropertyValue(pid)
+                    except Exception: return None
+                    return v if isinstance(v, (bool, int, str)) else None
+                activo = prop(UIA_ACTIVADO) == 1 or prop(UIA_SELECCIONADO) is True
+                valor = prop(UIA_VALOR)
+                if not nombre and not valor: continue
+                r = e.CachedBoundingRectangle
+                out.append({"tipo": tipo, "nombre": nombre[:80], "caja": (r.left, r.top, r.right, r.bottom),
+                            "activo": bool(activo), "valor": valor if isinstance(valor, str) else ""})
+    except Exception:
+        pass
+    return out
+
+
 class Captura:
     """Lo que vio el tutor de una ventana: la imagen reducida y los controles en píxeles de esa imagen.
     k: píxeles de la imagen por píxel físico. origen: dónde cae el (0, 0) de la imagen en la pantalla."""
