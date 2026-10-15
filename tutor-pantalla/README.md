@@ -115,6 +115,28 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 - **`tutor`:** lo que solo se ve en la imagen. Si lo de `pide` está bien, Comprobar abre la vista previa de la app; con la captura adjunta, el tutor responde bien / casi / revisa.
 - **Antes de darlo:** `python tutor-pantalla/panel_curso.py <curso.json> --probar` hasta «Curso: todo bien», con la app abierta para que busque cada `senalar`. Luego pruébalo de verdad con el panel.
 
+### Cursos de código (con `"proyecto"`)
+
+Si `curso.json` lleva `"proyecto": "<ruta absoluta de un proyecto Maven>"` (y, opcional, `"java_home"`: la carpeta del JDK que pide el proyecto; si falta, se usa la variable `JAVA_HOME` del sistema, y el JDK del PATH puede no ser el correcto), `pide` y los `si` de `errores` aceptan además estos tipos, que se revisan **sin IA** y sin abrir la app (la ventana de la app solo hace falta para los tipos de siempre). La ruta puede tener espacios.
+
+```json
+{"tipo": "compila", "texto": "Tu proyecto compila"}
+{"tipo": "archivo", "ruta": "src/main/java/gt/x/Libro.java", "contiene": ["private int paginas", "public int getPaginas()"],
+ "no_contiene": ["@Getter"], "regex": "IllegalArgument\\w+", "texto": "Libro está bien escrito"}
+{"tipo": "pruebas", "clases": ["LibroProfeTest"], "ocultas": true, "texto": "Pasas las pruebas del profe"}
+{"tipo": "pruebas", "clases": ["LibroTest"], "minimo": 3, "texto": "Tus 3 pruebas pasan"}
+{"tipo": "http", "metodo": "POST", "url": "http://localhost:8080/prestamos", "cuerpo": {"usuario": "ana"},
+ "codigo": 201, "json": {"usuario": "ana"}, "texto": "POST /prestamos responde 201"}
+```
+
+- **`compila`**: `mvnw compile` sobre una copia. Si no compila, «falta» lleva el primer error del compilador: `Libro.java línea 4: cannot find symbol` (si el archivo es una prueba oculta lo dice: «prueba del profe»).
+- **`archivo`**: `ruta` relativa al proyecto. Sin `contiene`/`no_contiene`/`regex` basta con que exista. `contiene` y `no_contiene` comparan con los espacios colapsados (`private  int x` = `private int x`): todo `contiene` debe aparecer y ningún `no_contiene`. `regex` (Python) se busca en todo el archivo.
+- **`pruebas`**: `clases` son nombres simples. Pasa si todas corrieron, sin fallos ni errores, y con al menos `minimo` pruebas (1 por defecto). Si falla, «falta» trae el primer mensaje de JUnit sin traza: `guardaTest: expected:<250> but was:<0>`. Con `"ocultas": true` se añaden las pruebas de `<carpeta del curso>/pruebas/<stem del módulo>/` (p. ej. `pruebas/m2_pruebas/`): si esa carpeta trae su propio `src/`, se copia tal cual; si no, su contenido cuelga de `src/test/java/`, así que `pruebas/m2_pruebas/gt/biblioteca/entity/LibroProfeTest.java` cae en su paquete.
+- **`http`**: una petición a la API que el estudiante tiene corriendo. `metodo` (GET por defecto), `cuerpo` (JSON), `codigo` (200 por defecto) y `json` (la respuesta debe **contener** esos campos con esos valores; en listas, algún elemento). Sin servidor: «¿Está corriendo tu app? (./mvnw spring-boot:run)».
+- **Cómo corre:** el proyecto se **copia a una carpeta temporal** (sin `target/`, `.git` ni `node_modules`; con su `.env`), se le añaden las ocultas y se corre `mvnw.cmd` (una sola vez por Comprobar, juntando las clases de `pide` y de `errores`); se leen `target/surefire-reports/`. Nunca se escribe en el proyecto del estudiante. La carpeta temporal se borra al terminar.
+- **Segundo plano:** Comprobar muestra «Revisando… (corriendo tus pruebas, ~N s)» (N = lo que tardó la última vez; 20 al principio) y el panel y el tutor siguen vivos. Mientras corre, un segundo Comprobar avisa y espera. Si el turno es solo de código, no consulta la app.
+- **`solucion/` y `--probar`:** en la carpeta del curso, `solucion/plantilla/` (el proyecto al empezar) y `solucion/<stem del módulo>/` (el proyecto completo tal como queda al terminar ese módulo, acumulado). `--probar` valida cada tipo nuevo (y que existan las ocultas) y corre cada «Tu turno» de código contra `solucion/<stem>/` (debe salir **bien**) y contra la del módulo anterior o `solucion/plantilla/` (debe **no** salir bien). Los `http` no se prueban ahí (se dan por buenos): se prueban a mano con la app corriendo. Una corrida de Maven tarda ≈10–16 s; `--probar` hace dos por «Tu turno».
+
 ## Archivos
 
 | Archivo | Qué es |
@@ -125,7 +147,7 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 | `ojos_ui.js` | La lista de ventanas con miniaturas y la vista previa (Cancelar / Recortar / Adjuntar), para la página de cualquier panel. |
 | `preguntas_ui.js` | Las tarjetas de preguntas del tutor en el chat (opción única o múltiple, abiertas, «Otra…», «No sé»), con la corrección al instante. |
 | `panel_pantalla.py` | El panel del asistente (pywebview): la API que llama la página, el modo puente y la prueba `--probar`. |
-| `curso_pantalla.py` | El modo curso: cargar el curso, leer el estado de la app, revisar el «Tu turno» sin IA, buscar lo que se señala y el estado en texto para el tutor. |
+| `curso_pantalla.py` | El modo curso: cargar el curso, leer el estado de la app, revisar el «Tu turno» sin IA, buscar lo que se señala y el estado en texto para el tutor. También los cursos de código: `ContextoCodigo`, `correr_maven`, `peticion` (ver «Cursos de código»). |
 | `panel_curso.py` | El panel de un curso (la página de los tutores): pasos, «Señálamelo», Comprobar (sin IA y con el tutor), el tutor del curso y `--probar`. |
 | `puente.py` | El modo puente: los dos lados se pasan mensajes por una carpeta temporal (`%TEMP%\tutor-pantalla-puente`, se borra al cerrar el panel, capturas incluidas). Desde el chat: `esperar` (en segundo plano: al llegar un mensaje termina y despierta al chat), `responder`, `pedir-captura`, `estado`. |
 | `panel.html` | La página: mismo diseño y tema que los paneles de Excel y Dia (el tema sale de `panel-excel/preferencias.json`). |

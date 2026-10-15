@@ -12,7 +12,7 @@ La página es la de los tutores (../panel-excel/panel.html) con los ojos (ojos_u
   y el tutor mira la captura que la persona adjunta (bien / casi / revisa).
 - Tutor: conoce el curso, recibe el estado de la app EN TEXTO (lo activo, valores; nunca el botón de la cuenta) y marca
   encima de la app por nombre o, con una captura adjunta, por caja."""
-import json, os, re, sys, time
+import json, os, re, sys, threading, time
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
@@ -57,6 +57,8 @@ class Api(ojos_panel.OjosApi):
         self._ojos = ojos_panel.Ojos(apps=[curso.app["exe"]], panel_hwnd=self._hwnd_panel)
         self._senalando = []                    # lo que señala ahora el paso (para seguirlo si se mueve)
         self._notas = []
+        self._rev_lock = threading.Lock()       # una revisión de código a la vez (Maven tarda)
+        self._seg_estimados = 20
 
     # ----- utilidades -----
     @property
@@ -179,11 +181,29 @@ class Api(ojos_panel.OjosApi):
         return r.get("dibujadas", 0)
 
     # ----- Comprobar -----
+    def _aviso_pagina(self, boton, aviso):
+        """Pone el texto del botón Comprobar y el aviso del turno desde Python (mientras la revisión corre en segundo plano)."""
+        self._empujar("(function(){var b=document.getElementById('comprobarTxt'),a=document.getElementById('turnoAviso');"
+                      f"if(b)b.textContent={json.dumps(boton)};if(a){{a.hidden=false;a.textContent={json.dumps(aviso)};}}}})()")
+
     def comprobar(self):
         t = self._turno()
         if not t: return {"revision": None}
-        est = cp.estado(self._curso.app["exe"])
-        rev = cp.revisar_turno(est, t) if t.get("pide") else {"estado": "bien", "ok": 0, "total": 0, "puntos": [], "mensaje": ""}
+        codigo = cp.ContextoCodigo.usa_codigo(t)
+        if codigo and not self._rev_lock.acquire(blocking=False):
+            return {"revision": None, "aviso": "Todavía estoy revisando lo anterior; espera un momento."}
+        try:
+            ctx = None
+            if codigo:                  # Maven corre en este hilo (no en el de la página): el panel y el tutor siguen vivos
+                ctx = cp.ContextoCodigo(self._curso, self._mod, t)
+                self._aviso_pagina("Revisando…", f"Revisando… (corriendo tus pruebas, ~{self._seg_estimados} s)" if cp.ContextoCodigo.usa_maven(t) else "Revisando…")
+            ui = any(q["tipo"] not in cp.TIPOS_CODIGO for q in t.get("pide") or []) or bool(t.get("tutor"))
+            est = cp.estado(self._curso.app["exe"]) if (ui or not codigo) else None
+            t0 = time.time()
+            rev = cp.revisar_turno(est, t, ctx) if t.get("pide") else {"estado": "bien", "ok": 0, "total": 0, "puntos": [], "mensaje": ""}
+            if ctx is not None and ctx._mvn: self._seg_estimados = max(5, int(round(time.time() - t0)))
+        finally:
+            if codigo: self._rev_lock.release()
         if rev["estado"] == "bien" and t.get("tutor") and est is not None:
             v = self._app()
             self._sin_ia = rev
@@ -223,7 +243,10 @@ class Api(ojos_panel.OjosApi):
         partes = [f"[Estado actual] {mods}Paso {self._n + 1} de {len(self._mod.pasos)}: {p.get('titulo', '')}. El panel dice: {p['texto']}"]
         est = cp.estado(self._curso.app["exe"])
         if t:
-            rev = cp.revisar_turno(est, t) if t.get("pide") else None
+            if cp.ContextoCodigo.usa_codigo(t):          # Maven no se corre por cada pregunta: lo último que vio Comprobar
+                if self._vista: partes.append(f"Última revisión automática: {self._vista['mensaje']} ({self._vista['ok']} de {self._vista['total']} bien)")
+                rev = None
+            else: rev = cp.revisar_turno(est, t) if t.get("pide") else None
             if rev: partes.append(f"Revisión automática ahora: {rev['mensaje']} ({rev['ok']} de {rev['total']} bien)")
             if t.get("tutor"): partes.append(f"Este turno además pide (se ve en la imagen): {t['tutor']['revisar']}")
         partes.append(cp.contexto_tutor(est, self._curso.app_nombre))
@@ -306,6 +329,26 @@ def abrir_ventana(api):
                                          on_top=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
 
 
+def probar_codigo(curso, mod, kmod, i, t, pide_ui, ver):
+    """--probar de un «Tu turno» de código: contra solucion/<stem>/ debe salir bien y contra la del módulo anterior (o
+    solucion/plantilla/) no. Los http no se prueban aquí. Devuelve 0 (los fallos los cuenta `ver`)."""
+    sol = curso.carpeta / "solucion"
+    mia = sol / mod.ruta.stem
+    ant = next((sol / curso.modulos[j].ruta.stem for j in range(kmod - 1, -1, -1) if (sol / curso.modulos[j].ruta.stem).is_dir()), sol / "plantilla")
+    if not mia.is_dir():
+        print(f"ℹ   paso {i + 1}: no hay solucion/{mod.ruta.stem}/: el Tu turno de código no se prueba contra una solución"); return 0
+    est = cp.simular(pide_ui)
+    ctx = cp.ContextoCodigo(curso, mod, t, raiz=mia, sin_http=True)
+    r = cp.revisar_turno(est, t, ctx)
+    ver(r["estado"] == "bien", f"  paso {i + 1} (código): con solucion/{mia.name}/ → {r['estado']} ({r['mensaje'][:90]})")
+    if not ant.is_dir():
+        print(f"ℹ   paso {i + 1}: no hay {ant.name}/ para comprobar que sin hacerlo no sale bien"); return 0
+    ctx = cp.ContextoCodigo(curso, mod, t, raiz=ant, sin_http=True)
+    r = cp.revisar_turno(est, t, ctx)
+    ver(r["estado"] != "bien", f"  paso {i + 1} (código): con solucion/{ant.name}/ (sin hacerlo) → {r['estado']} ({r['mensaje'][:90]})")
+    return 0
+
+
 def probar(curso):
     """--probar: sin ventanas ni IA. Devuelve los fallos."""
     malos = 0
@@ -317,7 +360,7 @@ def probar(curso):
     print(f"Curso «{curso.titulo}» ({curso.app_nombre}): {len(curso.modulos)} módulo(s)")
     est = cp.estado(curso.app["exe"])
     print(f"  {curso.app_nombre} {'abierto: se buscan los «senalar»' if est else 'cerrado: no se buscan los «senalar» (ábrelo para probarlos)'}")
-    for mod in curso.modulos:
+    for kmod, mod in enumerate(curso.modulos):
         print(f"Módulo {mod.codigo} «{mod.titulo}»: {len(mod.pasos)} pasos")
         for i, p in enumerate(mod.pasos):
             if est:
@@ -339,16 +382,27 @@ def probar(curso):
                             ver(cp.buscar(est, {"nombre": o["nombre"]}) is not None, f"  paso {i + 1}: «{nombre}» (dibujo «{d['forma']}») se encuentra en {curso.app_nombre}")
             t = p.get("turno")
             if not t: continue
-            pide = t.get("pide") or []
+            pide_all = t.get("pide") or []
+            codigo = cp.ContextoCodigo.usa_codigo(t)
+            pide = [q for q in pide_all if q["tipo"] not in cp.TIPOS_CODIGO]
+            t_ui = dict(t, pide=pide, errores=[e for e in t.get("errores") or [] if e["si"]["tipo"] not in cp.TIPOS_CODIGO])
+            for q in pide_all:
+                if q["tipo"] in cp.TIPOS_CODIGO: ver(True, f"  paso {i + 1}: «{q['tipo']}» bien escrito ({q.get('texto') or q.get('ruta') or q.get('url') or q.get('clases')})")
+                if q["tipo"] == "pruebas" and q.get("ocultas"):
+                    d = curso.carpeta / "pruebas" / mod.ruta.stem
+                    ver(d.is_dir() and any(d.rglob("*.java")), f"  paso {i + 1}: hay pruebas ocultas en pruebas/{mod.ruta.stem}/")
             if pide:
-                r = cp.revisar_turno(cp.simular(pide), t)
+                r = cp.revisar_turno(cp.simular(pide), t_ui)
                 ver(r["estado"] == "bien", f"  paso {i + 1} (Tu turno): con la solución → {r['estado']}")
-                r = cp.revisar_turno(cp.simular(), t)
+                r = cp.revisar_turno(cp.simular(), t_ui)
                 ver(r["estado"] in ("mal", "parcial") and r["ok"] == 0, f"  paso {i + 1}: sin hacer nada → {r['estado']} («{r['mensaje'][:60]}»)")
-                for k, e in enumerate(t.get("errores") or []):
+                for k, e in enumerate(t_ui.get("errores") or []):
                     otros = [q for q in pide if q["tipo"] != e["si"]["tipo"]]   # el error reemplaza lo de su tipo; lo demás, bien hecho
-                    r = cp.revisar_turno(cp.simular(otros, [e["si"]]), t)
+                    r = cp.revisar_turno(cp.simular(otros, [e["si"]]), t_ui)
                     ver(r["estado"] == "mal" and r["mensaje"] == e["mensaje"], f"  paso {i + 1}: error típico {k + 1} se reconoce («{e['mensaje'][:50]}…»)")
+            if codigo and curso.proyecto:
+                n = probar_codigo(curso, mod, kmod, i, t, pide, ver)   # primero la llamada: `ver` suma a malos dentro
+                malos += n
             if t.get("tutor"): print(f"  paso {i + 1}: además lo revisa el tutor con la captura: «{t['tutor']['revisar']}»")
     ver(cp.revisar_turno(None, {"pide": [{"tipo": "activo", "nombre": "x"}]})["estado"] == "vacio", "sin la app abierta, Comprobar lo dice")
     ctx = cp.contexto_tutor({"titulo": "a", "titulos": ["a"], "controles": [{"tipo": "botón", "nombre": "Signed in as Fulano", "caja": (0, 0, 1, 1), "activo": False, "valor": ""}]}, "app")
