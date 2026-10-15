@@ -179,7 +179,7 @@ def abrir(api, al_abrir=None):
         "<head>", f"<head><script>window.TEMA_PANEL = {json.dumps(t)}; window.MODO_PANEL = {json.dumps(modo)};</script>", 1))
     api._ventana = webview.create_window("Claude Code (puente)" if api._puente else "Asistente", html=html, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
-                                         on_top=True, min_size=(360, 300),
+                                         on_top=True, text_select=True, min_size=(360, 300),
                                          background_color="#232631" if t == "oscuro" else "#F8F6F1")
     api._ventana.events.closed += lambda: setattr(api, "_ventana", None)
     ojos_panel.atajo(lambda: api._ventana, api._panel_hwnd)                # Ctrl+Alt+M: «Que mire» desde cualquier programa

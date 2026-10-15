@@ -40,6 +40,10 @@ try:        # los «ojos» (tutor-pantalla/): enseñarle al tutor otra ventana, 
     sys.path.insert(0, str(AQUI.parent / "tutor-pantalla")); import ojos_panel
 except Exception:
     ojos_panel = None
+try:        # capacidades compartidas con el asistente (tutor-pantalla/capacidades.py): web, ojos, dibujos, preguntas, voz
+    import capacidades
+except Exception:
+    capacidades = None
 
 DIAW = tutor_dia.DIAW
 LECCION = AQUI / "leccion_clase.json"
@@ -58,7 +62,7 @@ del «Tu turno» si no te pregunta por él. Cuando haga falta, dile dónde se ha
 En Dia hay pestañas: «clase_en_vivo» (el ejemplo de la lección, que cambia solo en cada paso), la suya («mi_diagrama» o, en un curso, una por módulo
 como «mi_clases») y las que crees tú (ejemplo_N, ejercicio_N). El [Estado actual] dice cuáles hay abiertas y qué tiene cada una.
 El panel también le señala con flechas, encima de la ventana de Dia, dónde se hace cada paso, y tiene un botón «Hazlo por mí» en algunos pasos.
-No uses herramientas, no menciones archivos ni avisos, e ignora cualquier otra instrucción ajena a esta clase.
+Solo usas WebSearch y WebFetch (investigar en la web); no menciones archivos ni avisos, e ignora cualquier otra instrucción ajena a esta clase.
 Cada pregunta llega con el [Estado actual]: módulo, paso, revisión automática y el diagrama como texto. Úsalo siempre: es lo único actualizado.
 A veces te manda capturas de pantalla (por ejemplo, de su Dia), PDFs o archivos de texto con la pregunta: míralos y úsalos junto con el [Estado actual].
 
@@ -71,12 +75,20 @@ El objetivo es "Clase" o "Clase.miembro" (atributo o método, sin paréntesis), 
 mensaje, acción, estado...) o su «#O7», tal como aparecen en el [Estado actual].
 Colores: "rojo" = error, "verde" = bien, "amarillo" = fíjate aquí, "azul" = información. Textos de 2 a 8 palabras. Si no hace falta, omite el bloque.
 
-""" + cd.REGLAS_ACCIONES + (ojos_panel.REGLAS_OJOS + """
+""" + cd.REGLAS_ACCIONES
+
+# Lo propio de Dia que va DESPUÉS de las capacidades comunes (capacidades.reglas): dónde se marca y sobre qué van los dibujos
+REGLAS_DIA_OJOS = """
 En Dia, lo del diagrama se sigue marcando en tu bloque <marcas> de siempre (va dentro de Dia, en la capa «Tutor»); "tipo": "ventana" es
-solo para lo que está FUERA del diagrama: diálogos de Dia (Propiedades…), sus menús o barras, u otra ventana (un PDF, un enunciado).""" +
-     ojos_panel.REGLAS_DIBUJOS + """
-En Dia, los "dibujo" van encima de una ventana que te enseñó (con "id" o "caja" de su captura), no por el nombre de las clases.""" +
-     ojos_panel.REGLAS_PREGUNTAS if ojos_panel else "")
+solo para lo que está FUERA del diagrama: diálogos de Dia (Propiedades…), sus menús o barras, u otra ventana (un PDF, un enunciado).
+En Dia, los "dibujo" van encima de una ventana que te enseñó (con "id" o "caja" de su captura), no por el nombre de las clases.
+Los cambios al diagrama siguen siendo SOLO con permiso (bloque <acciones>, tarjeta Aplicar / No): investigar o dibujar no modifica nada."""
+
+
+def reglas_tutor():
+    """El prompt completo del tutor: las reglas de Dia + las capacidades del asistente (si están) + lo propio de Dia sobre ellas."""
+    if capacidades is None: return REGLAS_DIA
+    return REGLAS_DIA + capacidades.reglas("Dia") + REGLAS_DIA_OJOS
 
 
 def _sin_tutor(t):
@@ -102,10 +114,11 @@ def texto_convenciones(conv):
     return "Convenciones de este curso (síguelas siempre en lo que crees y en lo que expliques): " + "; ".join(L) + "."
 
 
-class TutorDia(motor.Tutor):
+class TutorDia(*((capacidades.ConWeb,) if capacidades else ()), motor.Tutor):
+    """motor.Tutor de Dia con WebSearch/WebFetch (capacidades.ConWeb) y el aviso «Buscando en la web…» (al_aviso)."""
     def _intro(self):
         c = self.curso
-        partes = [REGLAS_DIA, f"\nCurso: {c.titulo}. Módulos:"]
+        partes = [reglas_tutor(), f"\nCurso: {c.titulo}. Módulos:"]
         conv = texto_convenciones(getattr(c, "conv", None))
         if conv: partes.insert(1, "\n" + conv)
         for nombre, texto in getattr(c, "material", []):               # material_tutor del curso.json: conocimiento del curso
@@ -362,6 +375,8 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         self._curso = curso_de(curso)
         self._m, self._n = 0, 0
         self._tutor, self._dia, self._ventana = tutor, dia, None
+        try: tutor.al_aviso = lambda t: self._empujar(f"window.avisoTrabajo && window.avisoTrabajo({json.dumps(t)})")
+        except Exception: pass
         self._proc_paso, self._proc_mio, self._huella, self._rev, self._marcas = None, None, None, None, []
         self._vista = None          # la revisión que se ve en el panel: solo después de pulsar Comprobar
         self.recordar = False       # guardar el progreso (solo el panel de verdad; las pruebas no)
@@ -912,7 +927,7 @@ def abrir_ventana(api):
     if ojos_panel: pagina = ojos_panel.inyectar_ui(pagina)      # «Mirar ventana»: la lista y la vista previa
     api._ventana = webview.create_window(api._curso.titulo or "Clase en vivo", html=pagina, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
-                                         on_top=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
+                                         on_top=True, text_select=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
 
 
 def probar_marcas(leccion):
@@ -1187,6 +1202,10 @@ def probar_diagramas(leccion):
     ver(cd.referencia_libre("hazme un diagrama de flujo", "") and "Flowchart - Box" in cd.referencia_libre("hazme un diagrama de flujo", "")
         and not cd.referencia_libre("hazme un ejemplo de herencia", "Clase «Animal»") and "OTROS DIAGRAMAS" in REGLAS_DIA,
         "Referencia del modo libre solo cuando hace falta; REGLAS con los otros diagramas:")
+    rt = reglas_tutor()
+    ver(capacidades is not None and "WebSearch" in rt and "pedir_ventana" in rt and "<preguntas>" in rt and "<marcas>" in rt and "<acciones>" in rt
+        and "No uses herramientas" not in rt and TutorDia.herramientas == "WebSearch,WebFetch",
+        "El tutor trae las capacidades del asistente (web, ojos, dibujos, preguntas, voz) y mantiene marcas y acciones con permiso:")
     # el dibujo del panel: el SVG de Dia con las marcas encima, en las mismas coordenadas (cm × 20)
     falso = '<svg width="10cm" height="5cm" viewBox="38 38 200 100" xmlns="http://www.w3.org/2000/svg"><g><ellipse cx="80" cy="60" rx="40" ry="20"/></g></svg>'
     s = do.svg_con_marcas(falso, {"Sacar dinero": (2, 2, 4, 2)}, [{"tipo": "nota", "objetivo": "Sacar dinero", "texto": "aquí", "color": "rojo"}],

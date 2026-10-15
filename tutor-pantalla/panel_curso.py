@@ -18,13 +18,13 @@ from pathlib import Path
 AQUI = Path(__file__).resolve().parent
 EXCEL = AQUI.parent / "panel-excel"
 sys.path.insert(0, str(AQUI)); sys.path.insert(0, str(EXCEL))
-import ojos, ojos_panel, curso_pantalla as cp            # noqa: E402
+import ojos, ojos_panel, capacidades, curso_pantalla as cp   # noqa: E402
 import motor                                             # noqa: E402  (motor.Tutor: la sesión de Claude Code; motor.separar)
 
 REGLAS_CURSO = """Eres el tutor de un curso de {app} de un estudiante, dentro de un panel junto a la ventana de {app}. Español, tono cercano,
 MUY breve (máximo 6 líneas). Primero la idea y luego los clics. Si se equivoca, señala el paso exacto que falla, sin rehacer todo.
 En los «Tu turno» NO hagas el ejercicio por él: da pistas, salvo que pida la solución. Solo miras y señalas: nunca digas que hiciste clic.
-No uses herramientas, no menciones archivos y no afirmes cómo funciona {app} si no estás seguro: dilo.
+Tus únicas herramientas son WebSearch y WebFetch (ver TUS CAPACIDADES). No menciones archivos de este panel y no afirmes cómo funciona {app} si no estás seguro: dilo (o búscalo).
 Cada pregunta llega con el [Estado actual]: el módulo y el paso, la revisión automática y el estado de {app} EN TEXTO (qué está activo o
 elegido, valores, textos y los nombres de los controles que se pueden señalar). Úsalo siempre: es lo único actualizado.
 
@@ -34,12 +34,12 @@ con "nombre" EXACTO de la lista de controles del [Estado actual]; "texto" de 1 a
 (azul, verde, rojo, naranja). Se dibujan como flechas encima de la ventana de {app}."""
 
 
-class TutorCurso(motor.Tutor):
-    """motor.Tutor con las reglas y el temario de este curso."""
+class TutorCurso(capacidades.ConWeb, motor.Tutor):
+    """motor.Tutor con las reglas y el temario de este curso, y con WebSearch/WebFetch (capacidades.ConWeb)."""
 
     def _intro(self):
         c = self.curso
-        partes = [REGLAS_CURSO.format(app=c.app_nombre) + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS + ojos_panel.REGLAS_PREGUNTAS, f"\nCurso: {c.titulo}. Módulos:"]
+        partes = [REGLAS_CURSO.format(app=c.app_nombre) + capacidades.reglas(c.app_nombre, bool(c.d.get("proyecto") or c.d.get("proyectos"))), f"\nCurso: {c.titulo}. Módulos:"]
         for k, mod in enumerate(c.modulos):
             pasos = "; ".join(f"{p.get('titulo', '')}: {re.sub(r'[*]', '', p['texto'])[:140]}" for p in mod.pasos)
             partes.append(f"\nMódulo {k + 1}: {mod.titulo}. Tema: {mod.d.get('tema_tutor', '')}\n  Pasos: {pasos}\n"
@@ -54,7 +54,10 @@ class Api(ojos_panel.OjosApi):
         self._m, self._n = curso.progreso()
         self._ventana, self._vista, self.recordar = None, None, False
         self._marcas = []                       # las del tutor «por nombre» (se rehacen si la ventana cambia)
-        self._ojos = ojos_panel.Ojos(apps=[curso.app["exe"]], panel_hwnd=self._hwnd_panel)
+        self._raices = capacidades.raices_curso(curso.d)          # dónde buscar el archivo abierto en VS Code
+        self._codigo = bool(curso.d.get("proyecto") or curso.d.get("proyectos"))
+        self._ojos = ojos_panel.Ojos(apps=[curso.app["exe"]], panel_hwnd=self._hwnd_panel, raices=self._raices)
+        tutor.al_aviso = lambda t: self._empujar(f"window.avisoTrabajo && window.avisoTrabajo({json.dumps(t)})")
         self._senalando = []                    # lo que señala ahora el paso (para seguirlo si se mueve)
         self._notas = []
         self._rev_lock = threading.Lock()       # una revisión de código a la vez (Maven tarda)
@@ -151,17 +154,25 @@ class Api(ojos_panel.OjosApi):
         est = cp.estado(self._curso.app["exe"])
         marcas, faltan = [], []
         for k, o in enumerate(objetivos):
+            if o.get("linea") is not None:                # una línea del editor
+                ms, av = capacidades.marcas_linea([dict(o, tipo="app")], self._raices, (self._app() or {}).get("hwnd"))
+                for m in ms: m["n"] = o.get("n") or (k + 1 if len(objetivos) > 1 else None); m["color"] = o.get("color", color)
+                marcas += ms; faltan += [] if ms else [f"la línea {o['linea']}"]
+                self._lin_avisos = av
+                continue
             c = cp.buscar(est, o) if est else None
             if not c: faltan.append(o.get("texto") or cp.lista(o.get("nombre") or o.get("empieza"))[0]); continue
             marcas.append({"c": c, "texto": o.get("texto", ""), "n": o.get("n") or (k + 1 if len(objetivos) > 1 else None),
                            "color": o.get("color", color)})
         self._pintar(marcas)
+        extra = " " + " ".join(getattr(self, "_lin_avisos", []) or []) if getattr(self, "_lin_avisos", None) else ""
+        self._lin_avisos = []
         if not marcas:
             antes = self._paso().get("antes")
             if antes: return {"ok": False, "aviso": f"{antes} y vuelve a pulsar «Señálamelo»."}
             return {"ok": False, "aviso": f"Ahora no veo eso en {self._curso.app_nombre}" + (f": {', '.join(faltan[:2])}." if faltan else ".")}
         falta = f" (no veo: {faltan[0]})" if faltan else ""
-        return {"ok": True, "aviso": f"Mira {self._curso.app_nombre}: te señalé {len(marcas)} cosa{'s' if len(marcas) != 1 else ''}{falta}."}
+        return {"ok": True, "aviso": f"Mira {self._curso.app_nombre}: te señalé {len(marcas)} cosa{'s' if len(marcas) != 1 else ''}{falta}.{extra}"}
 
     def _pintar(self, marcas):
         """marcas: [{"c": control de cp.estado (caja en pantalla), "texto", "n", "color"}] → overlay encima de su ventana."""
@@ -244,6 +255,8 @@ class Api(ojos_panel.OjosApi):
         est = cp.estado(self._curso.app["exe"])
         if t:
             if cp.ContextoCodigo.usa_codigo(t):          # Maven no se corre por cada pregunta: lo último que vio Comprobar
+                partes.append("Este Tu turno revisa " + cp.ContextoCodigo(self._curso, self._mod, t).descripcion()
+                              + ". Los archivos que pida son relativos a esa carpeta; no es el proyecto de otros pasos.")
                 if self._vista: partes.append(f"Última revisión automática: {self._vista['mensaje']} ({self._vista['ok']} de {self._vista['total']} bien)")
                 rev = None
             else: rev = cp.revisar_turno(est, t) if t.get("pide") else None
@@ -272,15 +285,23 @@ class Api(ojos_panel.OjosApi):
         if avisos: self._notas.append("Estos dibujos tuyos no se pudieron hacer: " + "; ".join(avisos) + ".")
         marcas, en_ventana = self._ojos.marcar(marcas)            # las "ventana" (sobre una captura)
         hechas = 0
+        ms = []
+        por_linea = [m for m in marcas if isinstance(m, dict) and m.get("tipo") in ("app", "linea") and m.get("linea") is not None]
+        if por_linea and not en_ventana:                           # flechas sobre una línea del editor
+            ms, av = capacidades.marcas_linea(por_linea[:4], self._raices, (self._app() or {}).get("hwnd"))
+            for a in av:
+                self._notas.append(f"Tu marca de línea: {a}.")
+                if a.startswith(("Sube", "Baja")): self._ojos.avisos_linea.append(a)
         por_nombre = [m for m in marcas if isinstance(m, dict) and m.get("tipo") == "app" and m.get("nombre")]
         if por_nombre:
             est = cp.estado(self._curso.app["exe"])
-            ms = []
             for k, m in enumerate(por_nombre[:4]):
                 c = cp.buscar(est, {"nombre": m["nombre"]}) if est else None
                 if c: ms.append({"c": c, "texto": str(m.get("texto") or "")[:40], "n": m.get("n"), "color": m.get("color") or "azul"})
                 else: self._notas.append(f"Tu marca en «{m['nombre']}» no se dibujó: ese control no está a la vista.")
-            if ms and not en_ventana: hechas = self._pintar(ms) and len(ms)
+        if ms and not en_ventana: hechas = self._pintar(ms) and len(ms)
+        for a in capacidades.avisos_linea(self._ojos):             # «Sube/Baja hasta la línea N»: se lo dice el panel
+            texto = (texto + "\n\n" if texto else "") + "↕ " + a + "."
         return {"texto": texto, "marcas": 0, "marcas_ventana": en_ventana + hechas, "pedir": pide, "dibujos": lote, "preguntas": preguntas}
 
     def _resolver_nombre(self):
@@ -326,7 +347,7 @@ def abrir_ventana(api):
     pagina = ojos_panel.inyectar_ui(pagina)
     api._ventana = webview.create_window(api._curso.titulo or "Curso", html=pagina, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
-                                         on_top=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
+                                         on_top=True, text_select=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
 
 
 def probar_codigo(curso, mod, kmod, i, t, pide_ui, ver):
@@ -349,6 +370,21 @@ def probar_codigo(curso, mod, kmod, i, t, pide_ui, ver):
     return 0
 
 
+def probar_otro_proyecto(curso, mod, i, t, pide_ui, ver):
+    """--probar de un «Tu turno» con "proyecto": un proyecto del estudiante, sin solucion/. Solo se informa (ℹ, nunca ✘)
+    cómo saldría hoy contra el proyecto real (Maven en una copia temporal; los http no se corren)."""
+    ctx = cp.ContextoCodigo(curso, mod, t, sin_http=True)
+    if not ctx.raiz.is_dir():
+        print(f"ℹ   paso {i + 1}: el proyecto {ctx.descripcion()} no existe en este PC: no se puede probar contra él"); return
+    sub = ctx.raiz / ctx.maven_sub
+    if cp.ContextoCodigo.usa_maven(t) and not (sub / "mvnw.cmd").exists() and not (sub / "mvnw").exists():
+        print(f"ℹ   paso {i + 1}: {ctx.descripcion()} aún no tiene Maven Wrapper (mvnw): los turnos de Maven saldrán con ese aviso")
+    r = cp.revisar_turno(cp.simular(pide_ui), t, ctx)
+    print(f"ℹ   paso {i + 1} (proyecto «{ctx.nombre}», solo informa; no es un fallo): hoy saldría «{r['estado']}» ({r['ok']} de {r['total']}): {r['mensaje'][:140]}")
+    for p in r["puntos"]:
+        print(f"      {'✓' if p['ok'] else '·'} {p['texto']}" + (f" → {p['detalle'][:120]}" if p.get("detalle") else ""))
+
+
 def probar(curso):
     """--probar: sin ventanas ni IA. Devuelve los fallos."""
     malos = 0
@@ -365,6 +401,7 @@ def probar(curso):
         for i, p in enumerate(mod.pasos):
             if est:
                 for o in p.get("senalar") or []:
+                    if o.get("linea") is not None: continue         # una línea del editor: depende del archivo abierto
                     nombre = cp.lista(o.get("nombre") or o.get("empieza"))[0]
                     if cp.buscar(est, o) is None and p.get("antes"):     # solo se ve después de abrir algo (un diálogo)
                         print(f"ℹ   paso {i + 1}: «{nombre}» no está a la vista ahora ({p['antes']})"); continue
@@ -400,7 +437,9 @@ def probar(curso):
                     otros = [q for q in pide if q["tipo"] != e["si"]["tipo"]]   # el error reemplaza lo de su tipo; lo demás, bien hecho
                     r = cp.revisar_turno(cp.simular(otros, [e["si"]]), t_ui)
                     ver(r["estado"] == "mal" and r["mensaje"] == e["mensaje"], f"  paso {i + 1}: error típico {k + 1} se reconoce («{e['mensaje'][:50]}…»)")
-            if codigo and curso.proyecto:
+            if codigo and t.get("proyecto"):
+                probar_otro_proyecto(curso, mod, i, t, pide, ver)
+            elif codigo and curso.proyecto:
                 n = probar_codigo(curso, mod, kmod, i, t, pide, ver)   # primero la llamada: `ver` suma a malos dentro
                 malos += n
             if t.get("tutor"): print(f"  paso {i + 1}: además lo revisa el tutor con la captura: «{t['tutor']['revisar']}»")

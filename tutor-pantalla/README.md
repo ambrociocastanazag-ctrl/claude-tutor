@@ -115,6 +115,31 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 - **`tutor`:** lo que solo se ve en la imagen. Si lo de `pide` está bien, Comprobar abre la vista previa de la app; con la captura adjunta, el tutor responde bien / casi / revisa.
 - **Antes de darlo:** `python tutor-pantalla/panel_curso.py <curso.json> --probar` hasta «Curso: todo bien», con la app abierta para que busque cada `senalar`. Luego pruébalo de verdad con el panel.
 
+### Capacidades de los tutores (el asistente es la vara)
+
+Todo lo que sabe el asistente lo saben también los tutores del modo curso, de Excel y de Dia. Lo común vive en **`capacidades.py`** (una sola fuente; los paneles lo llaman, no lo copian):
+
+| Capacidad | Modo curso | Excel / Dia |
+|---|---|---|
+| Dibujos de `DIBUJOS.md` (también `svg` animado) sobre cualquier ventana aprobada | ya estaba | ya estaba |
+| Ver otras ventanas (📷, `<pedir_ventana/>`, vista previa siempre) y marcar con `"tipo": "ventana"` | ya estaba | ya estaba |
+| Adjuntos (clip, Ctrl+V, arrastrar), tarjetas `<preguntas>`, voz 🔊 | ya estaba (la página es la misma) | ya estaba |
+| Investigar en la web (WebSearch y WebFetch, con «Buscando en la web…») | **añadida**: `capacidades.ConWeb` | por integrar (ver abajo) |
+| El prompt «tus capacidades» (qué tiene y cuándo usarlo) | **añadida**: `capacidades.reglas(app, codigo)` | por integrar |
+| Archivo abierto en VS Code en el contexto + objetivo `"linea"` | **añadida** (cursos de código) | opcional: solo si el curso tiene proyecto |
+
+**Lo que tiene que llamar otro panel** (Excel: `panel_web.py`; Dia: `panel_dia.py`):
+1. `import capacidades` (con `tutor-pantalla/` en `sys.path`) y en el prompt del tutor, `capacidades.reglas("<app>")` en lugar de juntar a mano `REGLAS_OJOS + REGLAS_DIBUJOS + REGLAS_PREGUNTAS`; quitar «No uses herramientas» de sus reglas.
+2. La clase del tutor: `class TutorX(capacidades.ConWeb, motor.Tutor)`. Pone `--tools WebSearch,WebFetch` y reutiliza el bucle de lectura del asistente. Si su `_arrancar`/`_turno` no son los de `motor.Tutor` de Excel, basta con llamar a `asistente.Sesion._turno(self, contenido, al_trozo, self.al_aviso)`.
+3. En la API: `tutor.al_aviso = lambda t: self._empujar("window.avisoTrabajo && window.avisoTrabajo(" + json.dumps(t) + ")")` (`ojos_ui.js` ya trae `avisoTrabajo`).
+4. Si el curso tiene proyecto de código: `ojos_panel.Ojos(..., raices=capacidades.raices_curso(curso.d))` (así los dibujos aceptan `"linea"`), `capacidades.contexto_editor(raices)` en el [Estado actual], `capacidades.reglas(app, True)` y, al final de cada respuesta, `capacidades.avisos_linea(self._ojos)` para añadir «Sube/Baja…».
+
+#### Señalar una línea del editor (`"linea"`)
+
+En cursos de código el tutor recibe, en cada pregunta, el **archivo abierto** en VS Code: se saca del título de la ventana («Prueba.java - Proyecto - Visual Studio Code»; con «●» = cambios sin guardar, y entonces se avisa de que el texto es el del disco) y de la pestaña del editor (UI Automation), se busca dentro de las carpetas del curso (`proyecto`, `proyectos` y lo que abre `app.abrir`; gana el más reciente) y se le pasa con números de línea (máximo 400 alrededor del cursor), el cursor y las líneas visibles. Con eso marca `{"tipo": "app", "linea": 21, "texto": "…"}` o un dibujo con `"linea": 14` (opcional `"archivo"`), y un `senalar` de lección también puede llevar `"linea"`.
+
+Cómo se ubica (`editor_vscode.py`, solo lectura, sin clics ni teclas ni cambiar su foco ni su configuración): VS Code no expone el texto del editor a UI Automation mientras no haya lector de pantalla («The editor is not accessible at this time»; TextPattern no existe y no se cambia `editor.accessibilitySupport`). Sí expone el rectángulo del editor, la barra de estado («Ln 21, Col 2») y el cuadro de entrada del cursor. Con una captura **local** de esa ventana (PrintWindow, no sale a ningún sitio) se leen los números del margen como filas de tinta (cada fila es una línea real: ni el ajuste de ancho ni el «Run | Debug» cuentan), la fila del cursor da su número y las demás siguen; si el cursor no se ve, se alinea la forma del texto con el largo de las líneas del archivo en disco. Si la línea no está a la vista, el panel marca el borde del editor y dice «Sube/Baja en el editor hasta la línea N». Precisión medida: el recuadro cae sobre la línea exacta, con tema oscuro y 125 %, en un archivo con CodeLens (verificado por un revisor aparte); con regiones plegadas la numeración puede fallar (entonces dice que no la ve). Cuesta ≈ 2 s por pregunta (UI Automation del árbol completo).
+
 ### Cursos de código (con `"proyecto"`)
 
 Si `curso.json` lleva `"proyecto": "<ruta absoluta de un proyecto Maven>"` (y, opcional, `"java_home"`: la carpeta del JDK que pide el proyecto; si falta, se usa la variable `JAVA_HOME` del sistema, y el JDK del PATH puede no ser el correcto), `pide` y los `si` de `errores` aceptan además estos tipos, que se revisan **sin IA** y sin abrir la app (la ventana de la app solo hace falta para los tipos de siempre). La ruta puede tener espacios.
@@ -137,6 +162,28 @@ Si `curso.json` lleva `"proyecto": "<ruta absoluta de un proyecto Maven>"` (y, o
 - **Segundo plano:** Comprobar muestra «Revisando… (corriendo tus pruebas, ~N s)» (N = lo que tardó la última vez; 20 al principio) y el panel y el tutor siguen vivos. Mientras corre, un segundo Comprobar avisa y espera. Si el turno es solo de código, no consulta la app.
 - **`solucion/` y `--probar`:** en la carpeta del curso, `solucion/plantilla/` (el proyecto al empezar) y `solucion/<stem del módulo>/` (el proyecto completo tal como queda al terminar ese módulo, acumulado). `--probar` valida cada tipo nuevo (y que existan las ocultas) y corre cada «Tu turno» de código contra `solucion/<stem>/` (debe salir **bien**) y contra la del módulo anterior o `solucion/plantilla/` (debe **no** salir bien). Los `http` no se prueban ahí (se dan por buenos): se prueban a mano con la app corriendo. Una corrida de Maven tarda ≈10–16 s; `--probar` hace dos por «Tu turno».
 
+#### Varios proyectos, comodines y «todas» (`"proyectos"`)
+
+Un curso puede revisar **más de un proyecto** (p. ej. una práctica y el proyecto real del estudiante). En `curso.json`:
+
+```json
+"proyectos": {"carrito": {"ruta": "C:/Users/yo/mi repo", "maven": "api"}}
+```
+
+- `ruta`: la carpeta raíz del repo (puede tener espacios). `maven` (opcional): la subcarpeta donde está el `pom.xml` y el `mvnw` (si falta, es la raíz).
+- Un `turno` con `"proyecto": "carrito"` revisa **todos** sus `pide` y `si` contra ese proyecto: `archivo` con rutas relativas a `ruta` (la raíz del repo, así que en el ejemplo se escribe `api/src/...`), `compila` y `pruebas` con Maven en `ruta/maven`, y `http` igual que siempre (la API que el estudiante tiene corriendo). Sin `"proyecto"` en el turno, todo sigue como antes (el `"proyecto"` de `curso.json`; un nombre que no esté en `proyectos` es un error al cargar el curso).
+- **Cómo corre Maven aquí:** se copia el repo entero (sin `target/`, `.git` ni `node_modules`) a una carpeta temporal, se copia el `.env` de la raíz también a la subcarpeta `maven` (si esa no trae uno) y se corre ahí. Nunca se escribe en el repo del estudiante.
+- **Comodines en `archivo.ruta`** (`*`, `?`, `**`): pasa si **algún** archivo que coincida cumple `contiene`/`no_contiene`/`regex`. Sirve cuando el nombre lo elige el estudiante. Si nada coincide: «busqué `api/src/**/entity/*.java` y no encontré ningún archivo así»; si coincide pero ninguno cumple: «busqué `…`: 2 archivos, ninguno cumple (en Libro.java falta «private int x»)». No busca dentro de `target/` ni `node_modules/`.
+- **`"clases": "todas"`** en `pruebas`: corre todas sus pruebas (`mvnw test`, sin `-Dtest`) y exige **cero fallos** y al menos `minimo` pruebas en total (1 por defecto). Útil cuando no se conocen los nombres de sus clases de prueba.
+
+```json
+{"tipo": "archivo", "ruta": "api/src/main/java/**/entity/*.java", "contiene": ["@Entity", "@Id"], "texto": "Tienes una entidad con @Id"}
+{"tipo": "pruebas", "clases": "todas", "minimo": 3, "texto": "Tus 3 pruebas pasan"}
+```
+
+- **`--probar`:** valida estos turnos (tipos, nombre de proyecto, comodines) y **no** los prueba contra `solucion/`; en cambio **informa con ℹ** (nunca ✘) cómo saldrían hoy contra el proyecto real, en una copia temporal, punto por punto. Los `http` no se corren.
+- **Tutor:** en los turnos de código recibe una línea «Este Tu turno revisa «carrito» (ruta; Maven en api/)», para no confundir el proyecto de ese paso con el de otros.
+
 ## Archivos
 
 | Archivo | Qué es |
@@ -147,6 +194,8 @@ Si `curso.json` lleva `"proyecto": "<ruta absoluta de un proyecto Maven>"` (y, o
 | `ojos_ui.js` | La lista de ventanas con miniaturas y la vista previa (Cancelar / Recortar / Adjuntar), para la página de cualquier panel. |
 | `preguntas_ui.js` | Las tarjetas de preguntas del tutor en el chat (opción única o múltiple, abiertas, «Otra…», «No sé»), con la corrección al instante. |
 | `panel_pantalla.py` | El panel del asistente (pywebview): la API que llama la página, el modo puente y la prueba `--probar`. |
+| `capacidades.py` | Lo que comparten todos los tutores con el asistente: el bloque del prompt (`reglas`), `ConWeb` (WebSearch/WebFetch), `raices_curso`, `contexto_editor`, `ubicar_linea` y `marcas_linea`. `python capacidades.py` prueba sin ventanas. |
+| `editor_vscode.py` | Leer el editor de VS Code sin tocarlo: archivo abierto, cursor y rectángulo de una línea (`rect_linea`). |
 | `curso_pantalla.py` | El modo curso: cargar el curso, leer el estado de la app, revisar el «Tu turno» sin IA, buscar lo que se señala y el estado en texto para el tutor. También los cursos de código: `ContextoCodigo`, `correr_maven`, `peticion` (ver «Cursos de código»). |
 | `panel_curso.py` | El panel de un curso (la página de los tutores): pasos, «Señálamelo», Comprobar (sin IA y con el tutor), el tutor del curso y `--probar`. |
 | `puente.py` | El modo puente: los dos lados se pasan mensajes por una carpeta temporal (`%TEMP%\tutor-pantalla-puente`, se borra al cerrar el panel, capturas incluidas). Desde el chat: `esperar` (en segundo plano: al llegar un mensaje termina y despierta al chat), `responder`, `pedir-captura`, `estado`. |

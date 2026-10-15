@@ -22,8 +22,8 @@ TIPOS_PIDE = {
 # Cursos de código (curso.json con "proyecto"): se revisan con Maven, sin IA (README, «Cursos de código»)
 TIPOS_CODIGO = {
     "compila": "el proyecto compila: {\"tipo\": \"compila\"}",
-    "archivo": "un archivo del proyecto: {\"tipo\": \"archivo\", \"ruta\": \"src/...\", \"contiene\": [...], \"no_contiene\": [...], \"regex\": \"...\"}",
-    "pruebas": "pruebas JUnit: {\"tipo\": \"pruebas\", \"clases\": [...], \"ocultas\": true, \"minimo\": 3}",
+    "archivo": "un archivo del proyecto (la ruta admite comodines * y **): {\"tipo\": \"archivo\", \"ruta\": \"src/**/entity/*.java\", \"contiene\": [...], \"no_contiene\": [...], \"regex\": \"...\"}",
+    "pruebas": "pruebas JUnit: {\"tipo\": \"pruebas\", \"clases\": [...] o \"todas\", \"ocultas\": true, \"minimo\": 3}",
     "http":    "una petición a la API que corre el estudiante: {\"tipo\": \"http\", \"metodo\": \"POST\", \"url\": \"...\", \"cuerpo\": {...}, \"codigo\": 201, \"json\": {...}}",
 }
 IGNORAR_COPIA = ("target", ".git", "node_modules")
@@ -45,19 +45,29 @@ def es_uno(texto, opciones, modo="es"):
 
 
 # ---------- El curso ----------
+def es_todas(q):
+    """¿Este «pruebas» pide correr todas las pruebas del proyecto ("clases": "todas")?"""
+    c = q.get("clases")
+    return isinstance(c, str) and c.strip().lower() == "todas"
+
+
+def tiene_comodin(ruta): return any(ch in str(ruta) for ch in "*?[")
+
+
 def validar_codigo(q, donde, con_proyecto):
     """Valida un «pide» (o «si») de los tipos de código; lanza ValueError con la causa."""
     t = q.get("tipo")
     if not con_proyecto: raise ValueError(f"{donde}: «{t}» solo existe en cursos con «proyecto» en curso.json")
     if t == "archivo":
         if not q.get("ruta"): raise ValueError(f"{donde}: «archivo» necesita «ruta» (relativa al proyecto)")
+        if os.path.isabs(str(q["ruta"])) or ".." in Path(str(q["ruta"])).parts: raise ValueError(f"{donde}: «ruta» tiene que ser relativa al proyecto (sin «..»)")
         for k in ("contiene", "no_contiene"):
             if k in q and not all(isinstance(x, str) for x in lista(q[k])): raise ValueError(f"{donde}: «{k}» es un texto o una lista de textos")
         if q.get("regex"):
             try: re.compile(q["regex"])
             except re.error as e: raise ValueError(f"{donde}: «regex» mal escrita ({e})")
     elif t == "pruebas":
-        if not lista(q.get("clases")): raise ValueError(f"{donde}: «pruebas» necesita «clases»: [\"MiTest\"]")
+        if not es_todas(q) and not lista(q.get("clases")): raise ValueError(f"{donde}: «pruebas» necesita «clases»: [\"MiTest\"] (o \"todas\")")
         if "minimo" in q and not (isinstance(q["minimo"], int) and q["minimo"] >= 0): raise ValueError(f"{donde}: «minimo» es un número entero")
     elif t == "http":
         if not str(q.get("url", "")).startswith("http"): raise ValueError(f"{donde}: «http» necesita «url» (http://…)")
@@ -72,7 +82,8 @@ def valida_q(q, donde, con_proyecto):
 
 
 class Modulo:
-    def __init__(self, ruta, d, con_proyecto=False):
+    def __init__(self, ruta, d, con_proyecto=False, proyectos=()):
+        """con_proyecto: el curso tiene «proyecto» (el de siempre); proyectos: los nombres de «proyectos» (los turnos que lo piden)."""
         self.ruta, self.d = ruta, d
         self.titulo, self.codigo = d.get("titulo", ruta.stem), d.get("codigo", "")
         self.pasos = d.get("pasos") or []
@@ -81,11 +92,16 @@ class Modulo:
             donde = f"{ruta.name}, paso {i + 1}"
             if not p.get("texto"): raise ValueError(f"{donde}: le falta «texto»")
             for s in p.get("senalar") or []:
-                if not s.get("nombre") and not s.get("empieza"): raise ValueError(f"{donde}: cada «senalar» lleva «nombre» (o «empieza»)")
+                if not s.get("nombre") and not s.get("empieza") and s.get("linea") is None: raise ValueError(f"{donde}: cada «senalar» lleva «nombre» (o «empieza», o «linea» en un curso de código)")
             t = p.get("turno")
             if t:
-                for q in (t.get("pide") or []) + [e.get("si") or {} for e in t.get("errores") or []]:
-                    valida_q(q, donde, con_proyecto)
+                qs = (t.get("pide") or []) + [e.get("si") or {} for e in t.get("errores") or []]
+                if t.get("proyecto") is not None and t["proyecto"] not in proyectos:
+                    raise ValueError(f"{donde}: «proyecto» «{t['proyecto']}» no está en «proyectos» de curso.json ({', '.join(proyectos) or 'no hay ninguno'})")
+                if any(q.get("tipo") in TIPOS_CODIGO for q in qs) and not t.get("proyecto") and not con_proyecto:
+                    raise ValueError(f"{donde}: este turno revisa código: pon «proyecto»: \"<nombre>\" (de «proyectos») o «proyecto» en curso.json")
+                for q in qs:
+                    valida_q(q, donde, bool(con_proyecto or proyectos))
                 if not t.get("pide") and not t.get("tutor"): raise ValueError(f"{donde}: el «turno» necesita «pide» (sin IA) o «tutor» (con captura)")
                 if t.get("tutor") and not isinstance(t["tutor"], dict): raise ValueError(f"{donde}: «tutor» va así: {{\"revisar\": \"qué tiene que verse\"}}")
 
@@ -101,8 +117,14 @@ class Curso:
         self.app_nombre = self.app.get("nombre") or self.app["exe"]
         self.proyecto = Path(self.d["proyecto"]) if self.d.get("proyecto") else None       # proyecto Maven del estudiante (curso de código)
         if self.proyecto and not self.proyecto.is_dir(): raise ValueError(f"curso.json: «proyecto» no existe: {self.proyecto}")
+        self.proyectos = {}                                        # nombre → {"ruta": Path, "maven": subcarpeta con el pom ("" = la raíz)}
+        for nombre, info in (self.d.get("proyectos") or {}).items():
+            if not isinstance(info, dict) or not info.get("ruta"): raise ValueError(f"curso.json: «proyectos.{nombre}» necesita «ruta»")
+            mv = str(info.get("maven") or "").strip("/\\")
+            if os.path.isabs(mv) or ".." in Path(mv).parts: raise ValueError(f"curso.json: «proyectos.{nombre}.maven» es una subcarpeta de «ruta» (sin «..»)")
+            self.proyectos[nombre] = {"ruta": Path(info["ruta"]), "maven": mv}
         self.java_home = self.d.get("java_home") or os.environ.get("JAVA_HOME", "")    # el JDK del curso; si no, el del sistema
-        self.modulos = [Modulo(self.carpeta / m, json.loads((self.carpeta / m).read_text(encoding="utf-8")), bool(self.proyecto)) for m in self.d.get("modulos") or []]
+        self.modulos = [Modulo(self.carpeta / m, json.loads((self.carpeta / m).read_text(encoding="utf-8")), bool(self.proyecto), set(self.proyectos)) for m in self.d.get("modulos") or []]
         if not self.modulos: raise ValueError("curso.json: «modulos» está vacío")
         self.progreso_ruta = self.carpeta / "progreso.json"
 
@@ -208,8 +230,12 @@ def buscar(est_o_controles, objetivo):
     def nombre_ok(n):
         if objetivo.get("empieza"): return any(norm(n).startswith(norm(e)) for e in lista(objetivo["empieza"]))
         return es_uno(n, objetivo["nombre"])
-    cand = [c for c in cs if c.get("caja") and c["tipo"] != "texto" and nombre_ok(c["nombre"])
-            and (not objetivo.get("tipo") or c["tipo"] == objetivo["tipo"])]
+    def con_estado(n):   # algunas apps añaden un estado al nombre: «Explorer (Ctrl+Shift+E) - 1 unsaved file» en VS Code
+        return any(norm(n).startswith(norm(e) + " - ") for e in lista(objetivo.get("nombre")))
+    def candidatos(ok):
+        return [c for c in cs if c.get("caja") and c["tipo"] != "texto" and ok(c["nombre"])
+                and (not objetivo.get("tipo") or c["tipo"] == objetivo["tipo"])]
+    cand = candidatos(nombre_ok) or (candidatos(con_estado) if not objetivo.get("empieza") else [])
     if not cand: return None
     return min(cand, key=lambda c: (c["caja"][2] - c["caja"][0]) * (c["caja"][3] - c["caja"][1]))
 
@@ -305,29 +331,37 @@ def _lee_reportes(carpeta):
     return res
 
 
-def correr_maven(raiz, java_home, clases=(), ocultas_de=None, timeout=600):
+def correr_maven(raiz, java_home, clases=(), ocultas_de=None, timeout=600, maven="", todas=False):
     """UNA corrida de Maven Wrapper sobre una copia temporal de `raiz` (la copia se borra al terminar).
-    clases: simples (si hay, `test -Dtest=A,B`; si no, solo `compile`); ocultas_de: carpeta con las pruebas ocultas a añadir.
+    clases: simples (si hay, `test -Dtest=A,B`; si no, solo `compile`); todas: `test` sin -Dtest (todas las pruebas);
+    ocultas_de: carpeta con las pruebas ocultas a añadir; maven: subcarpeta de `raiz` donde está el pom (se copia el
+    repo entero y Maven corre ahí; el .env de la raíz también se copia a esa subcarpeta si no tiene uno).
     Devuelve {"compila": bool, "error": str, "clases": {...}, "seg": float}."""
     raiz = Path(raiz); t0 = time.time()
+    if not raiz.is_dir():
+        return {"compila": False, "error": f"No encuentro la carpeta del proyecto ({raiz}).", "clases": {}, "seg": 0.0}
     tmp = Path(tempfile.mkdtemp(prefix="curso_mvn_"))
     try:
         copiar_proyecto(raiz, tmp)
-        ocultos = anadir_ocultas(ocultas_de, tmp) if ocultas_de else []
-        mvnw = tmp / ("mvnw.cmd" if os.name == "nt" else "mvnw")
+        base = tmp / maven if maven else tmp
+        if maven and (raiz / ".env").is_file() and not (base / ".env").exists() and base.is_dir():
+            shutil.copy2(raiz / ".env", base / ".env")
+        ocultos = anadir_ocultas(ocultas_de, base) if ocultas_de else []
+        mvnw = base / ("mvnw.cmd" if os.name == "nt" else "mvnw")
         if not mvnw.exists():
-            return {"compila": False, "error": "El proyecto no tiene Maven Wrapper (mvnw.cmd).", "clases": {}, "seg": time.time() - t0}
+            donde = f" en {maven}/" if maven else ""
+            return {"compila": False, "error": f"El proyecto no tiene Maven Wrapper (mvnw.cmd){donde}.", "clases": {}, "seg": time.time() - t0}
         env = dict(os.environ)
         if java_home:
             env["JAVA_HOME"] = str(java_home); env["PATH"] = str(Path(java_home) / "bin") + os.pathsep + env.get("PATH", "")
-        cmd = [str(mvnw), "-B", "-q"] + (["test", "-Dtest=" + ",".join(clases), "-Dsurefire.failIfNoSpecifiedTests=false"] if clases else ["compile"])
+        cmd = [str(mvnw), "-B", "-q"] + (["test"] if todas else ["test", "-Dtest=" + ",".join(clases), "-Dsurefire.failIfNoSpecifiedTests=false"] if clases else ["compile"])
         try:
-            p = subprocess.run(cmd, cwd=str(tmp), env=env, capture_output=True, timeout=timeout,
+            p = subprocess.run(cmd, cwd=str(base), env=env, capture_output=True, timeout=timeout,
                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             salida = (p.stdout + b"\n" + p.stderr).decode("utf-8", "replace")
         except subprocess.TimeoutExpired:
             return {"compila": False, "error": f"Maven tardó más de {timeout} s.", "clases": {}, "seg": time.time() - t0}
-        reps = _lee_reportes(tmp / "target" / "surefire-reports")
+        reps = _lee_reportes(base / "target" / "surefire-reports")
         err = _compila_error(salida, ocultos)
         build = None
         if err is None and p.returncode != 0 and not reps:                # no compiló por otra razón, o Maven ni arrancó
@@ -384,10 +418,14 @@ class ContextoCodigo:
     `sin_http`: en --probar los http no se prueban (se dan por buenos)."""
 
     def __init__(self, curso, modulo, turno, raiz=None, sin_http=False):
-        self.curso, self.mod, self.raiz = curso, modulo, Path(raiz or curso.proyecto)
+        self.curso, self.mod = curso, modulo
+        self.nombre = turno.get("proyecto")                          # un proyecto de «proyectos» (si no, el «proyecto» de siempre)
+        info = curso.proyectos[self.nombre] if self.nombre else {"ruta": curso.proyecto, "maven": ""}
+        self.raiz, self.maven_sub = Path(raiz or info["ruta"]), info["maven"]
         self.sin_http = sin_http
         pr = [q for q in _qs(turno) if q.get("tipo") == "pruebas"]
-        self.clases = sorted({c for q in pr for c in lista(q["clases"])})
+        self.todas = any(es_todas(q) for q in pr)
+        self.clases = sorted({c for q in pr if not es_todas(q) for c in lista(q["clases"])})
         self.ocultas = any(q.get("ocultas") for q in pr)
         self._mvn = None
 
@@ -400,7 +438,7 @@ class ContextoCodigo:
     def maven(self):
         if self._mvn is None:
             ocultas = self.curso.carpeta / "pruebas" / self.mod.ruta.stem if self.ocultas else None
-            self._mvn = correr_maven(self.raiz, self.curso.java_home, self.clases, ocultas)
+            self._mvn = correr_maven(self.raiz, self.curso.java_home, self.clases, ocultas, maven=self.maven_sub, todas=self.todas)
         return self._mvn
 
     def evalua(self, q):
@@ -412,6 +450,13 @@ class ContextoCodigo:
         if not r["compila"]: return False, r["error"]
         if t == "compila": return True, ""
         total = 0
+        if es_todas(q):                                   # todas las pruebas del proyecto: cero fallos y al menos `minimo`
+            for c, rc in sorted(r["clases"].items()):
+                if rc["fallos"]: return False, rc["primer"] or f"{c} tiene pruebas que fallan"
+                total += rc["tests"]
+            minimo = q.get("minimo", 1)
+            if total < minimo: return False, f"corrieron {total} prueba(s) en todo el proyecto y se piden al menos {minimo}"
+            return True, ""
         for c in lista(q["clases"]):
             rc = r["clases"].get(c)
             if rc is None: return False, f"no encuentro la clase de pruebas {c} (¿está en src/test/java y con el nombre exacto?)"
@@ -421,11 +466,35 @@ class ContextoCodigo:
         if total < minimo: return False, f"corrieron {total} prueba(s) y se piden al menos {minimo}"
         return True, ""
 
+    def descripcion(self):
+        """Qué proyecto revisa este turno, en una línea (para el tutor y los avisos)."""
+        r = f"«{self.nombre}» ({self.raiz}" if self.nombre else f"el proyecto del curso ({self.raiz}"
+        return r + (f"; Maven en {self.maven_sub}/)" if self.maven_sub else ")")
+
     def _archivo(self, q):
-        ruta = (self.raiz / q["ruta"]).resolve()
-        try: ruta.relative_to(self.raiz.resolve())
+        raiz = self.raiz.resolve()
+        if not raiz.is_dir(): return False, f"no encuentro la carpeta del proyecto ({self.raiz})"
+        if tiene_comodin(q["ruta"]):
+            try:
+                hallados = sorted(f for f in raiz.glob(str(q["ruta"]).replace("\\", "/")) if f.is_file()
+                                  and not any(x in IGNORAR_COPIA for x in f.relative_to(raiz).parts))
+            except (NotImplementedError, ValueError, OSError): return False, f"la ruta «{q['ruta']}» no se puede buscar"
+            if not hallados: return False, f"busqué «{q['ruta']}» y no encontré ningún archivo así"
+            fallos = []
+            for f in hallados:
+                ok, det = self._revisa_archivo(f, q)
+                if ok: return True, ""
+                fallos.append(det)
+            n = len(hallados)
+            return False, f"busqué «{q['ruta']}»: {n} archivo{'s' if n != 1 else ''}, ninguno cumple ({fallos[0]})"
+        ruta = (raiz / q["ruta"]).resolve()
+        try: ruta.relative_to(raiz)
         except ValueError: return False, "ruta fuera del proyecto"
         if not ruta.is_file(): return False, f"no existe {q['ruta']}"
+        return self._revisa_archivo(ruta, q)
+
+    @staticmethod
+    def _revisa_archivo(ruta, q):
         txt = ruta.read_text(encoding="utf-8", errors="replace"); plano = _colapsa(txt)
         for c in lista(q.get("contiene")):
             if _colapsa(c).strip() not in plano: return False, f"en {ruta.name} falta «{c}»"

@@ -156,3 +156,13 @@
     cerrar: function(){ cerrar(); }
   };
 })();
+
+/* «Buscando en la web…»: los tutores de Excel, Dia y curso lo mandan mientras investigan (capacidades.ConWeb).
+   Cambia la línea «Leyendo tu …» de la burbuja de espera; el asistente tiene su propia versión en panel.html. */
+(function(){
+  if (window.avisoTrabajo) return;
+  window.avisoTrabajo = function(t){
+    var q = document.querySelector('.pensando .que');
+    if (q) q.textContent = t;
+  };
+})();

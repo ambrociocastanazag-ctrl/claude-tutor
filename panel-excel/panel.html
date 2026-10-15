@@ -73,6 +73,9 @@ h1{margin:0;font-size:21px;line-height:1.2;font-weight:700;letter-spacing:-.01em
 .ceja .n{font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--acc-text);white-space:nowrap}
 .ceja .t{color:var(--ink2);font-weight:650}
 .texto-paso{margin:0;font-size:14.5px;line-height:1.62;text-wrap:pretty}
+.texto-paso>p{margin:0 0 9px}.texto-paso>p:last-child{margin-bottom:0}
+.texto-paso>.lista,.texto-paso>.bloque-codigo,.texto-paso>.h{margin:4px 0 10px}
+.texto-paso .bloque-codigo pre{font-size:12.5px;font-weight:500;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:4}
 .donde{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 10px;padding:10px 12px;border-radius:10px;background:var(--sunk);border:1px dashed var(--line)}
 .donde .icono{grid-row:span 2;width:28px;height:28px;border-radius:8px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;color:var(--acc-text)}
 .donde .r{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);line-height:16px}
@@ -275,7 +278,7 @@ textarea:focus-visible{outline:none}
     <div class="cuerpo scroll" id="cuerpo">
       <div class="tarjeta">
         <div class="ceja"><span class="n" id="pasoNum">Conectando con Excel…</span><span class="sep" id="pasoSep" hidden style="color:var(--ink3)">·</span><span class="t" id="pasoTit"></span><button class="leer-paso" id="leerPaso" type="button" hidden title="Léeme este paso" aria-label="Léeme este paso"></button></div>
-        <p class="texto-paso" id="pasoTxt"></p>
+        <div class="texto-paso" id="pasoTxt"></div>
       </div>
       <div class="aviso-error" id="aviso" hidden></div>
       <div class="requisito" id="requisito" hidden></div>
@@ -400,7 +403,7 @@ textarea:focus-visible{outline:none}
     return s.replace(/(^|[\s(«])(=[^\s,;»)]+|\$?[A-Z]{1,2}\$?\d+(?::\$?[A-Z]{1,2}\$?\d+)?|\[@[^\]]+\]|#¡?[A-Z]+!?)(?=$|[\s,.;:)»])/g, '$1`$2`');
   }
   // Markdown del tutor → bloques del diseño: párrafos, títulos, listas numeradas y con viñetas, y bloques de código con «Copiar»
-  function bloques(t, cursor){
+  function bloques(t, cursor, excel){   // excel: en el texto (no en los bloques de código), celdas y fórmulas como código
     var out = [], partes = esc(t).split(/```/);
     partes.forEach(function(p, i){
       if (i % 2){                       // bloque de código ```...```
@@ -410,9 +413,10 @@ textarea:focus-visible{outline:none}
       }
       p.split(/\n{2,}/).forEach(function(b){
         b = b.replace(/^\n+|\n+$/g, ''); if (!b) return;
+        if (excel) b = b.split(/(`[^`\n]*`)/).map(function(x, k){ return k % 2 ? x : codigoExcel(x); }).join('');   // lo que ya es código no se toca
         var l = b.split('\n');
         if (l.every(function(x){ return /^\s*\d+[.)] /.test(x); }))
-          out.push('<div class="lista">' + l.map(function(x, k){ return '<div class="li"><span class="nn">' + (k + 1) + '</span><div>' + enLinea(x.replace(/^\s*\d+[.)] /, '')) + '</div></div>'; }).join('') + '</div>');
+          out.push('<div class="lista">' + l.map(function(x, k){ return '<div class="li"><span class="nn">' + (parseInt(x, 10) || k + 1) + '</span><div>' + enLinea(x.replace(/^\s*\d+[.)] /, '')) + '</div></div>'; }).join('') + '</div>');
         else if (l.every(function(x){ return /^\s*[-*•] /.test(x); }))
           out.push('<div class="lista">' + l.map(function(x){ return '<div class="li"><span class="bala"></span><div>' + enLinea(x.replace(/^\s*[-*•] /, '')) + '</div></div>'; }).join('') + '</div>');
         else if (/^#{1,4} /.test(b)) out.push('<div class="h">' + enLinea(b.replace(/^#{1,4} /, '')) + '</div>');
@@ -466,7 +470,7 @@ textarea:focus-visible{outline:none}
     $('pasoNum').textContent = 'Paso ' + (n + 1) + ' de ' + total;
     $('pasoTit').textContent = e.paso_titulo || ''; $('pasoSep').hidden = !e.paso_titulo;
     pasoActual = e; callarPaso();
-    $('pasoTxt').innerHTML = enLinea(codigoExcel(esc(e.texto)));
+    $('pasoTxt').innerHTML = bloques(e.texto, false, true);   // párrafos, listas y bloques de código con «Copiar»
     $('aviso').hidden = !e.aviso; $('aviso').textContent = e.aviso || '';
     $('requisito').hidden = !e.requisito; $('requisito').innerHTML = e.requisito ? '<span class="i">!</span><span>' + enLinea(esc(e.requisito)) + '</span>' : '';
     $('donde').hidden = !e.donde; $('dondeR').textContent = 'En ' + (e.app || 'Excel');
@@ -896,7 +900,14 @@ textarea:focus-visible{outline:none}
       if (el.tagName === 'CODE'){ el.classList.add('copiado'); setTimeout(function(){ el.classList.remove('copiado'); }, 1600); }
       else { el.classList.add('ok'); el.querySelector('b').textContent = 'Copiado'; setTimeout(function(){ el.classList.remove('ok'); el.querySelector('b').textContent = 'Copiar'; }, 1600); }
     };
-    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(hecho, function(){ aviso('Selecciona el texto y pulsa Ctrl+C'); });
+    function aMano(){                   // la ventana del panel no siempre deja usar navigator.clipboard: se copia con un textarea
+      var ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'; document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+      if (ok) hecho(); else aviso('Selecciona el texto y pulsa Ctrl+C');
+    }
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(hecho, aMano);
   });
   var tAviso;
   function aviso(t, ms){ var d = $('toast'); d.textContent = t; d.hidden = false; clearTimeout(tAviso); tAviso = setTimeout(function(){ d.hidden = true; }, ms || 1800); }

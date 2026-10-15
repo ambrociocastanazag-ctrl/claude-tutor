@@ -43,6 +43,8 @@ voz; si falta, se usa `texto`), `"n"` (número de orden).
 | `rayos_x` | Excel: de las celdas que usa la fórmula al resultado, con los valores viajando | `celda` |
 | `desarmar` | copia ampliada del texto con una llave y una explicación por parte | `original` (en Excel, con `celda`, sale de la celda), `partes`: `[{"texto", "nota"}]` |
 
+**Objetivo `"linea"` (cursos de código).** Además de `id`, `caja`, `celda` y `nombre`, un dibujo (o un paso de `fantasma`/`secuencia`) puede apuntar a una línea del editor de VS Code: `{"tipo": "dibujo", "forma": "foco", "linea": 14, "archivo": "Prueba.java", "texto": "Aquí"}`. `archivo` es opcional (si no es el abierto, el dibujo no sale y el tutor lo sabe). El panel lo ubica con `editor_vscode.rect_linea` (ver README, «Señalar una línea del editor»); si la línea no se ve, se dibuja en el borde del editor y se añade «Sube/Baja…» a la respuesta. Necesita `Ojos(raices=[carpetas del curso])`.
+
 ## 2. El lote (Python → página)
 
 `Ojos.dibujos(marcas, resolver)` devuelve `(resto, lote)`; la respuesta del panel lleva `"dibujos": lote` y la página

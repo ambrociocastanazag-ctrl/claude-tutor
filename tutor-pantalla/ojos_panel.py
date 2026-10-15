@@ -28,7 +28,7 @@ SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js"
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
 FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
-CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta", "en"}    # "en": objetivo de la interfaz de Dia
+CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta", "en", "linea", "archivo"}    # "en": objetivo de la interfaz de Dia
 MAX_DIBUJOS = 6
 MAX_CAPTURAS = 6                                                        # las que se guardan en memoria (adjuntas o en espera)
 
@@ -45,7 +45,7 @@ pidas si no hace falta."""
 
 REGLAS_DIBUJOS = r"""
 DIBUJOS: además de las flechas, puedes dibujar ENCIMA de la app (junto a tus otras marcas) con "tipo": "dibujo" y una
-"forma". Objetivo como en las demás marcas: "id"/"caja" de la última captura, "celda" en Excel, "nombre" en un curso.
+"forma". Objetivo como en las demás marcas: "id"/"caja" de la última captura, "celda" en Excel, "nombre" en un curso, "linea": N (y "archivo") en un curso de código.
 Comunes: "texto" (1 a 5 palabras), "decir" (frase corta que se lee en voz alta si la voz está encendida), "color".
   {"tipo": "dibujo", "forma": "foco", "id": 12, "texto": "Aquí"}            oscurece todo menos eso
   {"tipo": "dibujo", "forma": "mano", "trazo": "circulo", "id": 12, "texto": "¡Este!"}   trazo de profe: circulo |
@@ -221,8 +221,10 @@ class Ojos:
     """Capturas con permiso y flechas encima de la ventana capturada.
     apps: nombres de ejecutable (sin .exe) que van primero en la lista: las ventanas del curso."""
 
-    def __init__(self, apps=(), panel_hwnd=lambda: None):
+    def __init__(self, apps=(), panel_hwnd=lambda: None, raices=()):
         self.apps = {a.lower() for a in apps}
+        self.raices = list(raices)                   # carpetas del curso: con ellas, los objetivos «linea» ubican líneas del editor
+        self.avisos_linea = []                       # «Sube/Baja hasta la línea N» de los objetivos «linea» (capacidades.avisos_linea)
         self.panel_hwnd = panel_hwnd                 # función: la ventana del panel (las flechas van justo debajo)
         self.ov = Overlay()
         self.capa = Overlay(CAPA)                    # los dibujos ricos
@@ -344,6 +346,11 @@ class Ojos:
             r = resolver(m)
             if r: r = dict(r); return r.pop("hwnd", None), r.pop("r", None), r
         cap = self.ultima
+        if m.get("linea") is not None:                      # una línea del editor de código (editor_vscode.py)
+            import capacidades
+            h, caja, aviso = capacidades.ubicar_linea(m, self.raices, ventana)
+            if aviso: self.avisos_linea.append(aviso)
+            return h, caja, {}
         if "id" in m or "caja" in m:
             if not cap: raise ValueError("no hay ninguna captura a la que se refiera")
             caja = None
