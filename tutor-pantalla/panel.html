@@ -389,6 +389,7 @@ textarea:focus-visible{outline:none}
     pintarEnviar();
   }
   function adjuntar(a){ adjuntos = adjuntos.concat([a]).slice(-MAX_ADJ); pintarAdjuntos(); $('entrada').focus(); }
+  window.adjuntarExterno = adjuntar;          // 📱 Fotos del celular (ojos_ui.js): adjunto pendiente, sale solo al enviar
   $('clip').onclick = function(){ $('archivo').click(); };
   $('archivo').onchange = function(){ agregarArchivos(this.files); this.value = ''; };
   $('entrada').addEventListener('paste', function(e){

@@ -514,6 +514,16 @@ class OjosApi:
     def ojos_adjuntar(self, recorte=None):
         return self._ojos.adjuntar(recorte)
 
+    # --- 📱 fotos del celular (celular.py) ---
+    def _cel(self):
+        if getattr(self, "_celular_obj", None) is None:
+            import celular; self._celular_obj = celular.Celular()
+        return self._celular_obj
+
+    def celular_estado(self): return {"configurado": self._cel().configurado}
+    def celular_abrir(self): return self._cel().abrir()
+    def celular_recoger(self): return self._cel().recoger()
+
     def archivo_leer(self, token):
         """Tarjeta «¿Dejo que el tutor lea…?» (o lectura sola si es del curso): el archivo como adjunto (archivos.Lector)."""
         return archivos.leer(token)

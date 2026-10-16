@@ -1,0 +1,17 @@
+{
+  "name": "tutor-fotos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fotos del celular para los tutores: el panel las recoge y se borran al entregarlas.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "8.13.1",
+    "qrcode": "1.5.4"
+  }
+}

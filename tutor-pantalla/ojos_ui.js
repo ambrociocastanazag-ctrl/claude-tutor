@@ -41,6 +41,11 @@
     '.oj-btn.oj-prim{flex:1;justify-content:center;border:none;background:var(--acc);color:var(--on-acc);font-size:14px}' +
     '.oj-btn.oj-activo{background:var(--acc-soft);color:var(--acc-text);border-color:transparent}' +
     '.oj-aviso{padding:8px 11px;border-radius:9px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:13px;line-height:1.5;margin-bottom:10px}' +
+    '.oj-cel{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center}' +
+    '.oj-cel-qr{width:220px;height:220px;padding:10px;background:#fff;border-radius:12px;border:1px solid var(--line)} .oj-cel-qr svg{display:block;width:100%;height:100%}' +
+    '.oj-cel-tx{flex:1;min-width:220px;max-width:420px;font-size:14px;line-height:1.55;color:var(--ink2)} .oj-cel-tx p{margin:0 0 10px}' +
+    '.oj-cel-cod{font:700 34px/1.1 var(--mono,ui-monospace,Consolas,monospace);letter-spacing:.12em;color:var(--ink);margin:2px 0 12px}' +
+    '.oj-cel-nota{font-size:12.5px;color:var(--ink3)} .oj-cel-est{font-weight:650;color:var(--acc-text,var(--acc))}' +
     '.oj-vol{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 13px;font-family:var(--sans);color:var(--ink)}' +
     '.oj-vol-q{display:flex;gap:8px;align-items:flex-start;font-size:14px;font-weight:650;line-height:1.45}' +
     '.oj-vol-q svg{flex-shrink:0;margin-top:2px;color:var(--acc)}' +
@@ -55,7 +60,8 @@
 
   var P = {x: 'M6 6l12 12M18 6L6 18', refresh: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15', crop: 'M7 3v14h14M3 7h14v14',
            lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z', camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', clip: 'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.4 3.4 0 0 1 4.8 4.8l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4',
-           file: 'M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7zM14 3v4h4M9 13h6M9 17h4'};
+           file: 'M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7zM14 3v4h4M9 13h6M9 17h4',
+           phone: 'M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5zM11 18.5h2'};
   function ic(n, t){ return '<svg width="' + (t || 15) + '" height="' + (t || 15) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + P[n] + '"/></svg>'; }
   function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
   function api(){ return window.pywebview && window.pywebview.api; }
@@ -280,7 +286,56 @@
     return raiz;
   }
 
+  // ---- 📱 Fotos del celular (celular.py + fotos-servidor/): QR y código → el celular sube → el panel la recoge ----
+  // La foto queda como adjunto PENDIENTE del mensaje (miniatura y ✕): solo sale si la persona envía. La página pone
+  // window.adjuntarExterno(a). Una vez abierto, se recoge cada 2 s mientras el panel siga abierto (varias fotos).
+  var cel = {sesion: null, tic: null, llegadas: 0};
+  function celHtml(s){
+    return '<div class="oj-cab"><b>' + ic('phone', 16) + ' Foto del celular</b><button class="oj-ib oj-cerrar" type="button" aria-label="Cerrar">' + ic('x', 16) + '</button></div>' +
+      '<div class="oj-cuerpo oj-cel">' +
+        '<div class="oj-cel-qr">' + (s.qr || '') + '</div>' +
+        '<div class="oj-cel-tx"><p>Escanea el código con la cámara del celular, o abre <b>' + esc((s.inicio || '').replace(/^https?:\/\//, '')) + '</b> y escribe:</p>' +
+        '<div class="oj-cel-cod">' + esc(s.codigo.slice(0, 3) + ' ' + s.codigo.slice(3)) + '</div>' +
+        '<p class="oj-cel-nota">Toma la foto y pulsa enviar: aparece aquí en tu mensaje, con su miniatura. Si no la quieres, quítala con la ✕; solo le llega al tutor si envías. Puedes mandar varias.</p>' +
+        '<p class="oj-cel-est" aria-live="polite">' + (cel.llegadas ? 'Llegaron ' + cel.llegadas + ' foto(s).' : 'Esperando fotos…') + '</p></div>' +
+      '</div><div class="oj-pie"><div class="oj-botones"><button class="oj-btn oj-prim oj-cerrar" type="button">Listo</button></div></div>';
+  }
+  function celRecoger(){
+    var a = api(); if (!a || !a.celular_recoger) return;
+    a.celular_recoger().then(function(r){
+      if (!r) return;
+      if (r.nueva && r.codigo){ cel.sesion = Object.assign({}, cel.sesion, {codigo: r.codigo, url: r.url, qr: r.qr}); if (hoja && hoja.querySelector('.oj-cel')) hoja.innerHTML = celHtml(cel.sesion), atarCerrar(); }
+      (r.fotos || []).forEach(function(f){
+        cel.llegadas++;
+        if (window.adjuntarExterno) window.adjuntarExterno(f);
+        var e = hoja && hoja.querySelector('.oj-cel-est'); if (e) e.textContent = 'Llegaron ' + cel.llegadas + ' foto(s): ya están en tu mensaje.';
+      });
+    }, function(){});
+  }
+  function atarCerrar(){ Array.prototype.forEach.call(hoja.querySelectorAll('.oj-cerrar'), function(b){ b.onclick = function(){ cerrar(); }; }); }
+  function celular(){
+    var a = api(); if (!a || !a.celular_abrir) return;
+    a.celular_abrir().then(function(s){
+      if (!s || !s.ok){ abrir('<div class="oj-cab"><b>Foto del celular</b><button class="oj-ib oj-cerrar" type="button" aria-label="Cerrar">' + ic('x', 16) + '</button></div><div class="oj-cuerpo"><p>' + esc((s && s.error) || 'No pude abrir la sesión.') + '</p></div>'); return; }
+      cel.sesion = s; abrir(celHtml(s));
+      if (!cel.tic) cel.tic = setInterval(celRecoger, 2000);
+    });
+  }
+  function instalarCelular(intento){
+    var a = api(), clip = document.getElementById('clip');
+    if (!a || !a.celular_estado || !clip){ if ((intento || 0) < 40) setTimeout(function(){ instalarCelular((intento || 0) + 1); }, 500); return; }
+    a.celular_estado().then(function(e){
+      if (!e || !e.configurado || document.getElementById('celularBtn')) return;
+      var b = document.createElement('button'); b.type = 'button'; b.id = 'celularBtn'; b.className = clip.className;
+      b.title = 'Foto del celular (escaneas un QR y la foto llega aquí)'; b.setAttribute('aria-label', 'Foto del celular');
+      b.innerHTML = ic('phone', 18); b.onclick = celular;
+      clip.parentNode.insertBefore(b, clip.nextSibling);
+    });
+  }
+  instalarCelular(0);
+
   window.Ojos = {
+    celular: celular,
     elegir: elegir,
     mirar: mirar,
     tarjetaVolver: tarjetaVolver,

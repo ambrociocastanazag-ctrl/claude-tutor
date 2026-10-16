@@ -90,6 +90,15 @@
 !/tutor-pantalla/archivos.py
 !/tutor-pantalla/practica.py
 !/tutor-pantalla/ejercicios_tutor.py
+!/tutor-pantalla/celular.py
+!/tutor-pantalla/.env.example
+!/tutor-pantalla/fotos-servidor/
+/tutor-pantalla/fotos-servidor/*
+!/tutor-pantalla/fotos-servidor/server.js
+!/tutor-pantalla/fotos-servidor/celular.html
+!/tutor-pantalla/fotos-servidor/package.json
+!/tutor-pantalla/fotos-servidor/package-lock.json
+!/tutor-pantalla/fotos-servidor/README.md
 !/tutor-pantalla/editor_vscode.py
 !/tutor-pantalla/puente.py
 !/tutor-pantalla/curso_pantalla.py

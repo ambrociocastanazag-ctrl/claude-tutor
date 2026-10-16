@@ -224,6 +224,8 @@ Un curso puede revisar **más de un proyecto** (p. ej. una práctica y el proyec
 | Archivo | Qué es |
 |---|---|
 | `archivos.py` | Leer archivos: carpetas de lectura libre del curso, argumentos de `claude` (`--add-dir`, secretos negados), la tarjeta `<pedir_archivo/>` (permiso por archivo) y la lectura del archivo como adjunto. `python archivos.py` = pruebas. |
+| `celular.py` | Fotos del celular (botón «Foto del celular» junto al clip, en todos los paneles): abre sesión (código + QR), recoge las fotos (el servicio las borra al entregarlas) y cierra al salir. Config en `.env` (`FOTOS_URL`, `FOTOS_CLAVE`; plantilla `.env.example`; `.env` no va al repo). `python celular.py --probar [url clave]`. |
+| `fotos-servidor/` | El servicio de las fotos (Node; ver su README). |
 | `practica.py` | Modo práctica: estado (`practica.json`), reglas y prefijo del tutor, y `PracticaApi` (lo que llama la página). `python practica.py` = pruebas. |
 | `ejercicios_tutor.py` | Ejercicios que crea el tutor del modo curso (`<ejercicio>`): archivo nuevo + pruebas ocultas en código, `pide` en apps; tarjeta de permiso y Comprobar. `python ejercicios_tutor.py [--maven <copia>]` = pruebas. |
 | `ojos.py` | El núcleo: lista de ventanas, miniaturas, captura de una ventana (`Captura`: imagen reducida a 1400 px de lado largo, controles en píxeles de la imagen, recorte y conversión a la pantalla). `python ojos.py --lista` / `--capturar "texto" salida.png`. |

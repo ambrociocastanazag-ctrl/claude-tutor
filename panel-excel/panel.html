@@ -764,6 +764,11 @@ textarea:focus-visible{outline:none}
     });
   }
   $('mirarVentana').onclick = mirarVentana;
+  // 📱 Fotos del celular (ojos_ui.js): la foto llega como adjunto pendiente; sale solo si la persona envía
+  window.adjuntarExterno = function(a){
+    if (adjuntos.length >= MAX_ADJ) return aviso('Máximo ' + MAX_ADJ + ' adjuntos por mensaje: envía o quita alguno.', 3500);
+    cambiarA('tutor'); a.listo = Promise.resolve(); adjuntos.push(a); pintarAdjuntos();
+  };
   $('archivo').onchange = function(){ agregar(this.files); this.value = ''; };
   $('entrada').addEventListener('paste', function(e){
     var cd = e.clipboardData; if (!cd || !cd.files.length) return;
