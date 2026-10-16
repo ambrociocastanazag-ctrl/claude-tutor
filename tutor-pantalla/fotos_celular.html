@@ -93,11 +93,14 @@ svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-widt
       '<div class="barra"><button type="button" class="c"><svg class="i"><use href="#i-copiar"/></svg>Copiar</button>' +
       '<button type="button" class="x" title="Quitar" aria-label="Quitar"><svg class="i"><use href="#i-x"/></svg></button></div>';
     var img = d.querySelector('img'); img.src = url;
-    // Arrastrar: es una imagen servida por http (127.0.0.1), como en cualquier web → llega como archivo de imagen.
-    // DownloadURL además deja soltarla en el Escritorio o en una carpeta.
+        // Arrastrar: WebView2 no deja sacar la imagen, así que se cancela el arrastre de la página y lo hace Windows con el
+    // ARCHIVO (fotos_celular.Buzon.arrastrar): llega como si vinieras del Explorador.
     img.addEventListener('dragstart', function(e){
-      try { e.dataTransfer.setData('DownloadURL', 'image/jpeg:' + nombre + ':' + url); } catch (er) {}
-      d.classList.remove('nueva');
+      e.preventDefault(); d.classList.remove('nueva');
+      api.arrastrar(nombre).then(function(r){
+        if (r && !r.ok) aviso(r.error, true);
+        else if (r && r.efecto === 'Copy') aviso('Listo: la foto se soltó como archivo.');
+      });
     });
     d.querySelector('.c').onclick = function(){
       var b = this;
