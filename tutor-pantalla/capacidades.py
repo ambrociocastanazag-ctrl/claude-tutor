@@ -103,23 +103,33 @@ def raices_curso(d):
     return out
 
 
-def ventana_editor(hwnd=None):
-    """El hwnd del editor: el que se pasa (si es VS Code o de su familia) o la ventana de editor más reciente."""
+def ventana_editor(hwnd=None, raices=()):
+    """El hwnd del editor: el que se pasa (si es VS Code o de su familia); si no, el editor cuyo título nombra una
+    carpeta del curso (con varios VS Code o forks abiertos, el del proyecto y no otro); si no, el más reciente."""
     if hwnd and editor_vscode.es_vscode(ojos.app_de(ojos.pid_de(hwnd))): return hwnd
-    v = editor_vscode.ventana_editor()
-    return v["hwnd"] if v else None
+    eds = [v for v in ojos.listar_ventanas() if editor_vscode.es_vscode(v["app"])]
+    if not eds: return None
+    nombres = set()
+    for r in raices or ():
+        p = Path(r)
+        nombres |= {p.name.lower(), p.parent.name.lower()}
+    nombres.discard("")
+    for v in eds:                                   # en orden: el más reciente primero
+        if any(f" - {n} - " in f" {v['titulo'].lower()} - " or v["titulo"].lower().endswith(f" - {n}") for n in nombres):
+            return v["hwnd"]
+    return eds[0]["hwnd"]
 
 
 def contexto_editor(raices, hwnd=None):
     """Texto del archivo abierto para el [Estado actual] (vacío si no hay editor)."""
-    h = ventana_editor(hwnd)
+    h = ventana_editor(hwnd, raices)
     return editor_vscode.contexto_archivo(h, raices) if h else ""
 
 
 def ubicar_linea(m, raices, hwnd=None):
     """Para Ojos._donde: la marca {"linea": N, "archivo": "X"} → (hwnd, caja [x, y, w, h] en pantalla, aviso o None).
     Lanza ValueError si no se puede ubicar."""
-    h = ventana_editor(hwnd)
+    h = ventana_editor(hwnd, raices)
     if not h: raise ValueError("no hay un editor de código abierto")
     try: n = int(m["linea"])
     except (TypeError, ValueError): raise ValueError(f"«linea» tiene que ser un número ({m.get('linea')!r})")
