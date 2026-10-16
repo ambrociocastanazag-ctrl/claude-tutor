@@ -44,6 +44,10 @@ try:        # capacidades compartidas con el asistente (tutor-pantalla/capacidad
     import capacidades
 except Exception:
     capacidades = None
+try:        # modo práctica (tutor-pantalla/practica.py): la lección en pausa y ejercicios nuevos del tutor
+    import practica
+except Exception:
+    practica = None
 
 DIAW = tutor_dia.DIAW
 LECCION = AQUI / "leccion_clase.json"
@@ -85,10 +89,18 @@ En Dia, los "dibujo" van encima de una ventana que te enseñó (con "id" o "caja
 Los cambios al diagrama siguen siendo SOLO con permiso (bloque <acciones>, tarjeta Aplicar / No): investigar o dibujar no modifica nada."""
 
 
+# Cómo crea Dia un ejercicio en modo práctica (va con practica.REGLAS)
+REGLAS_DIA_PRACTICA = """
+En Dia, en MODO PRÁCTICA un ejercicio se crea con tu bloque <acciones> de siempre: "diagrama": "nuevo" con un "ejercicio" (lo que se espera, para
+Comprobar) y, si hace falta, los "cambios" del diagrama de arranque. SIEMPRE en un diagrama NUEVO de práctica (se llama ejercicio_N), nunca en el
+diagrama del módulo («mi_...»), que es el trabajo de su lección. Sale la tarjeta «Ejercicio del tutor» (Aplicar / No / Deshacer) y lo revisas con Comprobar."""
+
+
 def reglas_tutor():
     """El prompt completo del tutor: las reglas de Dia + las capacidades del asistente (si están) + lo propio de Dia sobre ellas."""
-    if capacidades is None: return REGLAS_DIA
-    return REGLAS_DIA + capacidades.reglas("Dia") + REGLAS_DIA_OJOS
+    base = REGLAS_DIA if capacidades is None else REGLAS_DIA + capacidades.reglas("Dia") + REGLAS_DIA_OJOS
+    if practica is not None: base += practica.REGLAS + REGLAS_DIA_PRACTICA
+    return base
 
 
 def _sin_tutor(t):
@@ -369,10 +381,11 @@ class DibujoDia:
         return texto
 
 
-class Api(ojos_panel.OjosApi if ojos_panel else object):
+class Api(*((practica.PracticaApi,) if practica else ()), *((ojos_panel.OjosApi,) if ojos_panel else ())):
     def __init__(self, curso, tutor, dia, rutas=None):
         self._ojos = ojos_panel.Ojos(apps=["diaw", "dia"], panel_hwnd=self._hwnd_panel) if ojos_panel else None
         self._curso = curso_de(curso)
+        self._practica = practica.Practica(self._curso.carpeta) if practica else None
         self._m, self._n = 0, 0
         self._tutor, self._dia, self._ventana = tutor, dia, None
         try: tutor.al_aviso = lambda t: self._empujar(f"window.avisoTrabajo && window.avisoTrabajo({json.dumps(t)})")
@@ -470,7 +483,21 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
                 "diagrama_archivo": mio.name if t else "", "botones": self._botones(),
                 "revision": (self._vista or {"estado": "pendiente", "ok": 0, "total": 0, "mensaje": t.get("al_empezar",
                              "Dibuja en Dia. Cuando termines, guarda (Ctrl+S) y pulsa Comprobar.")}) if t else None,
-                "tutor_ej": self._cambios.estado_ejercicio()}
+                "tutor_ej": self._cambios.estado_ejercicio(),
+                "practica": self._practica.info(lambda m: self._curso.modulos[m].titulo) if self._practica else None}
+
+    def _en_practica(self): return bool(self._practica and self._practica.activa)
+
+    def _pos(self):
+        """Dónde va la lección ahora (módulo, paso): lo guarda el modo práctica al entrar."""
+        return self._m, self._n
+
+    def _ir_pos(self, m, n):
+        """Vuelve al módulo y paso (al salir de la práctica) por el mismo camino de modulo()/ir(), que deja a Dia en la pestaña de ese
+        paso (su diagrama del módulo en un «Tu turno», el ejemplo en los demás), no en la del ejercicio de práctica."""
+        m = max(0, min(len(self._curso.modulos) - 1, int(m)))
+        if m != self._m: self.modulo(m)
+        return self.ir(n)
 
     def _pestana_marcas(self):
         """La pestaña de Dia donde van las marcas: la suya en el «Tu turno», la del ejemplo en los pasos."""
@@ -655,6 +682,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         self._marcas = []; self._vista = None
 
     def ir(self, n):
+        if self._en_practica(): return self._estado()          # la lección está en pausa
         self._salir_del_paso()
         self._n = max(0, min(len(self._mod.pasos) - 1, int(n)))
         if self._dia.modo == "plugin": self._quitar_marcas_dia(); self._mover_dia()
@@ -666,6 +694,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
     def modulo(self, m):
         """El menú de módulos (y «Siguiente módulo»): arma sus pasos si hace falta, abre su diagrama y cierra el del anterior
         (si no tiene cambios sin guardar), y empieza en su paso 1."""
+        if self._en_practica(): return self._estado()          # la lección está en pausa
         m = max(0, min(len(self._curso.modulos) - 1, int(m)))
         if m == self._m: return self.ir(self._n)
         self._salir_del_paso()
@@ -793,6 +822,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         if ref: ctx += "\n" + ref
         if self._notas: ctx = "[Del panel] " + " ".join(self._notas) + "\n" + ctx; self._notas = []
         if self._ojos: ctx += ("\n" + self._ojos.contexto(adjuntos)).rstrip()     # la ventana y los controles de cada captura
+        if self._practica: ctx = self._practica.prefijo() + ctx                    # [MODO PRÁCTICA] al inicio (vacío si no está activa)
         def trozo(t): self._empujar(f"window.trozoTutor({json.dumps(t)})")
         try: resp = self._tutor.preguntar(ctx, pregunta, trozo, adjuntos)
         except ValueError as e: return {"texto": str(e)}             # un adjunto que no se admite
@@ -861,6 +891,8 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
             self._notas.append(f"La persona {que} tu propuesta «{tarjeta['resumen']}».")
         elif tarjeta["estado"] == "error":
             self._notas.append(f"Tu propuesta «{tarjeta['resumen']}» no se pudo aplicar: {tarjeta['mensaje']}")
+        if que == "APLICÓ" and tarjeta["estado"] == "aplicada" and tarjeta.get("ejercicio") and self._en_practica():
+            self._practica.ejercicio_hecho()
         return {"propuesta": tarjeta, "tutor_ej": self._cambios.estado_ejercicio()}
 
     def aplicar(self, pid):
@@ -1366,6 +1398,52 @@ def probar_fase2():
     return all(todo)
 
 
+def probar_practica(curso=None):
+    """--probar: el modo práctica (sobre una COPIA del curso de ejemplo: practica.json no queda en carpetas reales)."""
+    import shutil
+    if practica is None: print("Modo práctica: tutor-pantalla/practica.py no está (se salta)"); return
+    todo = []
+    def ver(c, t): todo.append(bool(c)); print(t, "✔" if c else "✘")
+    class TutorCtx:
+        def preguntar(self, ctx, pregunta, al_trozo, adjuntos): self.ctx = ctx; return "ok"
+    with tempfile.TemporaryDirectory() as tmp:
+        copia = Path(tmp) / "curso"
+        orig = curso or cu.Curso(AQUI / "curso-ejemplo" / "curso.json")
+        shutil.copytree(orig.carpeta, copia, ignore=shutil.ignore_patterns("pasos", "mis_diagramas", "tutor", "progreso.json", "practica.json", "__pycache__"))
+        c = cu.Curso(copia / orig.ruta.name); preparar(c)
+        M = 1 if len(c.modulos) > 1 else 0; N = min(2, len(c.modulos[M].pasos) - 1)
+        tutor = TutorCtx(); dia = _SinDia("plugin")
+        api = Api(c, tutor, dia); api._m, api._n = M, N; api._cambios.rutas["mio"] = c.modulos[M].mio
+        ver(api._estado()["practica"] is None and "[MODO PRÁCTICA]" not in api._contexto(), "Sin práctica: estado sin barra y contexto normal:")
+        e = api.practica_entrar()
+        ver(e["practica"] and e["practica"]["volver"] == {"m": M, "n": N} and f"Módulo {M + 1}" in e["practica"]["texto"] and f"paso {N + 1}" in e["practica"]["texto"]
+            and (copia / "practica.json").exists(), "Entrar guarda módulo y paso (y practica.json en la copia):")
+        e = api.ir(0); e2 = api.modulo(0)
+        ver((api._m, api._n) == (M, N) and e["n"] == N and e2["m"] == M, "Durante la práctica ir() y modulo() no mueven la lección:")
+        api.preguntar("dame un ejercicio")
+        ver(tutor.ctx.startswith("[MODO PRÁCTICA]"), "El contexto del tutor empieza con el prefijo de práctica:")
+        rt = TutorDia._intro(type("T", (), {"curso": c})())
+        ver("MODO PRÁCTICA" in rt and "diagrama NUEVO de práctica" in rt, "El prompt del tutor trae las reglas de práctica y la de Dia:")
+        h0 = api._practica.hechos
+        class Prop:  # una propuesta aplicada con ejercicio
+            pass
+        api._cambios.aplicar = lambda pid: {"estado": "aplicada", "resumen": "x", "ejercicio": "Ej"}
+        api.aplicar("p1")
+        ver(api._practica.hechos == h0 + 1, "Aplicar un ejercicio del tutor en práctica lo cuenta (ejercicio_hecho):")
+        api._cambios.aplicar = lambda pid: {"estado": "aplicada", "resumen": "y", "ejercicio": ""}
+        api.aplicar("p2")
+        ver(api._practica.hechos == h0 + 1, "Aplicar algo que no es ejercicio no cuenta:")
+        api._m, api._n = 0, 0                            # algo movió la app: al salir vuelve a donde iba
+        e = api.practica_salir()
+        ver(e["practica"] is None and (e["m"], e["n"]) == (M, N) and (api._m, api._n) == (M, N) and not Practica_activa(copia), "Salir vuelve a su módulo y paso:")
+        ver(api.ir(0)["n"] == 0, "Ya sin práctica, ir() vuelve a mover la lección:")
+    print("Modo práctica:", "todo bien" if all(todo) else "HAY FALLOS")
+    return all(todo)
+
+
+def Practica_activa(carpeta): return practica.Practica(carpeta).activa
+
+
 def probar_convenciones():
     """--probar: las convenciones del curso (curso.json «convenciones» y «material_tutor»), sin Dia: parámetros solo con el tipo
     (leer, escribir, revisar), nombre sin negrita, enumerada, biblioteca, verbo con triángulo de lectura (hacia donde toca, con rombo
@@ -1797,6 +1875,7 @@ def probar_curso(curso):
             try: cu.validar_modulo(dict(d, titulo="M"), "m.json"); msgs.append("(no falló)")
             except ValueError as x: msgs.append(str(x))
         ver(all("(no falló)" not in x for x in msgs), "Módulos mal escritos: errores claros (" + " | ".join(x[:55] for x in msgs) + "):")
+    todo.append(probar_practica(curso) is not False)
     print("Curso de Dia:", "todo bien" if all(todo) else "HAY FALLOS")
     return all(todo)
 
@@ -1829,6 +1908,7 @@ if __name__ == "__main__":
             probar_diagramas(leccion)
             probar_fase2()
             probar_convenciones()
+            probar_practica()
     else:
         import webview
         preparar(curso)

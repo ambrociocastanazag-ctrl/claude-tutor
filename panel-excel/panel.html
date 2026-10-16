@@ -193,6 +193,17 @@ h1{margin:0;font-size:21px;line-height:1.2;font-weight:700;letter-spacing:-.01em
 .pensando .que{font-size:12.5px;color:var(--ink3)}
 .pie{flex-shrink:0;padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line2);background:var(--bg)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+.practica-btn{flex-shrink:0;height:26px;display:flex;align-items:center;gap:5px;padding:0 10px 0 8px;border-radius:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink2);font:inherit;font-size:12px;font-weight:650;cursor:pointer}
+.practica-btn:hover{border-color:var(--acc);color:var(--acc-text)}
+.practica-barra{flex-shrink:0;display:flex;flex-direction:column;gap:8px;padding:10px 14px;background:var(--acc-soft);border-bottom:1px solid var(--line2)}
+.practica-barra .t{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:13px;color:var(--ink2)}
+.practica-barra .t b{color:var(--acc-text);font-size:13.5px}
+.practica-barra .acc{display:flex;flex-wrap:wrap;gap:8px}
+.practica-barra button{height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;font-weight:650;cursor:pointer}
+.practica-barra button.prim{background:var(--acc);border-color:transparent;color:var(--on-acc,#fff)}
+.practica-vacia{margin:4px 0;padding:14px;border:1px dashed var(--line);border-radius:12px;font-size:13.5px;line-height:1.55;color:var(--ink2)}
+body.en-practica #vista-leccion .cuerpo > .tarjeta, body.en-practica #turno, body.en-practica #donde, body.en-practica #botones,
+body.en-practica #requisito, body.en-practica #confirmaBoton{display:none !important}
 .chip{height:28px;display:flex;align-items:center;gap:6px;padding:0 10px 0 8px;border-radius:14px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;font-weight:650;white-space:nowrap}
 .chip.prim{background:var(--acc-soft);color:var(--acc-text);border-color:transparent}
 .chip.suave{background:transparent;color:var(--ink2);border-color:transparent;margin-left:auto}
@@ -272,10 +283,15 @@ textarea:focus-visible{outline:none}
         <span class="curso" id="curso">Clase en vivo</span>
         <button class="modulo-btn" id="moduloBtn" type="button" hidden><span class="t" id="moduloTxt"></span><span class="chev" data-ic="chev"></span></button>
       </div>
-      <div class="fila" style="flex-wrap:wrap"><h1 id="titulo">Cargando la lección…</h1><span class="tag" id="tag" hidden></span></div>
+      <div class="fila" style="flex-wrap:wrap"><h1 id="titulo">Cargando la lección…</h1><span class="tag" id="tag" hidden></span><button class="practica-btn" style="margin-left:auto" id="practicaBtn" type="button" hidden title="Practica con ejercicios nuevos del tutor; tu lección queda guardada aquí"><span data-ic="spark"></span><span>Practicar</span></button></div>
       <div class="fila" style="gap:10px"><div class="segs" id="segs"></div><span class="contador" id="contador"></span></div>
     </div>
+    <div class="practica-barra" id="practicaBarra" hidden>
+      <div class="t"><b>Modo práctica</b><span id="practicaTxt"></span></div>
+      <div class="acc"><button class="prim" id="practicaPedir" type="button">Dame un ejercicio</button><button id="practicaSalir" type="button">Salir y volver a la lección</button></div>
+    </div>
     <div class="cuerpo scroll" id="cuerpo">
+      <div class="practica-vacia" id="practicaVacia" hidden>Pídele al tutor un ejercicio (botón «Dame un ejercicio» o en la pestaña Tutor, con tus palabras: «uno de listas», «otro más difícil»…). Lo crea con tu permiso, lo haces y pulsas <b>Comprobar</b>.</div>
       <div class="tarjeta">
         <div class="ceja"><span class="n" id="pasoNum">Conectando con Excel…</span><span class="sep" id="pasoSep" hidden style="color:var(--ink3)">·</span><span class="t" id="pasoTit"></span><button class="leer-paso" id="leerPaso" type="button" hidden title="Léeme este paso" aria-label="Léeme este paso"></button></div>
         <div class="texto-paso" id="pasoTxt"></div>
@@ -335,6 +351,7 @@ textarea:focus-visible{outline:none}
     <div class="chat scroll" id="chat"></div>
     <div class="pie">
       <div class="chips">
+        <button class="chip prim" type="button" id="chipPractica" hidden data-q="Dame un ejercicio nuevo para practicar lo que estoy viendo"><span data-ic="spark"></span>Dame un ejercicio</button>
         <button class="chip prim" type="button" id="chipRevisar" data-q="Revisa lo que hice en la hoja"><span data-ic="refresh"></span><span id="chipRevisarTxt">Revisar mi hoja</span></button>
         <button class="chip" type="button" data-q="Dame una pista para seguir, sin darme la respuesta"><span data-ic="hint"></span>Dame una pista</button>
         <button class="chip" type="button" data-q="Explícame este paso de otra forma"><span data-ic="swap"></span>Explícalo de otra forma</button>
@@ -478,10 +495,10 @@ textarea:focus-visible{outline:none}
     $('turnoEj').textContent = e.ejercicio || '';
     if (e.hoja){ $('ctx').hidden = false; $('ctxTxt').textContent = e.hoja; }
     OBJ = e.objeto || 'hoja'; APP = e.app || 'Excel';
-    CABECERA.confirmar = OBJ === 'diagrama' ? '¿Deshacer igual?' : '¿Borrar la hoja?';
-    $('ejtIr').firstChild.textContent = OBJ === 'diagrama' ? 'Ir al diagrama' : 'Ir a la hoja';
-    $('ejtQuitar').title = 'Quitar esta tarjeta (' + (OBJ === 'diagrama' ? 'el diagrama' : 'la hoja') + ' y lo que hiciste se quedan)';
-    $('subTutor').textContent = 'lee tu ' + OBJ + ' y la marca';
+    CABECERA.confirmar = OBJ === 'diagrama' ? '¿Deshacer igual?' : OBJ === 'archivo' ? '¿Borrar el archivo?' : '¿Borrar la hoja?';
+    $('ejtIr').firstChild.textContent = OBJ === 'diagrama' ? 'Ir al diagrama' : OBJ === 'archivo' ? 'Ir al archivo' : OBJ === 'ventana' ? 'Ir a ' + APP : 'Ir a la hoja';
+    $('ejtQuitar').title = 'Quitar esta tarjeta (' + (OBJ === 'diagrama' ? 'el diagrama' : OBJ === 'archivo' ? 'el archivo' : OBJ === 'ventana' ? 'la ventana' : 'la hoja') + ' y lo que hiciste se quedan)';
+    $('subTutor').textContent = 'lee tu ' + OBJ + (OBJ === 'hoja' || OBJ === 'ventana' ? ' y la marca' : ' y lo marca');
     $('chipRevisarTxt').textContent = 'Revisar mi ' + OBJ; $('chipRevisar').dataset.q = 'Revisa lo que hice en mi ' + OBJ;
     window.mostrarDiagrama(e.svg, e.diagrama_titulo, e.diagrama_archivo);
     var bs = e.botones || []; $('botones').hidden = !bs.length; $('botones').innerHTML = ''; $('confirmaBoton').hidden = true;
@@ -493,7 +510,8 @@ textarea:focus-visible{outline:none}
     });
     window.estadoTurno(e.revision, true);
     window.ejercicioTutor(e.tutor_ej);
-    $('ant').disabled = n === 0; $('sig').disabled = n === total - 1 && m >= modulos.length - 1;
+    pintarPractica(e.practica || null, e.tutor_ej);
+    $('ant').disabled = practica || n === 0; $('sig').disabled = practica || (n === total - 1 && m >= modulos.length - 1);
     $('sigTxt').textContent = n === total - 1 ? (m < modulos.length - 1 ? 'Siguiente módulo' : 'Fin del curso') : 'Siguiente';
     pintarProgreso();
   }
@@ -509,8 +527,27 @@ textarea:focus-visible{outline:none}
     Voz.callar(); leyendoPaso = true; $('leerPaso').classList.add('leyendo');
     Voz.decir(t).then(function(){ if (pasoActual === e){ leyendoPaso = false; $('leerPaso').classList.remove('leyendo'); } });
   };
+  // ---- Modo práctica (tutor-pantalla/practica.py): la lección queda en pausa y el tutor crea ejercicios nuevos ----
+  var practica = false;
+  function pintarPractica(p, ej){
+    practica = !!(p && p.activa);
+    document.body.classList.toggle('en-practica', practica);
+    $('practicaBtn').hidden = practica || !(api && api.practica_entrar);
+    $('practicaBarra').hidden = !practica;
+    $('practicaVacia').hidden = !practica || !!ej;
+    $('chipPractica').hidden = !practica;
+    $('moduloBtn').disabled = practica;
+    if (practica) $('practicaTxt').textContent = 'Tu lección te espera en ' + p.texto + (p.hechos ? ' · ' + p.hechos + (p.hechos === 1 ? ' ejercicio' : ' ejercicios') : '') + '.';
+  }
+  function cambiarPractica(llamada){
+    if (!api || moviendo) return; moviendo = true;
+    llamada().then(function(e){ mostrar(e); $('cuerpo').scrollTop = 0; if (e.aviso_practica) aviso(e.aviso_practica, 3500); }).finally(function(){ moviendo = false; });
+  }
+  $('practicaBtn').onclick = function(){ cambiarPractica(function(){ return api.practica_entrar(); }); };
+  $('practicaSalir').onclick = function(){ cambiarPractica(function(){ return api.practica_salir(); }); };
+  $('practicaPedir').onclick = function(){ cambiarA('tutor'); preguntar($('chipPractica').dataset.q); };
   function ir(k){
-    if (!api || moviendo) return;
+    if (!api || moviendo || practica) return;
     if (k >= total && m < modulos.length - 1) return irModulo(m + 1);
     moviendo = true; $('ant').disabled = $('sig').disabled = true;
     api.ir(k).then(function(e){ mostrar(e); $('cuerpo').scrollTop = 0; }).finally(function(){ moviendo = false; });
@@ -537,7 +574,7 @@ textarea:focus-visible{outline:none}
     c.scrollIntoView({block: 'nearest'});
   }
   function irModulo(k){
-    if (!api || moviendo) return; cerrarMenu(); moviendo = true;
+    if (!api || moviendo || practica) return; cerrarMenu(); moviendo = true;
     $('pasoTxt').textContent = 'Preparando el módulo en ' + APP + '…';
     api.modulo(k).then(mostrar).finally(function(){ moviendo = false; });
   }
@@ -825,7 +862,7 @@ textarea:focus-visible{outline:none}
     propuestas[p.id] = p;
     var e = p.estado, h = '<div class="permiso ' + e + '" data-id="' + esc(p.id) + '">'
       + '<div class="pm-cab"><span class="pm-ico">' + ic(ICONO[e] || 'pen') + '</span><span class="pm-r">' + esc((e === 'confirmar' && p.confirmar_titulo) || CABECERA[e]) + '</span>'
-      + '<span class="pm-hoja" title="' + mayus(OBJ) + '">' + (p.nueva ? '<b>' + (OBJ === 'diagrama' ? 'nuevo' : 'nueva') + '</b> · ' : '') + esc(p.hoja) + '</span></div>';
+      + '<span class="pm-hoja" title="' + mayus(OBJ) + '">' + (p.nueva ? '<b>' + (OBJ === 'diagrama' || OBJ === 'archivo' ? 'nuevo' : 'nueva') + '</b> · ' : '') + esc(p.hoja) + '</span></div>';
     if (e === 'pendiente' || e === 'error' || e === 'rechazada' || e === 'deshecha'){
       h += '<p class="pm-res">' + enLinea(codigoExcel(esc(mayus(p.resumen)))) + '</p>';
       if (p.para && e === 'pendiente') h += '<p class="pm-para">Para: ' + esc(p.para) + '</p>';
@@ -924,7 +961,11 @@ textarea:focus-visible{outline:none}
       tutor_ej: ejDemo}; };
     var ejDemo = {id: 'p1', hoja: 'Práctica 1', rango: 'C2:C5', titulo: 'Con IVA · C2:C5',
       revision: {estado: 'pendiente', ok: 0, total: 0, mensaje: 'Calcula en C2 el precio con el IVA de F1 y cópialo hasta C5. Luego pulsa Comprobar.'}};
+    var pr = null;
+    var e0 = e; e = function(){ var x = e0(); x.practica = pr; return x; };
     return {estado: function(){ return Promise.resolve(e()); }, ir: function(x){ k = Math.max(0, Math.min(6, x)); return Promise.resolve(e()); }, modulo: function(){ return Promise.resolve(e()); },
+      practica_entrar: function(){ pr = {activa: true, texto: 'Módulo 1, paso ' + (k + 1), hechos: 0}; var x = e(); x.aviso_practica = 'Modo práctica: pídele al tutor un ejercicio.'; return Promise.resolve(x); },
+      practica_salir: function(){ pr = null; var x = e(); x.aviso_practica = 'Volviste a tu lección.'; return Promise.resolve(x); },
       preguntar: function(){
         var r = 'Vas bien: el descuento ya está en `E4` y `$E$1` queda fijo al copiar.\n\nLo que falla:\n\n1. Falta el **IVA** sobre el precio rebajado.\n2. Al copiar, `B1` tiene que quedarse quieta.\n\n```\n=B4*(1-$E$1)*(1+$B$1)\n```', i = 0;
         var tic = setInterval(function(){ if (i < r.length){ window.trozoTutor(r.slice(i, i + 7)); i += 7; } else clearInterval(tic); }, 30);

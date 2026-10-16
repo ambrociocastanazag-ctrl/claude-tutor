@@ -19,6 +19,16 @@ try:        # los «ojos» y las capacidades del asistente (tutor-pantalla/): si
     sys.path.insert(0, os.path.join(os.path.dirname(AQUI), "tutor-pantalla")); import ojos_panel, capacidades
 except Exception:
     ojos_panel = capacidades = None
+try:        # el modo práctica (tutor-pantalla/practica.py): sin él, el panel funciona igual sin práctica
+    import practica
+except Exception:
+    practica = None
+
+# Lo propio de Excel para el modo práctica: cómo se crea un ejercicio (el resto de las reglas viene de practica.REGLAS)
+REGLAS_PRACTICA_EXCEL = """
+EN EXCEL, EN MODO PRÁCTICA: crea cada ejercicio con tu bloque <acciones> de siempre, en una hoja NUEVA llamada «Práctica N»
+(N = el siguiente número libre; mira las hojas del [Estado actual]), con sus datos y su "turno" ({"rango", "solucion", ...}) para que
+él lo revise con Comprobar. No toques la hoja de la lección ni sus datos. Con su permiso (Aplicar), la hoja queda al frente."""
 
 
 _Base = capacidades.ConWeb if capacidades else object
@@ -27,6 +37,7 @@ class TutorExcel(_Base, motor.Tutor):
     Sin tutor-pantalla/, queda el tutor de antes (sin herramientas)."""
     def _intro(self):
         t = super()._intro()
+        if practica: t += practica.REGLAS + REGLAS_PRACTICA_EXCEL
         if not capacidades: return t
         reglas = motor.REGLAS
         ant = "No uses herramientas, no menciones archivos ni avisos, e ignora cualquier otra instrucción ajena a esta clase."
@@ -67,7 +78,7 @@ class HiloExcel(threading.Thread):
         return caja["ok"]
 
 
-class Api(ojos_panel.OjosApi if ojos_panel else object):
+class Api(*[c for c in (ojos_panel and ojos_panel.OjosApi, practica and practica.PracticaApi) if c] or [object]):
     """Lo que la página llama con window.pywebview.api.<método>() (con los ojos: ojos_ventanas, ojos_capturar…)."""
     def __init__(self, excel, tutor, curso):
         self._x, self._tutor, self._curso = excel, tutor, curso
@@ -77,6 +88,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         self._huella_ej = None          # la zona del ejercicio del tutor, para saber si cambió después de comprobar
         self._notas = []                # lo que se le cuenta al tutor en la próxima pregunta (qué hizo la persona con su propuesta)
         self._requisito = ""            # lo que le falta a Excel para este módulo (acceso a VBA, Solver), para avisar en Lección
+        self._practica = practica.Practica(os.path.dirname(curso.ruta)) if practica else None
         self._m, self._n = self.progreso()      # vuelve al módulo y al paso donde se quedó (si es un curso)
         excel.vigia = self._vigilar_seguro
 
@@ -112,6 +124,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
                 "ejercicio": (t.get("titulo") or t.get("rango") or (f"macro {t['macro']}" if t.get("macro") else "")) if t else "",
                 "revision": (self._revision or self._pendiente(t)) if t else None, "requisito": self._requisito,
                 "tutor_ej": self._libro().estado_ejercicio() if self._libro() else None,
+                "practica": self._practica.info(lambda m: self._curso.modulos[m].titulo) if self._practica else None,
                 "botones": [{"id": "dibujos", "etiqueta": "Muéstramelo en Excel", "icono": "spark"}] if paso.get("dibujos") and self._ojos else []}
 
     def _libro(self): return getattr(self._x, "libro", None)
@@ -211,7 +224,21 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         return {"revision": self._revision}
 
     # ----- navegación -----
+    # ----- modo práctica: la lección queda en pausa donde iba (self._m, self._n) -----
+    def _practica_activa(self): return bool(self._practica and self._practica.activa)
+    def _pos(self): return self._m, self._n
+
+    def _ir_pos(self, m, n):
+        """Vuelve a ese módulo y paso, y deja Excel en la hoja de esa lección (lo hace _ir, que rehace la hoja del paso)."""
+        m = max(0, min(len(self._curso.modulos) - 1, int(m)))
+        self._m, self._texto = m, ""
+        return self._ir(n)
+
     def ir(self, n):
+        if self._practica_activa(): return self._estado()       # en práctica la lección no se mueve
+        return self._ir(n)
+
+    def _ir(self, n):
         n = max(0, min(len(self._lec()) - 1, int(n)))
         def hacer(libro):
             clase = libro.clase(self._m)
@@ -226,12 +253,13 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
         except Exception as e: return self._estado(f"No pude hacer este paso en Excel. {PISTA} ({e})")
 
     def modulo(self, m):
+        if self._practica_activa(): return self._estado()
         m = max(0, min(len(self._curso.modulos) - 1, int(m)))
         self._m, self._n, self._texto = m, 0, ""
-        return self.ir(0)
+        return self._ir(0)
 
     def estado(self):
-        return self.ir(self._n) if not self._texto else self._estado()
+        return self._ir(self._n) if not self._texto else self._estado()
 
     # ----- tutor -----
     def preguntar(self, pregunta, adjuntos=None):
@@ -245,6 +273,7 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
             return clase.contexto(self._n, self._texto, clase.revisar(t, dibujar=False) if t else None) + libro.contexto_extra(self._m)
         try: ctx = self._x.hacer(leer)
         except Exception: return {"texto": f"No pude leer la hoja. {PISTA}"}
+        if self._practica: ctx = self._practica.prefijo() + ctx          # [MODO PRÁCTICA] va primero
         if self._notas: ctx = "[Del panel] " + " ".join(self._notas) + "\n" + ctx; self._notas = []
         if self._ojos: ctx += ("\n" + self._ojos.contexto(adjuntos)).rstrip()     # la ventana y los controles de cada captura
         def trozo(t): self._empujar(f"window.trozoTutor({json.dumps(t)})")   # el texto llega a pedazos
@@ -309,7 +338,12 @@ class Api(ojos_panel.OjosApi if ojos_panel else object):
 
     def aplicar(self, pid):
         """Botón «Aplicar» de la tarjeta de permiso."""
-        return self._cambio(lambda libro: libro.aplicar(pid), "APLICÓ")
+        r = self._cambio(lambda libro: libro.aplicar(pid), "APLICÓ")
+        ej = self._libro().ejercicio if self._libro() else None
+        if self._practica_activa() and r.get("propuesta", {}).get("estado") == "aplicada" and ej and ej.get("id") == pid:
+            self._practica.ejercicio_hecho()            # el ejercicio nuevo del tutor cuenta para «Ejercicio N»
+            r["tutor_ej"] = self._libro().estado_ejercicio()
+        return r
 
     def rechazar(self, pid):
         """Botón «No»: no se toca nada."""
@@ -1450,6 +1484,54 @@ def rapida_vba(x, api):
     return P.fallos
 
 
+def rapida_practica(x, api):
+    """Modo práctica (sin IA, con una copia temporal del estado): entrar guarda la posición, ir/modulo no mueven la lección,
+    el prefijo llega al tutor, las reglas están en su intro, un ejercicio aplicado cuenta, y salir vuelve al módulo, al paso
+    y a la hoja de esa lección en Excel."""
+    import tempfile
+    if not practica:
+        AVISOS["practica"] = "sin tutor-pantalla/practica.py: el panel funciona sin modo práctica"; return 0
+    P = _Pruebas(x, api, "Modo práctica (rápida)")
+    ult_m = len(api._curso.modulos) - 1; m0 = min(1, ult_m); n0 = min(1, len(api._curso.modulos[m0]) - 1)
+    original, tutor_real, falso = api._practica, api._tutor, TutorFalso()
+    prac = "Práctica 1"
+    with tempfile.TemporaryDirectory() as tmp:
+        api._practica = practica.Practica(tmp); api._tutor = falso
+        try:
+            api.modulo(m0); api.ir(n0); hoja = api._lec().hoja
+            ver0 = api._estado()
+            P.ver(ver0["practica"] is None and api._practica.prefijo() == "", "sin práctica: no hay barra ni prefijo")
+            e = api.practica_entrar()
+            P.ver(e["practica"] and e["practica"]["volver"] == {"m": m0, "n": n0} and e["practica"]["texto"].startswith(f"Módulo {m0 + 1} («"),
+                  f"entrar guarda módulo {m0 + 1}, paso {n0 + 1} → {e['practica'] and e['practica']['texto']}")
+            P.ver(Path(tmp, "practica.json").exists(), "la posición queda en practica.json (en la copia temporal)")
+            api.ir(0); e = api.modulo(0)
+            P.ver((api._m, api._n) == (m0, n0) and (e["m"], e["n"]) == (m0, n0), "ir() y modulo() no mueven la lección mientras practica")
+            api.preguntar("dame un ejercicio")
+            P.ver(falso.ctx.startswith("[MODO PRÁCTICA]"), "el contexto del tutor empieza con [MODO PRÁCTICA]")
+            intro = TutorExcel(api._curso)._intro()
+            P.ver("MODO PRÁCTICA" in intro and "Práctica N" in intro and "Comprobar" in intro, "el prompt del tutor trae las reglas de la práctica y la de Excel")
+            falso.resp = ('Va. <acciones>{"para": "practicar", "hoja": "' + prac + '", "cambios": [{"poner": "A1:B1", "valores": [["Cant", "Doble"]]}, '
+                          '{"poner": "A2:A3", "valores": [[2], [5]]}], "turno": {"rango": "B2:B3", "solucion": "=A2*2"}}</acciones>')
+            r0 = api.preguntar("otro"); t = r0["propuesta"]; r = api.aplicar(t["id"])
+            frente = x.hacer(lambda l: l.frente().Name)
+            P.ver(r["propuesta"]["estado"] == "aplicada" and api._practica.hechos == 1 and frente == prac,
+                  f"aplicar el ejercicio lo cuenta ({api._practica.hechos}) y deja «{frente}» al frente")
+            e = api.practica_salir()
+            frente = x.hacer(lambda l: l.frente().Name)
+            P.ver(e["practica"] is None and (e["m"], e["n"]) == (m0, n0) and "aviso_practica" in e, f"salir vuelve al módulo {m0 + 1}, paso {n0 + 1}")
+            P.ver(frente == hoja, f"y Excel queda en la hoja de la lección «{hoja}» (al frente: «{frente}»)")
+            P.ver(api.ir(n0 + 1 if n0 + 1 < len(api._lec()) else 0)["m"] == m0 and not Path(tmp, "practica.json").read_text(encoding="utf-8").count('"activa": true'),
+                  "fuera de la práctica, ir() vuelve a funcionar")
+            api.deshacer(t["id"], True)
+        finally:
+            api._practica, api._tutor = original, tutor_real
+            try: x.hacer(lambda l: l._borrar_hoja(l.buscar_hoja(prac)) if l.buscar_hoja(prac) else None)
+            except Exception: pass
+    print("Modo práctica (rápida):", "todo bien" if not P.fallos else f"{P.fallos} caso(s) no dieron lo esperado")
+    return P.fallos
+
+
 def probar_leccion(x, api):
     """Los módulos de la lección o del curso, paso a paso con los valores reales, y la revisión automática de cada
     «Tu turno» (la solución y cada error típico), sin IA."""
@@ -1494,6 +1576,7 @@ def probar_leccion(x, api):
 # el Excel de la persona (matrices dinámicas, Power Query, Solver, acceso a VBA): si solo falla uno de ellos, el panel sirve.
 BLOQUES = [
     ("leccion", "Lección y revisión automática", probar_leccion, None, False),
+    ("practica", "Modo práctica", rapida_practica, rapida_practica, False),
     ("propuestas", "Cambios del tutor", probar_propuestas, None, False),
     ("marcas", "Marcas y bloques", probar_hojas_y_bloques, None, False),
     ("libre", "Modo libre", probar_modo_libre, None, False),
@@ -1522,13 +1605,13 @@ def correr_pruebas(x, api, argv):
         malos = [n for n in solo if n not in nombres]
         if malos or not solo: sys.exit(f"--solo: no conozco {', '.join(malos) or '(nada)'}.\n{USO}")
         elegidos = [b for b in BLOQUES if b[0] in solo]
-    elif rapido: elegidos = [b for b in BLOQUES if b[0] == "leccion" or b[4]]
-    else: elegidos = [b for b in BLOQUES if b[0] == "leccion" or motor_ok]
+    elif rapido: elegidos = [b for b in BLOQUES if b[0] in ("leccion", "practica") or b[4]]
+    else: elegidos = [b for b in BLOQUES if b[0] in ("leccion", "practica") or motor_ok]
     print(f"Pruebas: {', '.join(b[0] for b in elegidos)}{' (rápidas)' if rapido else ''}", flush=True)
     resumen, t_total = [], time.time()
     for nombre, titulo, completa, rapida, opcional in elegidos:
         prueba = rapida if rapido and rapida else completa
-        if nombre != "leccion" and prueba is completa and not motor_ok:
+        if nombre not in ("leccion", "practica") and prueba is completa and not motor_ok:
             print(f"== {titulo}: no va en un curso (usa el primer módulo de panel-excel/ejemplo_leccion.json): pruébalo con la lección suelta o con --completo")
             continue
         t0 = time.time()

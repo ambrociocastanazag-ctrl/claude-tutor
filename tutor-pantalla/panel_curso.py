@@ -12,13 +12,13 @@ La página es la de los tutores (../panel-excel/panel.html) con los ojos (ojos_u
   y el tutor mira la captura que la persona adjunta (bien / casi / revisa).
 - Tutor: conoce el curso, recibe el estado de la app EN TEXTO (lo activo, valores; nunca el botón de la cuenta) y marca
   encima de la app por nombre o, con una captura adjunta, por caja."""
-import json, os, re, sys, threading, time
+import json, os, re, shutil, subprocess, sys, threading, time
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 EXCEL = AQUI.parent / "panel-excel"
 sys.path.insert(0, str(AQUI)); sys.path.insert(0, str(EXCEL))
-import ojos, ojos_panel, capacidades, curso_pantalla as cp   # noqa: E402
+import ojos, ojos_panel, capacidades, curso_pantalla as cp, practica, ejercicios_tutor, editor_vscode   # noqa: E402
 import motor                                             # noqa: E402  (motor.Tutor: la sesión de Claude Code; motor.separar)
 
 REGLAS_CURSO = """Eres el tutor de un curso de {app} de un estudiante, dentro de un panel junto a la ventana de {app}. Español, tono cercano,
@@ -44,11 +44,13 @@ class TutorCurso(capacidades.ConWeb, motor.Tutor):
             pasos = "; ".join(f"{p.get('titulo', '')}: {re.sub(r'[*]', '', p['texto'])[:140]}" for p in mod.pasos)
             partes.append(f"\nMódulo {k + 1}: {mod.titulo}. Tema: {mod.d.get('tema_tutor', '')}\n  Pasos: {pasos}\n"
                           f"  Lo que solo sabes tú (no lo reveles entero): {mod.d.get('notas_tutor', '')}")
+        codigo = bool(c.d.get("proyecto") or c.d.get("proyectos"))
+        partes.append(practica.REGLAS + ejercicios_tutor.reglas(c, codigo))
         partes.append("\nResponde solo: Listo")
         return "\n".join(partes)
 
 
-class Api(ojos_panel.OjosApi):
+class Api(practica.PracticaApi, ojos_panel.OjosApi):
     def __init__(self, curso, tutor):
         self._curso, self._tutor = curso, tutor
         self._m, self._n = curso.progreso()
@@ -62,6 +64,9 @@ class Api(ojos_panel.OjosApi):
         self._notas = []
         self._rev_lock = threading.Lock()       # una revisión de código a la vez (Maven tarda)
         self._seg_estimados = 20
+        self._practica = practica.Practica(curso.carpeta)             # modo práctica (practica.py)
+        self._ej = ejercicios_tutor.Ejercicios(curso, self._practica, self._codigo)   # los ejercicios que crea el tutor
+        self._archivo_antes = None              # el archivo abierto en el editor al entrar a la práctica (para volver)
 
     # ----- utilidades -----
     @property
@@ -101,9 +106,10 @@ class Api(ojos_panel.OjosApi):
                 "titulo": self._mod.titulo, "titulo_codigo": self._mod.codigo, "curso": c.titulo,
                 "paso_titulo": p.get("titulo", ""), "donde": p.get("donde", ""), "app": c.app_nombre, "objeto": "ventana",
                 "hoja": c.app_nombre, "ejercicio": t.get("titulo", "") if t else "", "svg": "", "botones": self._botones(),
+                "practica": self._practica.info(lambda k: c.modulos[k].titulo),
                 "revision": (self._vista or {"estado": "pendiente", "ok": 0, "total": 0,
                                              "mensaje": t.get("al_empezar", "Hazlo en la app y pulsa Comprobar.")}) if t else None,
-                "tutor_ej": None}
+                "tutor_ej": self._ej.estado()} | ({"objeto": "archivo"} if self._codigo else {})
 
     def estado(self): return self._estado()
 
@@ -112,12 +118,14 @@ class Api(ojos_panel.OjosApi):
         self._ojos.borrar()
 
     def ir(self, n):
+        if self._practica.activa: return self._estado()          # la lección está en pausa
         self._salir_del_paso()
         self._n = max(0, min(len(self._mod.pasos) - 1, int(n)))
         if self.recordar: self._curso.guardar_progreso(self._m, self._n)
         return self._estado()
 
     def modulo(self, m):
+        if self._practica.activa: return self._estado()
         self._salir_del_paso()
         self._m, self._n = max(0, min(len(self._curso.modulos) - 1, int(m))), 0
         if self.recordar: self._curso.guardar_progreso(self._m, self._n)
@@ -263,7 +271,8 @@ class Api(ojos_panel.OjosApi):
             if rev: partes.append(f"Revisión automática ahora: {rev['mensaje']} ({rev['ok']} de {rev['total']} bien)")
             if t.get("tutor"): partes.append(f"Este turno además pide (se ve en la imagen): {t['tutor']['revisar']}")
         partes.append(cp.contexto_tutor(est, self._curso.app_nombre))
-        return "\n".join(partes)
+        if self._ej.contexto(): partes.append(self._ej.contexto())
+        return self._practica.prefijo() + "\n".join(partes)
 
     def preguntar(self, pregunta, adjuntos=None):
         pregunta = (pregunta or "").strip()
@@ -277,6 +286,8 @@ class Api(ojos_panel.OjosApi):
         except ValueError as e: return {"texto": str(e)}
         except Exception as e: return {"texto": f"No pude hablar con el tutor ({e}). Intenta otra vez."}
         resp, pide = ojos_panel.separar_pedido(resp)
+        resp, propuesta, error_ej = self._ej.separar(resp)           # <ejercicio> → tarjeta Aplicar / No
+        if error_ej: self._notas.append(error_ej + ".")
         resp, preguntas = ojos_panel.separar_preguntas(resp)          # <preguntas> → tarjeta con botones
         texto, marcas = motor.separar(resp)
         lote = avisos = None
@@ -302,7 +313,9 @@ class Api(ojos_panel.OjosApi):
         if ms and not en_ventana: hechas = self._pintar(ms) and len(ms)
         for a in capacidades.avisos_linea(self._ojos):             # «Sube/Baja hasta la línea N»: se lo dice el panel
             texto = (texto + "\n\n" if texto else "") + "↕ " + a + "."
-        return {"texto": texto, "marcas": 0, "marcas_ventana": en_ventana + hechas, "pedir": pide, "dibujos": lote, "preguntas": preguntas}
+        if error_ej and not texto: texto = "No pude crear ese ejercicio; pídeselo otra vez al tutor."
+        return {"texto": texto, "marcas": 0, "marcas_ventana": en_ventana + hechas, "pedir": pide, "dibujos": lote, "preguntas": preguntas,
+                "propuesta": propuesta}
 
     def _resolver_nombre(self):
         """Para Ojos.dibujos: los "dibujo" con "nombre" se ubican por UI Automation en la ventana de la app (el estado
@@ -317,6 +330,61 @@ class Api(ojos_panel.OjosApi):
             a, b, x1, y1 = c["caja"]
             return {"hwnd": v["hwnd"], "r": [a, b, x1 - a, y1 - b]}
         return resolver
+
+    # ----- modo práctica (practica.py): al salir, vuelve al paso y al archivo que tenía abierto -----
+    def _pos(self): return self._m, self._n
+
+    def _ir_pos(self, m, n):
+        self._salir_del_paso(); self.restaurar(m, n)
+        if self.recordar: self._curso.guardar_progreso(self._m, self._n)
+        if self._codigo and self._archivo_antes and Path(self._archivo_antes).is_file():   # el archivo de antes, al frente
+            exe = shutil.which("code") or shutil.which("code.cmd")
+            if exe:
+                try: subprocess.Popen([exe, "-r", "-g", self._archivo_antes], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                except OSError: pass
+        v = self._app()
+        if v: _al_frente(v["hwnd"])
+        self._archivo_antes = None
+        return self._estado()
+
+    def practica_entrar(self):
+        if self._codigo and not self._practica.activa:
+            try:
+                h = capacidades.ventana_editor((self._app() or {}).get("hwnd"), self._raices)
+                a = editor_vscode.archivo_abierto(h, self._raices) if h else None
+                self._archivo_antes = str(a["ruta"]) if a and a.get("ruta") else None
+            except Exception: self._archivo_antes = None
+        return super().practica_entrar()
+
+    # ----- el ejercicio que crea el tutor (ejercicios_tutor.py): tarjeta Aplicar / No / Deshacer y su Comprobar -----
+    def _boton_ej(self, f, que):
+        try: tarjeta = f()
+        except KeyError: return {"aviso": "Esa propuesta ya no existe (¿reiniciaste el panel?)."}
+        except OSError as e: return {"aviso": f"No pude escribir el archivo ({e.strerror or e})."}
+        if tarjeta["estado"] in ("aplicada", "rechazada", "deshecha"): self._notas.append(f"La persona {que} tu ejercicio «{tarjeta['ejercicio']}».")
+        return {"propuesta": tarjeta, "tutor_ej": self._ej.estado()}
+
+    def aplicar(self, pid): return self._boton_ej(lambda: self._ej.aplicar(pid), "APLICÓ")
+    def rechazar(self, pid): return self._boton_ej(lambda: self._ej.rechazar(pid), "NO aplicó")
+    def deshacer(self, pid, forzar=False): return self._boton_ej(lambda: self._ej.deshacer(pid, bool(forzar)), "DESHIZO")
+
+    def comprobar_ejercicio(self):
+        if not self._ej.ej: return {"tutor_ej": None}
+        if self._codigo:
+            if not self._rev_lock.acquire(blocking=False): return {"tutor_ej": self._ej.estado(), "aviso": "Todavía estoy revisando lo anterior; espera un momento."}
+            self._empujar("(function(){var b=document.getElementById('ejtComprobarTxt');if(b)b.textContent='Corriendo sus pruebas…';})()")
+            try: return {"tutor_ej": self._ej.comprobar()}
+            finally: self._rev_lock.release()
+        return {"tutor_ej": self._ej.comprobar(cp.estado(self._curso.app["exe"]))}
+
+    def ir_ejercicio(self):
+        if self._codigo and self._ej.abrir(): return {"ok": True}
+        v = self._app()
+        if v: _al_frente(v["hwnd"])
+        return {"ok": bool(v)}
+
+    def quitar_ejercicio(self):
+        self._ej.quitar(); return {"tutor_ej": None}
 
     def borrar_marcas(self):
         self._ojos.borrar(); self._senalando = []

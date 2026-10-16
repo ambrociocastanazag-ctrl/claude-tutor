@@ -224,6 +224,10 @@ Si la hoja cambió después de aplicar, la tarjeta pregunta «¿Deshacer igual?�
 
 **Lo que ve el tutor.** El [Estado actual] cuenta, además de las celdas, lo que hay en la hoja: tablas, gráficos (tipo, título, series), tablas dinámicas (rango, datos, filas, columnas, valores), formato condicional, validación, tablas de Power Query, filtros, escenarios y los nombres definidos. Así puede cambiar lo que ya existe. También: las fórmulas que se desbordan con su rango y primeros valores («[se desborda en E2:G4: …]»), las consultas de Power Query con su M y dónde están cargadas, los archivos de la carpeta de datos, el código VBA con líneas numeradas (si hay acceso), los puntos ✔/✘ de la última revisión (primero lo que falla) y una línea con lo que tiene este Excel (matrices dinámicas, LAMBDA, Power Query, Solver, acceso a VBA, si el libro guarda macros), para que no proponga lo que no se puede.
 
+## Modo práctica (2026-10-16)
+
+Botón «Practicar» (interfaz en `panel.html`, lógica común en `tutor-pantalla/practica.py`): la lección queda en pausa en su módulo y paso, el tutor recibe `[MODO PRÁCTICA]` y crea ejercicios con `<acciones>` en una hoja nueva «Práctica N» con su `"turno"` (`REGLAS_PRACTICA_EXCEL` en `panel_web.py`); «Salir y volver a la lección» vuelve al paso y deja Excel en la hoja de la lección. Prueba: bloque `rapida_practica` de `--probar` (también en `--rapido`), con un `practica.json` temporal.
+
 ## Cambios que propone el tutor (con permiso)
 
 El tutor, además de `<marcas>`, puede terminar su respuesta con un bloque `<acciones>` (JSON) **por hoja**; lo normal es uno. Sus reglas están en `motor.REGLAS`.
