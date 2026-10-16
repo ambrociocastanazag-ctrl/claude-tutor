@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotos del celular</title>
+<style>
+:root{--papel:#F4EFE6;--tarjeta:#FFFDF8;--tinta:#1E2A2F;--tinta-2:#4A5960;--tinta-3:#7C878C;--linea:#E2D9C8;
+  --acento:#C24A22;--sobre-acento:#fff;--acento-suave:#F8E3D8;--ok:#2E7D5B;--ok-suave:#DDF0E6;
+  --sombra:0 1px 2px rgba(74,52,30,.06),0 8px 22px -12px rgba(74,52,30,.22);
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;--mono:"Cascadia Mono",Consolas,monospace}
+:root[data-tema="oscuro"]{--papel:#161B1E;--tarjeta:#1F262A;--tinta:#EEE8DC;--tinta-2:#B9B3A6;--tinta-3:#858E92;--linea:#2E373C;
+  --acento:#F07A4E;--sobre-acento:#1A0F0A;--acento-suave:#3A2419;--ok:#6FCF9F;--ok-suave:#1C3328;
+  --sombra:0 1px 2px rgba(0,0,0,.3),0 10px 24px -14px rgba(0,0,0,.6)}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--papel);color:var(--tinta);font:400 14px/1.45 var(--sans);display:flex;flex-direction:column;user-select:none}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cab{display:flex;align-items:center;gap:10px;padding:12px 14px 10px}
+.cab .ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--acento-suave);color:var(--acento)}
+.cab b{flex:1;font-size:15px}
+.cab button{border:0;background:transparent;color:var(--acento);font:600 13px var(--sans);padding:6px 8px;border-radius:8px;cursor:pointer}
+.cab button:hover{background:var(--acento-suave)}
+.qr{margin:0 14px;display:flex;gap:12px;align-items:center;padding:12px;background:var(--tarjeta);border:1px solid var(--linea);border-radius:14px;box-shadow:var(--sombra)}
+.qr[hidden]{display:none}
+.qr .img{width:118px;height:118px;flex:none;background:#fff;border-radius:10px;padding:6px}
+.qr .img svg{display:block;width:100%;height:100%}
+.qr p{font-size:12.5px;color:var(--tinta-2)}
+.qr .cod{font:700 24px/1.2 var(--mono);letter-spacing:.1em;color:var(--tinta);margin:4px 0}
+.aviso{margin:10px 14px 0;font-size:12.5px;color:var(--tinta-2)}
+.aviso.error{color:#B42318}
+.lista{flex:1;overflow-y:auto;padding:10px 14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start;scrollbar-width:thin}
+.vacio{grid-column:1/-1;margin-top:6px;padding:22px 14px;border:1.5px dashed var(--linea);border-radius:14px;text-align:center;color:var(--tinta-2);font-size:13px}
+.foto{position:relative;background:var(--tarjeta);border:1px solid var(--linea);border-radius:12px;overflow:hidden;box-shadow:var(--sombra);animation:entra .25s ease-out}
+.foto.nueva{outline:2px solid var(--ok);outline-offset:-2px}
+.foto img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;cursor:grab;-webkit-user-drag:element}
+.foto img:active{cursor:grabbing}
+.barra{display:flex;gap:4px;padding:6px}
+.barra button{flex:1;height:30px;border:1px solid var(--linea);border-radius:8px;background:transparent;color:var(--tinta);font:600 12.5px var(--sans);display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer}
+.barra button:hover{border-color:var(--acento);color:var(--acento)}
+.barra button.x{flex:none;width:30px}
+.barra button.hecho{background:var(--ok-suave);border-color:transparent;color:var(--ok)}
+.pie{display:flex;align-items:center;gap:8px;padding:10px 14px 12px;border-top:1px solid var(--linea);font-size:12px;color:var(--tinta-3)}
+.pie span{flex:1}
+.pie button{border:1px solid var(--linea);background:var(--tarjeta);color:var(--tinta);font:600 12.5px var(--sans);padding:6px 10px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px}
+@keyframes entra{from{opacity:0;transform:scale(.95)}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-cel" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2"/><path d="M11 18.5h2"/></symbol>
+  <symbol id="i-copiar" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-carpeta" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+</svg>
+<div class="cab">
+  <span class="ico"><svg class="i"><use href="#i-cel"/></svg></span>
+  <b>Fotos del celular</b>
+  <button id="verQr" type="button" hidden>Ver QR</button>
+</div>
+<div class="qr" id="qr">
+  <div class="img" id="qrImg"></div>
+  <div>
+    <p>Escanéalo con el celular o abre <b id="host"></b> y escribe:</p>
+    <div class="cod" id="cod">… …</div>
+    <p>Las fotos aparecen aquí abajo.</p>
+  </div>
+</div>
+<p class="aviso" id="aviso">Arrastra una foto a la guía o al chat de Claude. También puedes copiarla y pegarla con Ctrl+V.</p>
+<div class="lista" id="lista"><div class="vacio" id="vacio">Esperando fotos…</div></div>
+<div class="pie">
+  <span>Se borran al cerrar esta ventana.</span>
+  <button id="carpeta" type="button"><svg class="i"><use href="#i-carpeta"/></svg>Abrir carpeta</button>
+</div>
+<script>
+(function(){
+  if (window.TEMA_PANEL === 'oscuro') document.documentElement.dataset.tema = 'oscuro';
+  var $ = function(id){ return document.getElementById(id); };
+  var api = null, tic = null;
+  function aviso(t, error){ $('aviso').textContent = t; $('aviso').className = 'aviso' + (error ? ' error' : ''); }
+  function sesion(s){
+    if (!s || !s.ok){ aviso((s && s.error) || 'No pude abrir la sesión.', true); return; }
+    $('qrImg').innerHTML = s.qr || '';
+    $('cod').textContent = s.codigo.slice(0, 3) + ' ' + s.codigo.slice(3);
+    if (s.inicio) $('host').textContent = s.inicio.replace(/^https?:\/\//, '');
+  }
+  function plegarQr(si){ $('qr').hidden = si; $('verQr').hidden = !si; $('verQr').textContent = 'Ver QR'; }
+  $('verQr').onclick = function(){ plegarQr(false); };
+  function tarjeta(nombre){
+    var d = document.createElement('div'); d.className = 'foto nueva';
+    var url = new URL(nombre, location.href).href;
+    d.innerHTML = '<img draggable="true" alt="Foto del celular">' +
+      '<div class="barra"><button type="button" class="c"><svg class="i"><use href="#i-copiar"/></svg>Copiar</button>' +
+      '<button type="button" class="x" title="Quitar" aria-label="Quitar"><svg class="i"><use href="#i-x"/></svg></button></div>';
+    var img = d.querySelector('img'); img.src = url;
+    // Arrastrar: es una imagen servida por http (127.0.0.1), como en cualquier web → llega como archivo de imagen.
+    // DownloadURL además deja soltarla en el Escritorio o en una carpeta.
+    img.addEventListener('dragstart', function(e){
+      try { e.dataTransfer.setData('DownloadURL', 'image/jpeg:' + nombre + ':' + url); } catch (er) {}
+      d.classList.remove('nueva');
+    });
+    d.querySelector('.c').onclick = function(){
+      var b = this;
+      api.copiar(nombre).then(function(r){
+        if (!r.ok) return aviso(r.error, true);
+        b.classList.add('hecho'); b.lastChild.textContent = 'Copiada';
+        aviso('Copiada: pégala con Ctrl+V donde quieras.');
+        setTimeout(function(){ b.classList.remove('hecho'); b.lastChild.textContent = 'Copiar'; }, 2500);
+      });
+      d.classList.remove('nueva');
+    };
+    d.querySelector('.x').onclick = function(){ api.quitar(nombre); d.remove(); $('vacio').hidden = !!document.querySelector('.foto'); };
+    $('lista').insertBefore(d, $('lista').firstChild);
+    $('vacio').hidden = true;
+  }
+  function recoger(){
+    api.recoger().then(function(r){
+      if (!r) return;
+      if (r.codigo) sesion({ok: true, codigo: r.codigo, qr: r.qr});
+      if (r.error && !r.ok) return aviso(r.error, true);
+      (r.fotos || []).forEach(function(f){ tarjeta(f.nombre); });
+      if ((r.fotos || []).length){ plegarQr(true); aviso('Llegó ' + (r.fotos.length === 1 ? 'una foto' : r.fotos.length + ' fotos') + '. Arrástrala a la guía, o Copiar y Ctrl+V.'); }
+    }, function(){});
+  }
+  $('carpeta').onclick = function(){ api.abrir_carpeta(); };
+  function iniciar(a){
+    api = a;
+    api.sesion().then(function(s){ sesion(s); if (s && s.ok && !tic) tic = setInterval(recoger, 2000); });
+  }
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.sesion) iniciar(window.pywebview.api);
+  else window.addEventListener('pywebviewready', function(){ iniciar(window.pywebview.api); });
+})();
+</script>
+</body>
+</html>

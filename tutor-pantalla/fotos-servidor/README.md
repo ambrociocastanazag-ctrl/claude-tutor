@@ -7,7 +7,8 @@ Servicio pequeño (Node, sin framework) para el botón **«Foto del celular»** 
 | Archivo | Qué es |
 |---|---|
 | `server.js` | El servicio: página del celular, subir (solo con un código vivo), y para el panel (con `TUTOR_CLAVE`): abrir sesión (código + QR en SVG), recoger y borrar, cerrar. Límite de intentos por IP, solo JPG/PNG/WebP, máx. 8 MB y 6 fotos esperando. |
-| `celular.html` | La página del celular (código, «Tomar foto», «Elegir de la galería»; reduce la foto a 2000 px antes de subirla). |
+| `celular.html` | La página del celular, diseño de Claude Design (estilo «Cuaderno y tinta»: Fraunces, Figtree, JetBrains Mono): código, «Tomar foto», «Elegir de la galería», miniaturas con su estado y Reintentar; reduce la foto a 2000 px antes de subirla. Con `?demo` simula el servidor. |
+| `vista-previa.html` | Las 4 vistas (código y fotos, claro y oscuro) con el servidor simulado; se abre directo desde la carpeta. |
 | `package.json`, `package-lock.json` | Dependencias: `pg` y `qrcode`. `node_modules/` no se versiona. |
 
 ## Variables

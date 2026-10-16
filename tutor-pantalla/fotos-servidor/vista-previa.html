@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Vista previa · Foto para el tutor</title>
+<style>
+body{margin:0;background:#E9E3D7;font:600 14px/1.4 system-ui,sans-serif;color:#4A5960}
+a{color:#C24A22}a:hover{color:#1E2A2F}
+.fila{display:flex;flex-wrap:wrap;gap:32px;padding:32px;justify-content:center}
+figure{margin:0;display:flex;flex-direction:column;gap:10px}
+iframe{width:390px;height:844px;border:0;border-radius:36px;box-shadow:0 20px 50px -24px rgba(74,52,30,.45);background:#fff}
+p{max-width:900px;margin:24px auto 0;padding:0 32px;font-weight:400;text-align:center}
+</style>
+</head>
+<body>
+<!-- Ábrela directo desde la carpeta (no la sirve el servidor). Diseño de Claude Design, estilo «Cuaderno y tinta». -->
+<p>Vista previa con servidor simulado. El código 000000 da error; cualquier otro funciona. En la simulación, una de cada cuatro subidas falla.</p>
+<div class="fila">
+  <figure><figcaption>Código · claro</figcaption><iframe src="celular.html?demo" title="Código, modo claro"></iframe></figure>
+  <figure><figcaption>Fotos · claro (desde QR)</figcaption><iframe src="celular.html?demo&amp;c=482913&amp;semilla" title="Fotos, modo claro"></iframe></figure>
+  <figure><figcaption>Fotos · oscuro</figcaption><iframe src="celular.html?demo&amp;c=482913&amp;semilla&amp;tema=oscuro" title="Fotos, modo oscuro"></iframe></figure>
+  <figure><figcaption>Código · oscuro</figcaption><iframe src="celular.html?demo&amp;tema=oscuro" title="Código, modo oscuro"></iframe></figure>
+</div>
+</body>
+</html>
