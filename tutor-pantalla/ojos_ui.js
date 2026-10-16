@@ -5,6 +5,8 @@
    Ojos.elegir(cb)          lista de ventanas → cb({hwnd, titulo, app})
    Ojos.mirar(hwnd, cb)     captura → vista previa (Cancelar / Recortar / Adjuntar) → cb(adjunto)
    Ojos.elegirYMirar(cb)    las dos seguidas
+   Ojos.tarjetaArchivo(info, enviar) la tarjeta «¿Dejo que el tutor lea «archivo»?» (Sí / No; archivos.py), o la lectura
+                            sola si el archivo es libre; el archivo viaja como adjunto, igual que la captura de abajo
    Ojos.tarjetaVolver(info, enviar)  la tarjeta «¿Vuelvo a mirar «ventana»?» (Sí / No / Recortar) del tutor; la dibuja
                             Preguntas.tarjeta cuando una "pregunta" trae "volver" (ojos_panel.tarjeta_volver). enviar(texto)
                             es la función del panel que manda un mensaje; la captura viaja en ese mensaje (ver instalarEnvio)
@@ -52,7 +54,8 @@
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   var P = {x: 'M6 6l12 12M18 6L6 18', refresh: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15', crop: 'M7 3v14h14M3 7h14v14',
-           lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z', camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', clip: 'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.4 3.4 0 0 1 4.8 4.8l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4'};
+           lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z', camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', clip: 'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.4 3.4 0 0 1 4.8 4.8l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4',
+           file: 'M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7zM14 3v4h4M9 13h6M9 17h4'};
   function ic(n, t){ return '<svg width="' + (t || 15) + '" height="' + (t || 15) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + P[n] + '"/></svg>'; }
   function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
   function api(){ return window.pywebview && window.pywebview.api; }
@@ -234,10 +237,54 @@
     return raiz;
   }
 
+  // ---- «¿Dejo que el tutor lea «archivo»?»: Sí / No (archivos.py). Permiso por ARCHIVO, nunca por carpeta. ----
+  // Si es libre (de la carpeta del curso o ya aprobado en esta sesión), se lee y se manda solo, sin preguntar.
+  function tarjetaArchivo(info, enviar){
+    instalarEnvio();
+    var n = info.nombre || 'el archivo', hecho = false;
+    var raiz = document.createElement('div'); raiz.className = 'oj-vol';
+    function fin(txt){
+      hecho = true; Array.prototype.forEach.call(raiz.querySelectorAll('.oj-btn'), function(b){ b.disabled = true; });
+      var r = document.createElement('div'); r.className = 'oj-vol-r'; r.textContent = txt; raiz.appendChild(r);
+    }
+    function leerYMandar(texto){
+      api().archivo_leer(info.token).then(function(a){
+        if (!a || !a.ok){ fin(a && a.error || 'No pude leerlo.'); enviar('No pude pasarte «' + n + '»: ' + (a && a.error || 'error al leerlo') + '. Sigue sin él.'); return; }
+        fin(info.auto ? 'Le pasé «' + n + '» (ya tenía permiso).' : 'Le pasé «' + n + '».');
+        extra = {adj: {nombre: a.nombre, tipo: a.tipo, media_type: a.media_type, datos: a.datos}, t: Date.now()};
+        enviar(texto);
+      }, function(){ fin('No pude leerlo.'); });
+    }
+    if (info.error){
+      raiz.innerHTML = '<div class="oj-vol-q">' + ic('file', 16) + '<span>' + esc(info.error) + '</span></div>';
+      return raiz;
+    }
+    if (info.auto){
+      raiz.innerHTML = '<div class="oj-vol-q">' + ic('file', 16) + '<span>Leyendo «' + esc(n) + '»…</span></div>';
+      setTimeout(function(){ leerYMandar('Aquí tienes «' + n + '» (' + info.ruta + '). Contesta lo que te pregunté con él.'); }, 50);
+      return raiz;
+    }
+    raiz.innerHTML = '<div class="oj-vol-q">' + ic('file', 16) + '<span>¿Dejo que el tutor lea «' + esc(n) + '»?</span></div>' +
+      '<div class="oj-vol-n">' + esc(info.ruta) + (info.secreto ? '<br><b>Ojo:</b> parece un archivo de claves o contraseñas.' : '') +
+      '<br>Solo este archivo, no su carpeta. Lo lee sin cambiarlo.</div>' +
+      '<div class="oj-botones"><button class="oj-btn oj-prim oj-a-si" type="button" style="flex:none">Sí</button>' +
+      '<button class="oj-btn oj-a-no" type="button">No</button></div>';
+    raiz.querySelector('.oj-a-si').onclick = function(){
+      if (hecho) return; hecho = true;
+      leerYMandar('Sí, lee «' + n + '» (te lo adjunto). Contesta lo que te pregunté con él.');
+    };
+    raiz.querySelector('.oj-a-no').onclick = function(){
+      if (hecho) return; fin('No le pasé «' + n + '».');
+      enviar('No, no leas «' + n + '». Respóndeme sin él.');
+    };
+    return raiz;
+  }
+
   window.Ojos = {
     elegir: elegir,
     mirar: mirar,
     tarjetaVolver: tarjetaVolver,
+    tarjetaArchivo: tarjetaArchivo,
     elegirYMirar: function(cb){ elegir(function(v){ mirar(v.hwnd, cb); }); },
     cerrar: function(){ cerrar(); }
   };

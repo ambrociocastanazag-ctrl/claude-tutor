@@ -20,7 +20,7 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
-import ojos                                                             # noqa: E402
+import ojos, archivos                                                           # noqa: E402
 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
@@ -146,6 +146,8 @@ def separar_preguntas(texto):
     if v: _VOLVER_PEND[:] = [v]
     pend = _VOLVER_PEND[:]; _VOLVER_PEND.clear()
     tarjeta = _ACTIVO.tarjeta_volver(pend[0][0]) if pend and _ACTIVO else None      # <volver_a_mirar/> → tarjeta Sí / No / Recortar
+    texto, t_arch = archivos.separar(texto)                    # <pedir_archivo ruta="…"/> → tarjeta Sí / No (o se lee solo)
+    if t_arch and not tarjeta: tarjeta = t_arch
     m = PREGUNTAS_RE.search(texto or "")
     if not m: return texto or "", [tarjeta] if tarjeta else []
     limpio = (texto[:m.start()] + " " + texto[m.end():]).strip()
@@ -511,6 +513,10 @@ class OjosApi:
 
     def ojos_adjuntar(self, recorte=None):
         return self._ojos.adjuntar(recorte)
+
+    def archivo_leer(self, token):
+        """Tarjeta «¿Dejo que el tutor lea…?» (o lectura sola si es del curso): el archivo como adjunto (archivos.Lector)."""
+        return archivos.leer(token)
 
     def ojos_volver(self, token, modo="si"):
         """Tarjeta «¿Vuelvo a mirar…?»: modo "si" (adjunto sin vista previa) o "recortar" (captura para la vista previa)."""

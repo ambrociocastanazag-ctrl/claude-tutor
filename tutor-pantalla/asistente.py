@@ -2,7 +2,8 @@
 
 Como el tutor de panel-excel (motor.Tutor): un proceso `claude -p` con stream-json que arranca una vez y
 responde a trozos; sin MCP y sin ajustes, para que no cargue hooks ni avisos de nadie.
-Puede buscar en la web y leer enlaces (WebSearch y WebFetch, sin permisos que pedir); nada más.
+Puede buscar en la web y leer enlaces (WebSearch y WebFetch, sin permisos que pedir); los archivos, solo con su permiso
+(<pedir_archivo/> → tarjeta Sí / No, ver archivos.py).
 Para señalar, Claude termina su respuesta con una línea  MARCAS: [...]  que el panel quita del texto y
 convierte en flechas encima de la ventana (ver marcas())."""
 import json, re, shutil, subprocess, tempfile, threading
@@ -31,7 +32,8 @@ pase). Úsalos cuando la respuesta dependa de algo actual, de una página concre
 busques lo que ya sabes. Cuando uses una fuente, da su enlace completo (https://...) para que pueda abrirlo, y si
 recomiendas descargar o comprar algo, enlaza la página oficial."""
 HERRAMIENTAS = "WebSearch,WebFetch"         # solo leer la web: nada que toque su PC
-AVISOS = {"WebSearch": "Buscando en la web…", "WebFetch": "Leyendo la página…"}
+AVISOS = {"WebSearch": "Buscando en la web…", "WebFetch": "Leyendo la página…", "Read": "Leyendo un archivo…",
+          "Glob": "Buscando archivos…"}
 
 MARCA_RE = re.compile(r"\n?\s*MARCAS:\s*(\[.*\])\s*$", re.S)
 
@@ -86,6 +88,7 @@ class Sesion:
                                   text=True, encoding="utf-8", bufsize=1, cwd=tempfile.gettempdir(),
                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.turnos = 0
+        import archivos; archivos.activar(())          # sin carpetas: cualquier archivo, con la tarjeta <pedir_archivo/>
         self._turno(self.reglas + "\n\nResponde solo: Listo", lambda t: None)
 
     def _turno(self, contenido, al_trozo, al_aviso=lambda t: None):

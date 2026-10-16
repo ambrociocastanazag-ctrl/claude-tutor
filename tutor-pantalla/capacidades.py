@@ -12,7 +12,7 @@ Qué ya traía cada panel y qué falta está en tutor-pantalla/README.md («Capa
 import re, shutil, subprocess, tempfile, threading
 from pathlib import Path
 
-import asistente, editor_vscode, ojos, ojos_panel
+import archivos, asistente, editor_vscode, ojos, ojos_panel
 
 HERRAMIENTAS_WEB = asistente.HERRAMIENTAS               # "WebSearch,WebFetch": solo leer la web
 
@@ -28,7 +28,8 @@ TUS CAPACIDADES (las mismas del asistente del estudiante; úsalas cuando ayuden,
 - INVESTIGAR: WebSearch (buscar) y WebFetch (leer una página o un enlace que te pase). Úsalos si la respuesta depende de
   algo actual o de una página concreta, o si no estás seguro; no busques lo que ya sabes. Da siempre el enlace completo
   (https://...) y, si recomiendas descargar algo, la página oficial.
-- ARCHIVOS: puede adjuntarte imágenes, PDF y texto (clip, Ctrl+V o arrastrar): léelos y úsalos.
+- ARCHIVOS: puede adjuntarte imágenes, PDF y texto (clip, Ctrl+V o arrastrar): léelos y úsalos. Y tú mismo lees los
+  archivos de sus carpetas del curso (ver LEER ARCHIVOS).
 - PREGUNTAS: puedes poner una tarjeta de preguntas con botones para comprobar que entendió (ver más abajo).
 - VOZ: él puede activar la voz (botón del altavoz); lo que escribas en "decir" se lee en voz alta. Mantén las frases cortas.
 En la pantalla solo miras, señalas y dibujas: nunca digas que hiciste clic, escribiste o cambiaste algo suyo. Si tu panel te deja cambiar su archivo (libro de Excel, diagrama de Dia), es solo con su permiso y como digan sus propias reglas."""
@@ -49,7 +50,7 @@ una frase. NUNCA digas que no ves la línea exacta: usa "linea". Si te piden se�
 def reglas(app, codigo=False):
     """El bloque completo de capacidades para el prompt de cualquier tutor: capacidades + ojos + dibujos + preguntas
     (+ archivo abierto y líneas si es un curso de código)."""
-    t = CAPACIDADES.format(app=app) + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS + ojos_panel.REGLAS_PREGUNTAS
+    t = CAPACIDADES.format(app=app) + archivos.REGLAS + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS + ojos_panel.REGLAS_PREGUNTAS
     if codigo: t += REGLAS_CODIGO.format(app=app)
     return t
 
@@ -62,6 +63,7 @@ class ConWeb:
     Necesita en la clase: _intro() y self.curso (con .d["modelo_tutor"] o .modulos[0].d), como motor.Tutor."""
     herramientas = HERRAMIENTAS_WEB
     al_aviso = staticmethod(lambda t: None)
+    carpetas = None                     # las de lectura libre; None = las del curso (archivos.carpetas_de)
 
     def _modelo(self):
         try: return self.curso.d.get("modelo_tutor") or self.curso.modulos[0].d.get("modelo_tutor") or "sonnet"
@@ -70,14 +72,19 @@ class ConWeb:
     def _arrancar(self):
         exe = shutil.which("claude")
         if not exe: raise RuntimeError("No encuentro Claude Code (el comando 'claude') en esta PC.")
+        carpetas = self.carpetas if self.carpetas is not None else archivos.carpetas_de(getattr(self, "curso", None))
+        archivos.activar(carpetas)                         # <pedir_archivo/> de este panel: dentro libre, fuera con tarjeta
+        cwd, leer, extra = archivos.args_claude(carpetas)
+        herr = self.herramientas + ("," + leer if leer else "")
+        # --allowedTools solo la web: Read y Glob quedan con el permiso normal (libres en --add-dir, negados fuera)
         cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-               "--include-partial-messages", "--tools", self.herramientas, "--allowedTools", self.herramientas,
+               "--include-partial-messages", "--tools", herr, "--allowedTools", self.herramientas, *extra,
                "--model", self._modelo(), "--strict-mcp-config", "--no-session-persistence", "--setting-sources", ""]
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                  text=True, encoding="utf-8", bufsize=1, cwd=tempfile.gettempdir(),
+                                  text=True, encoding="utf-8", bufsize=1, cwd=cwd,
                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.turnos = 0
-        self._turno(self._intro(), lambda t: None)
+        self._turno(archivos.lista(carpetas) + "\n\n" + self._intro(), lambda t: None)
 
     def _turno(self, contenido, al_trozo):
         # el bucle de lectura es el del asistente (no se duplica): solo añade el aviso al usar una herramienta

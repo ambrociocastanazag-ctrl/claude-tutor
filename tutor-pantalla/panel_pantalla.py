@@ -16,11 +16,12 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
-import ojos, asistente, ojos_panel                                      # noqa: E402
+import ojos, asistente, ojos_panel, archivos                            # noqa: E402
 
 PREFERENCIAS = AQUI.parent / "panel-excel" / "preferencias.json"         # el tema de los paneles del tutor
 REGLAS = (asistente.REGLAS + ojos_panel.REGLAS_DIBUJOS.replace("(junto a tus otras marcas)", "(en la misma línea MARCAS: [...])")
-          + ojos_panel.REGLAS_PREGUNTAS + "\nEl bloque <preguntas> va antes de la línea MARCAS.\n" + ojos_panel.REGLAS_VOLVER)
+          + ojos_panel.REGLAS_PREGUNTAS + "\nEl bloque <preguntas> va antes de la línea MARCAS.\n" + ojos_panel.REGLAS_VOLVER
+          + archivos.REGLAS + "\n" + archivos.lista(()))
 
 
 class Api(ojos_panel.OjosApi):

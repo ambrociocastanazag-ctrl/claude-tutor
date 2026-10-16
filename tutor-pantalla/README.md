@@ -128,12 +128,22 @@ Todo lo que sabe el asistente lo saben también los tutores del modo curso, de E
 | Investigar en la web (WebSearch y WebFetch, con «Buscando en la web…») | **añadida**: `capacidades.ConWeb` | por integrar (ver abajo) |
 | El prompt «tus capacidades» (qué tiene y cuándo usarlo) | **añadida**: `capacidades.reglas(app, codigo)` | por integrar |
 | Archivo abierto en VS Code en el contexto + objetivo `"linea"` | **añadida** (cursos de código) | opcional: solo si el curso tiene proyecto |
+| **Leer archivos** (Read y Glob en las carpetas del curso; fuera o secretos, `<pedir_archivo/>` con tarjeta Sí / No) | **añadida** (2026-10-16): `archivos.py` | **añadida** (idéntica; también el asistente, solo con tarjeta) |
 
 **Lo que tiene que llamar otro panel** (Excel: `panel_web.py`; Dia: `panel_dia.py`):
 1. `import capacidades` (con `tutor-pantalla/` en `sys.path`) y en el prompt del tutor, `capacidades.reglas("<app>")` en lugar de juntar a mano `REGLAS_OJOS + REGLAS_DIBUJOS + REGLAS_PREGUNTAS`; quitar «No uses herramientas» de sus reglas.
 2. La clase del tutor: `class TutorX(capacidades.ConWeb, motor.Tutor)`. Pone `--tools WebSearch,WebFetch` y reutiliza el bucle de lectura del asistente. Si su `_arrancar`/`_turno` no son los de `motor.Tutor` de Excel, basta con llamar a `asistente.Sesion._turno(self, contenido, al_trozo, self.al_aviso)`.
 3. En la API: `tutor.al_aviso = lambda t: self._empujar("window.avisoTrabajo && window.avisoTrabajo(" + json.dumps(t) + ")")` (`ojos_ui.js` ya trae `avisoTrabajo`).
 4. Si el curso tiene proyecto de código: `ojos_panel.Ojos(..., raices=capacidades.raices_curso(curso.d))` (así los dibujos aceptan `"linea"`), `capacidades.contexto_editor(raices)` en el [Estado actual], `capacidades.reglas(app, True)` y, al final de cada respuesta, `capacidades.avisos_linea(self._ojos)` para añadir «Sube/Baja…».
+
+#### Leer archivos (`archivos.py`, `<pedir_archivo/>`)
+
+Para que no haga falta mandarle captura de un archivo (lo pidió así el 2026-10-16):
+- **Dentro de las carpetas del curso** (la del `curso.json`, `proyecto`, `proyectos`, la que abre `app.abrir` y `datos` de Excel; ver `archivos.carpetas_de`): el tutor lee solo con **Read** y **Glob** de Claude Code. La sesión arranca en una carpeta vacía y cada carpeta va con `--add-dir`, así que fuera de ellas Claude Code se lo niega solo (y no carga ningún `CLAUDE.md`).
+- **Secretos** (`.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `credentials*`… lista `SECRETOS`): negados aunque estén dentro, con reglas `Read(//**/…)` (tienen que ser absolutas: las relativas no alcanzan las carpetas de `--add-dir`). Probado con el `.env` real de `carrito-gt`.
+- **Fuera o secreto:** el tutor escribe `<pedir_archivo ruta="C:/…"/>` → tarjeta **«¿Dejo que el tutor lea «x»?»** (Sí / No). El permiso es **por archivo, nunca por carpeta**, y dura la sesión: si lo vuelve a pedir, se lee solo. Con Sí, el panel lee el archivo (texto numerado con su ruta, PDF o imagen) y lo manda como adjunto en el mismo mensaje (`OjosApi.archivo_leer`, `Ojos.tarjetaArchivo` en `ojos_ui.js`).
+- **Sin Grep:** en la prueba no quedó claro que la búsqueda de texto respetara la regla de los secretos. Solo lee: nunca escribe ni ejecuta.
+- Pruebas: `python tutor-pantalla/archivos.py`.
 
 #### Volver a mirar la misma ventana (`<volver_a_mirar/>`)
 

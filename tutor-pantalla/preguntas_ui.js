@@ -42,7 +42,16 @@
   function lista(v){ return v == null ? [] : Array.isArray(v) ? v : [v]; }
 
   // Una "pregunta" con "volver" no es una pregunta: es la tarjeta «¿Vuelvo a mirar «ventana»?» de ojos_ui.js (Sí / No / Recortar).
+  // Y una con "archivo" es la tarjeta «¿Dejo que el tutor lea…?» (Sí / No) de ojos_ui.js.
   function tarjeta(preguntas, enviar){
+    var arch = preguntas.filter(function(q){ return q && q.archivo; });
+    if (arch.length && window.Ojos && Ojos.tarjetaArchivo){
+      var otras = preguntas.filter(function(q){ return !(q && q.archivo); });
+      var c = document.createElement('div');
+      c.appendChild(Ojos.tarjetaArchivo(arch[0].archivo, enviar));
+      if (otras.length) c.appendChild(tarjeta(otras, enviar));
+      return c;
+    }
     var vol = preguntas.filter(function(q){ return q && q.volver; });
     if (vol.length && window.Ojos && Ojos.tarjetaVolver){
       var resto = preguntas.filter(function(q){ return !(q && q.volver); });
