@@ -20,7 +20,7 @@ import ojos, asistente, ojos_panel                                      # noqa: 
 
 PREFERENCIAS = AQUI.parent / "panel-excel" / "preferencias.json"         # el tema de los paneles del tutor
 REGLAS = (asistente.REGLAS + ojos_panel.REGLAS_DIBUJOS.replace("(junto a tus otras marcas)", "(en la misma línea MARCAS: [...])")
-          + ojos_panel.REGLAS_PREGUNTAS + "\nEl bloque <preguntas> va antes de la línea MARCAS.")
+          + ojos_panel.REGLAS_PREGUNTAS + "\nEl bloque <preguntas> va antes de la línea MARCAS.\n" + ojos_panel.REGLAS_VOLVER)
 
 
 class Api(ojos_panel.OjosApi):

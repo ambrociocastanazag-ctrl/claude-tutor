@@ -163,6 +163,7 @@ def probar():
         if not c: malos += 1
     r = reglas("VS Code", True)
     ver("WebSearch" in r and "pedir_ventana" in r and "DIBUJOS" in r and "<preguntas>" in r and '"linea"' in r, "el prompt trae ojos, dibujos, web, preguntas y «linea»")
+    ver("<volver_a_mirar/>" in reglas("Paint") and "Recortar" in reglas("Paint"), "el prompt trae la regla de volver a mirar la misma ventana")
     ver("linea" not in reglas("Paint").split("TUS CAPACIDADES")[1].split("DIBUJOS: además")[0], "sin código no hay bloque de archivo abierto")
     ver(editor_vscode.nombre_del_titulo("● Prueba.java - Proyecto Programacion - Visual Studio Code") == ("Prueba.java", True), "título con ● = sin guardar")
     ver(editor_vscode.nombre_del_titulo("Prueba.java - X - Visual Studio Code") == ("Prueba.java", False), "título sin ● = guardado")

@@ -41,7 +41,20 @@
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
   function lista(v){ return v == null ? [] : Array.isArray(v) ? v : [v]; }
 
+  // Una "pregunta" con "volver" no es una pregunta: es la tarjeta «¿Vuelvo a mirar «ventana»?» de ojos_ui.js (Sí / No / Recortar).
   function tarjeta(preguntas, enviar){
+    var vol = preguntas.filter(function(q){ return q && q.volver; });
+    if (vol.length && window.Ojos && Ojos.tarjetaVolver){
+      var resto = preguntas.filter(function(q){ return !(q && q.volver); });
+      var caja = document.createElement('div');
+      caja.appendChild(Ojos.tarjetaVolver(vol[0].volver, enviar));
+      if (resto.length) caja.appendChild(tarjetaPreguntas(resto, enviar));
+      return caja;
+    }
+    return tarjetaPreguntas(preguntas.filter(function(q){ return !(q && q.volver); }), enviar);
+  }
+
+  function tarjetaPreguntas(preguntas, enviar){
     var raiz = document.createElement('div'); raiz.className = 'pq';
     var varias = preguntas.length > 1, estado = [];
     var directa = !varias && preguntas[0].opciones && preguntas[0].opciones.length && !preguntas[0].multiple && !preguntas[0].otra;

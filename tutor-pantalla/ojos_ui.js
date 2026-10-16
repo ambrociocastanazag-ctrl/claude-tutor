@@ -5,6 +5,9 @@
    Ojos.elegir(cb)          lista de ventanas → cb({hwnd, titulo, app})
    Ojos.mirar(hwnd, cb)     captura → vista previa (Cancelar / Recortar / Adjuntar) → cb(adjunto)
    Ojos.elegirYMirar(cb)    las dos seguidas
+   Ojos.tarjetaVolver(info, enviar)  la tarjeta «¿Vuelvo a mirar «ventana»?» (Sí / No / Recortar) del tutor; la dibuja
+                            Preguntas.tarjeta cuando una "pregunta" trae "volver" (ojos_panel.tarjeta_volver). enviar(texto)
+                            es la función del panel que manda un mensaje; la captura viaja en ese mensaje (ver instalarEnvio)
    El adjunto tiene el formato de los adjuntos del panel ({nombre, tipo, media_type, datos, vista, tam}) más ojos_id.
    Nada sale de la PC aquí: «Adjuntar» solo lo pone en el mensaje; sale cuando la persona lo envía. */
 (function(){
@@ -36,11 +39,20 @@
     '.oj-btn.oj-prim{flex:1;justify-content:center;border:none;background:var(--acc);color:var(--on-acc);font-size:14px}' +
     '.oj-btn.oj-activo{background:var(--acc-soft);color:var(--acc-text);border-color:transparent}' +
     '.oj-aviso{padding:8px 11px;border-radius:9px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:13px;line-height:1.5;margin-bottom:10px}' +
+    '.oj-vol{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 13px;font-family:var(--sans);color:var(--ink)}' +
+    '.oj-vol-q{display:flex;gap:8px;align-items:flex-start;font-size:14px;font-weight:650;line-height:1.45}' +
+    '.oj-vol-q svg{flex-shrink:0;margin-top:2px;color:var(--acc)}' +
+    '.oj-vol-n{margin:4px 0 10px 23px;font-size:12px;line-height:1.5;color:var(--ink3)}' +
+    '.oj-vol .oj-botones{margin-left:23px;flex-wrap:wrap}' +
+    '.oj-vol .oj-btn[disabled]{opacity:.5;cursor:default}' +
+    '.oj-vol-r{margin:8px 0 0 23px;font-size:12.5px;line-height:1.5;color:var(--ink2)}' +
+    '.oj-vol-r img{display:block;max-width:160px;max-height:100px;margin-top:6px;border:1px solid var(--line);border-radius:6px}' +
+    '.oj-vol-e{margin:8px 0 0 23px;padding:8px 11px;border-radius:9px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:13px;line-height:1.5}' +
     '.oj-cargando{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 0;color:var(--ink3);font-size:13px}';
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   var P = {x: 'M6 6l12 12M18 6L6 18', refresh: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15', crop: 'M7 3v14h14M3 7h14v14',
-           lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z', clip: 'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.4 3.4 0 0 1 4.8 4.8l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4'};
+           lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z', camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', clip: 'M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.4 3.4 0 0 1 4.8 4.8l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4'};
   function ic(n, t){ return '<svg width="' + (t || 15) + '" height="' + (t || 15) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + P[n] + '"/></svg>'; }
   function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
   function api(){ return window.pywebview && window.pywebview.api; }
@@ -100,20 +112,23 @@
   }
 
   // ---- Vista previa: el permiso ----
-  function mirar(hwnd, cb, alFallar){
+  // opts (todo opcional): captura() → promesa con lo mismo que api.ojos_capturar (la tarjeta «Recortar» pide una captura de una
+  // ventana ya aprobada); recortar: true abre con el recorte activo; alCancelar(): se cerró la vista previa sin adjuntar.
+  function mirar(hwnd, cb, alFallar, opts){
+    opts = opts || {};
     var h = abrir('<div class="oj-cab"><b>Esto es lo que verá</b><button class="oj-ib oj-cerrar" type="button" aria-label="Cancelar">' + ic('x', 11) + '</button></div>' +
       '<div class="oj-cuerpo"><div class="oj-cargando">Capturando la ventana…</div></div>');
-    api().ojos_capturar(hwnd).then(function(r){
+    (opts.captura ? opts.captura() : api().ojos_capturar(hwnd)).then(function(r){
       if (!hoja || hoja !== h) return;
       if (!r.ok){
         h.querySelector('.oj-cuerpo').innerHTML = '<div class="oj-aviso">' + esc(r.error) + '</div>';
         h.insertAdjacentHTML('beforeend', '<div class="oj-pie"><div class="oj-botones"><button class="oj-btn oj-cerrar" type="button">Cerrar</button>' +
           '<button class="oj-btn oj-prim oj-reintentar" type="button">Volver a intentar</button></div></div>');
-        Array.prototype.forEach.call(h.querySelectorAll('.oj-cerrar'), function(b){ b.onclick = function(){ cerrar(); if (alFallar) alFallar(r); }; });
-        h.querySelector('.oj-reintentar').onclick = function(){ mirar(hwnd, cb, alFallar); };
+        Array.prototype.forEach.call(h.querySelectorAll('.oj-cerrar'), function(b){ b.onclick = function(){ cerrar(); if (alFallar) alFallar(r); if (opts.alCancelar) opts.alCancelar(); }; });
+        h.querySelector('.oj-reintentar').onclick = function(){ mirar(hwnd, cb, alFallar, opts); };
         return;
       }
-      alCerrar = function(){ api().ojos_descartar(); };          // cancelar = la captura se tira, no sale nada
+      alCerrar = function(){ api().ojos_descartar(); if (opts.alCancelar) opts.alCancelar(); };          // cancelar = la captura se tira, no sale nada
       var recorte = null, arrastre = null;
       h.querySelector('.oj-cuerpo').innerHTML = '<div class="oj-lienzo"><img alt="Captura de ' + esc(r.titulo) + '" src="' + r.img + '"><div class="oj-sel" hidden></div></div>';
       h.insertAdjacentHTML('beforeend', '<div class="oj-pie"><div class="oj-permiso">' + ic('lock', 14) + '<span>Se adjunta esta imagen de «' + esc(r.titulo) + '»' +
@@ -145,13 +160,84 @@
         alCerrar = null; cerrar(true);
         api().ojos_adjuntar(recorte).then(function(a){ if (a && a.ok) cb(a); });
       };
-      h.querySelector('.oj-adjuntar').focus();
+      if (opts.recortar) h.querySelector('.oj-recortar').click();
+      else h.querySelector('.oj-adjuntar').focus();
     });
+  }
+
+  // ---- «¿Vuelvo a mirar «ventana»?»: Sí / No / Recortar ----
+  // La captura sale en el MISMO mensaje que la respuesta de la tarjeta: se guarda aquí y api.preguntar (la de todos los
+  // paneles: asistente, curso, Excel y Dia) la añade a sus adjuntos. Así el panel no cambia y la respuesta sigue sola.
+  var extra = null;
+  function instalarEnvio(){
+    var a = api(); if (!a || a._ojosEnvio || typeof a.preguntar !== 'function') return;
+    var orig = a.preguntar;
+    a.preguntar = function(q, adj){
+      var e = extra; extra = null;
+      if (e && Date.now() - e.t < 15000) adj = (adj || []).concat([e.adj]);
+      return orig.call(a, q, adj);
+    };
+    a._ojosEnvio = true;
+  }
+  function tarjetaVolver(info, enviar){
+    instalarEnvio();
+    var t = info.titulo || 'la ventana';
+    var raiz = document.createElement('div'); raiz.className = 'oj-vol';
+    raiz.innerHTML = '<div class="oj-vol-q">' + ic('camera', 16) + '<span>¿Vuelvo a mirar «' + esc(t) + '»?</span></div>' +
+      '<div class="oj-vol-n">Solo esa ventana, nunca la pantalla entera. «Sí» la captura ahora, sin vista previa; «Recortar» te deja elegir la zona antes de mandarla.</div>' +
+      '<div class="oj-botones"><button class="oj-btn oj-prim oj-v-si" type="button" style="flex:none">Sí</button>' +
+      '<button class="oj-btn oj-v-no" type="button">No</button>' +
+      '<button class="oj-btn oj-v-rec" type="button">' + ic('crop', 14) + 'Recortar</button></div>';
+    var bs = raiz.querySelectorAll('.oj-btn'), hecho = false;
+    function bloquear(on){ Array.prototype.forEach.call(bs, function(b){ b.disabled = on; }); }
+    function fin(txt, vista){
+      hecho = true; bloquear(true);
+      var r = document.createElement('div'); r.className = 'oj-vol-r'; r.textContent = txt;
+      if (vista){ var im = document.createElement('img'); im.alt = 'Captura enviada'; im.src = vista; r.appendChild(im); }
+      raiz.appendChild(r);
+    }
+    function fallo(r){
+      var e = raiz.querySelector('.oj-vol-e'); if (e) e.remove();
+      e = document.createElement('div'); e.className = 'oj-vol-e'; e.textContent = r.error || 'No pude capturarla.';
+      if (r.cerrada || /cámara|📷/.test(r.error || '')){
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'oj-btn'; b.style.marginTop = '8px'; b.innerHTML = ic('camera', 14) + 'Enseñar otra ventana';
+        b.onclick = function(){ Ojos.elegirYMirar(function(a){ fin('Te mandé «' + (a.titulo || a.nombre) + '».', a.vista); mandar(a, 'Te adjunto otra ventana (' + (a.titulo || a.nombre) + '). Contesta lo que te pregunté con ella.'); }); };
+        e.appendChild(document.createElement('br')); e.appendChild(b);
+        if (r.cerrada) bloquear(true);
+      }
+      raiz.appendChild(e); if (!r.cerrada) bloquear(false);
+    }
+    function mandar(a, texto){ extra = {adj: {nombre: a.nombre, tipo: a.tipo, media_type: a.media_type, datos: a.datos, ojos_id: a.ojos_id}, t: Date.now()}; enviar(texto); }
+    raiz.querySelector('.oj-v-si').onclick = function(){
+      if (hecho) return; bloquear(true);
+      api().ojos_volver(info.token, 'si').then(function(a){
+        if (!a || !a.ok) return fallo(a || {});
+        fin('Te mandé una captura nueva de «' + t + '».', a.vista);
+        mandar(a, 'Sí, vuelve a mirar «' + t + '» (te adjunto la captura nueva). Contesta lo que te pregunté con ella.');
+      }, function(){ fallo({error: 'No pude capturarla.'}); });
+    };
+    raiz.querySelector('.oj-v-no').onclick = function(){
+      if (hecho) return; fin('No la volví a mirar.');
+      enviar('No, no vuelvas a mirar «' + t + '». Respóndeme sin la imagen (o dime que no puedes verla).');
+    };
+    raiz.querySelector('.oj-v-rec').onclick = function(){
+      if (hecho) return; bloquear(true);
+      mirar(info.hwnd, function(a){
+        fin('Te mandé solo el recorte de «' + t + '».', a.vista);
+        mandar(a, 'Te adjunto solo un recorte nuevo de «' + t + '». Contesta lo que te pregunté con él.');
+      }, function(r){ fallo(r); }, {
+        captura: function(){ return api().ojos_volver(info.token, 'recortar'); }, recortar: true,
+        alCancelar: function(){ if (!hecho) bloquear(false); }
+      });
+    };
+    if (info.existe === false) fallo({cerrada: true, error: '«' + t + '» ya no está abierta. Si quieres, enséñame otra con la cámara (📷).'});
+    return raiz;
   }
 
   window.Ojos = {
     elegir: elegir,
     mirar: mirar,
+    tarjetaVolver: tarjetaVolver,
     elegirYMirar: function(cb){ elegir(function(v){ mirar(v.hwnd, cb); }); },
     cerrar: function(){ cerrar(); }
   };

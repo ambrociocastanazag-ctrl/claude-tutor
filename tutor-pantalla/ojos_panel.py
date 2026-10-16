@@ -43,6 +43,17 @@ Si para ayudar necesitas VER algo que no está en tu contexto (un diálogo abier
 pídeselo en una frase y escribe al final <pedir_ventana/>: el panel le dará un botón para enseñártela (él decide). No lo
 pidas si no hace falta."""
 
+REGLAS_VOLVER = """
+VOLVER A MIRAR LA MISMA VENTANA: si él ya te enseñó una ventana en esta sesión (hay una «Captura adjunta» arriba) y ahora
+pregunta algo sobre ESA ventana, y para contestar necesitas ver cómo está AHORA (cambió, hay un error nuevo, un paso que
+hizo), no le pidas que la enseñe de nuevo: escribe al final <volver_a_mirar/> (o <volver_a_mirar ventana="parte del
+título"/> si fueron varias). Le sale una tarjeta «¿Vuelvo a mirar «título»?» con Sí (captura esa ventana sin vista
+previa), No (contestas sin la imagen) y Recortar (elige una zona). Pon antes una frase corta de por qué la necesitas y
+nada más: la respuesta con la imagen llega sola cuando él elige. Úsalo UNA sola vez por respuesta, nunca si la pregunta no
+tiene que ver con esa ventana, y si dijo que No no insistas: contesta con lo que sabes o di que no la puedes ver. Si
+nunca te enseñó esa ventana, usa <pedir_ventana/>."""
+REGLAS_OJOS += REGLAS_VOLVER
+
 REGLAS_DIBUJOS = r"""
 DIBUJOS: además de las flechas, puedes dibujar ENCIMA de la app (junto a tus otras marcas) con "tipo": "dibujo" y una
 "forma". Objetivo como en las demás marcas: "id"/"caja" de la última captura, "celda" en Excel, "nombre" en un curso, "linea": N (y "archivo") en un curso de código.
@@ -131,11 +142,15 @@ def atajo(ventana, hwnd, accion="window.atajoMirar && window.atajoMirar()"):
 
 def separar_preguntas(texto):
     """(texto sin el bloque <preguntas>, lista de preguntas válidas para Preguntas.tarjeta). Lo que no se entiende se tira."""
+    texto, v = separar_volver(texto)
+    if v: _VOLVER_PEND[:] = [v]
+    pend = _VOLVER_PEND[:]; _VOLVER_PEND.clear()
+    tarjeta = _ACTIVO.tarjeta_volver(pend[0][0]) if pend and _ACTIVO else None      # <volver_a_mirar/> → tarjeta Sí / No / Recortar
     m = PREGUNTAS_RE.search(texto or "")
-    if not m: return texto or "", []
+    if not m: return texto or "", [tarjeta] if tarjeta else []
     limpio = (texto[:m.start()] + " " + texto[m.end():]).strip()
     try: datos = json.loads(m.group(1))
-    except ValueError: return limpio, []
+    except ValueError: return limpio, [tarjeta] if tarjeta else []
     out = []
     for q in (datos if isinstance(datos, list) else [datos])[:4]:
         if not isinstance(q, dict) or not str(q.get("pregunta") or "").strip(): continue
@@ -147,7 +162,7 @@ def separar_preguntas(texto):
         corr = [c for c in (corr if isinstance(corr, list) else [corr]) if isinstance(c, int) and not isinstance(c, bool) and 0 <= c < len(ops)]
         if corr: d["correcta"] = corr if d["multiple"] else corr[0]
         out.append(d)
-    return limpio, out
+    return limpio, ([tarjeta] if tarjeta else []) + out
 
 
 def bloques_adjuntos(adjuntos):
@@ -172,10 +187,23 @@ def bloques_adjuntos(adjuntos):
 
 
 PEDIDO_RE = re.compile(r"\s*<pedir_ventana\s*/?>\s*", re.I)
+VOLVER_RE = re.compile(r"\s*<volver_a_mirar(?:\s+ventana\s*=\s*[\"\u201c'\u2018]([^\"\u201d'\u2019>]*)[\"\u201d'\u2019])?\s*/?>\s*", re.I)
+_ACTIVO = None                       # el Ojos del panel abierto (uno por proceso): a él se refiere <volver_a_mirar/>
+_VOLVER_PEND = []                    # lo que separar_pedido sacó del texto y separar_preguntas convierte en tarjeta
+
+
+def separar_volver(texto):
+    """(texto sin <volver_a_mirar/>, [ventana pedida o ""] o None si no hay etiqueta). Solo cuenta la primera: una vez por respuesta."""
+    ms = list(VOLVER_RE.finditer(texto or ""))
+    if not ms: return texto or "", None
+    return VOLVER_RE.sub(" ", texto).strip(), [ms[0].group(1) or ""]
 
 
 def separar_pedido(texto):
-    """(texto sin <pedir_ventana/>, si el tutor pidió ver una ventana)."""
+    """(texto sin <pedir_ventana/>, si el tutor pidió ver una ventana). También quita <volver_a_mirar/> y lo deja anotado:
+    separar_preguntas (que todos los paneles llaman justo después) lo convierte en la tarjeta «¿Vuelvo a mirar…?»."""
+    texto, v = separar_volver(texto)
+    if v: _VOLVER_PEND[:] = [v]
     pide = bool(PEDIDO_RE.search(texto or ""))
     return PEDIDO_RE.sub(" ", texto or "").strip() if pide else (texto or ""), pide
 
@@ -234,6 +262,11 @@ class Ojos:
         self.ultima = None                           # la última que vio el tutor: a ella se refieren las marcas "ventana"
         self.marcas = []                             # las flechas puestas ahora (cajas en píxeles de self.ultima)
         self.n = 0
+        self.titulos = {}                            # hwnd → (título, app) de las ventanas aprobadas en esta sesión (la más reciente al final)
+        self.volver_tokens = {}                      # token de una tarjeta «¿Vuelvo a mirar…?» → hwnd
+        self.n_volver = 0
+        global _ACTIVO
+        _ACTIVO = self
 
     # --- lista y captura ---
     def ventanas(self, actual=None):
@@ -241,7 +274,7 @@ class Ojos:
         for v in vs: v["curso"] = v["app"].lower() in self.apps; v["actual"] = v["hwnd"] == actual
         return sorted(vs, key=lambda v: not v["curso"])        # estable: dentro de cada grupo, la más reciente primero
 
-    def capturar(self, hwnd):
+    def capturar(self, hwnd, marco=True):
         hwnd = int(hwnd)
         if not ojos.u32.IsWindow(hwnd): return {"ok": False, "error": "Esa ventana ya se cerró: elige otra."}
         try:
@@ -253,7 +286,7 @@ class Ojos:
         self.n += 1; cid = f"v{self.n}"
         self.capturas[cid] = cap; self.pendiente = cid
         while len(self.capturas) > MAX_CAPTURAS: self.capturas.pop(next(iter(self.capturas)))
-        self._marco(cap)
+        if marco: self._marco(cap)
         return {"ok": True, "id": cid, "img": ojos.a_data_url(cap.img, "PNG"), "w": cap.img.width, "h": cap.img.height,
                 "titulo": cap.titulo, "app": cap.app, "controles": len(cap.controles), "como": cap.como}
 
@@ -279,11 +312,45 @@ class Ojos:
         if cap is None: return {"ok": False, "error": "No hay captura en la vista previa."}
         if recorte: cap.recortar(*recorte)
         self.aprobadas.add(cap.hwnd)
+        self.titulos.pop(cap.hwnd, None); self.titulos[cap.hwnd] = (cap.titulo, cap.app)
         b = io.BytesIO(); cap.img.save(b, "PNG"); datos = base64.b64encode(b.getvalue()).decode()
         app = re.sub(r"[^\w-]+", "_", cap.app or "ventana")[:20]
         return {"ok": True, "ojos_id": cid, "nombre": f"{app}_{cid}.png", "tipo": "imagen", "media_type": "image/png",
                 "datos": datos, "vista": "data:image/png;base64," + datos, "tam": f"{max(1, len(b.getvalue()) // 1000)} KB",
                 "titulo": cap.titulo}
+
+    # --- volver a mirar una ventana ya aprobada (<volver_a_mirar/>) ---
+    def tarjeta_volver(self, ventana=""):
+        """La «pregunta» especial que la página dibuja como tarjeta Sí / No / Recortar, o None si el tutor no tiene a qué
+        volver (nunca se enseñó nada en esta sesión). ventana: parte del título, si pidió una concreta; si no, la última vista."""
+        vivas = [h for h in self.titulos if h in self.aprobadas]
+        if not vivas: return None
+        hwnd = None
+        if ventana:
+            for h in reversed(vivas):
+                if ventana.lower() in self.titulos[h][0].lower() or ventana.lower() in self.titulos[h][1].lower(): hwnd = h; break
+        if hwnd is None:
+            hwnd = self.ultima.hwnd if self.ultima is not None and self.ultima.hwnd in vivas else vivas[-1]
+        existe = bool(ojos.u32.IsWindow(hwnd))
+        titulo = (ojos.titulo(hwnd) if existe else "") or self.titulos[hwnd][0]
+        self.n_volver += 1; tok = f"r{self.n_volver}"; self.volver_tokens[tok] = hwnd
+        return {"pregunta": f"¿Vuelvo a mirar «{titulo}»?", "opciones": [], "volver": {"token": tok, "titulo": titulo, "hwnd": hwnd, "existe": existe}}
+
+    def volver(self, token, modo):
+        """Sí → captura esa ventana (ya aprobada) sin vista previa y devuelve el adjunto. Recortar → captura nueva y devuelve lo
+        mismo que capturar() (la página abre la vista previa con el recorte activo). Solo ventanas de esta sesión; jamás la pantalla."""
+        hwnd = self.volver_tokens.get(token)
+        if hwnd is None or hwnd not in self.aprobadas:
+            return {"ok": False, "error": "Esa ventana no es una de las que me enseñaste en esta sesión: usa la cámara (📷)."}
+        titulo = self.titulos.get(hwnd, ("la ventana",))[0]
+        if not ojos.u32.IsWindow(hwnd):
+            return {"ok": False, "cerrada": True, "error": f"«{titulo}» ya no está abierta. Si quieres, enséñame otra con la cámara (📷)."}
+        if modo == "recortar": return self.capturar(hwnd)
+        r = self.capturar(hwnd, marco=False)
+        if not r.get("ok"): return r
+        a = self.adjuntar()
+        if a.get("ok"): a["ventana"] = titulo
+        return a
 
     # --- al preguntar y al responder ---
     def contexto(self, adjuntos):
@@ -445,6 +512,10 @@ class OjosApi:
     def ojos_adjuntar(self, recorte=None):
         return self._ojos.adjuntar(recorte)
 
+    def ojos_volver(self, token, modo="si"):
+        """Tarjeta «¿Vuelvo a mirar…?»: modo "si" (adjunto sin vista previa) o "recortar" (captura para la vista previa)."""
+        return self._ojos.volver(token, modo)
+
     # --- dibujos (dibujante.js) ---
     def capa_poner(self, datos):
         return self._ojos.poner_capas((datos or {}).get("capas"))
@@ -569,6 +640,34 @@ def probar():
     try: validar_dibujos([{"forma": "rayo"}], "m1, paso 2"); malo = ""
     except ValueError as e: malo = str(e)
     ver("m1, paso 2, dibujo 1" in malo, "validar_dibujos: una forma que no existe da un error claro con el paso")
+    # volver a mirar la misma ventana (<volver_a_mirar/>): etiqueta, tarjeta y permisos
+    t, v = separar_volver('Cambió algo. <volver_a_mirar ventana="Bloc"/> <volver_a_mirar/>')
+    ver(v == ["Bloc"] and "volver_a_mirar" not in t and t == "Cambió algo.", "separar_volver: quita la etiqueta y solo cuenta la primera (una vez por respuesta)")
+    ver(separar_volver("Nada") == ("Nada", None), "sin etiqueta, el texto queda igual")
+    o3 = Ojos(); o3.ov.orden = lambda d: {"ok": True}
+    t, qs = separar_preguntas("Mira otra vez. <volver_a_mirar/>")
+    ver(t == "Mira otra vez." and qs == [], "sin ventana aprobada en la sesión, la etiqueta se quita y no sale tarjeta")
+    class CapV(CapFalsa):
+        hwnd, titulo = esc, "Documento - Bloc de notas"; app = "notepad"
+        def a_pantalla(self, caja): return caja
+    o3.aprobadas.add(esc); o3.titulos[esc] = ("Documento - Bloc de notas", "notepad"); o3.ultima = CapV()
+    t, pide = separar_pedido("Veo que cambió. <volver_a_mirar/>")
+    t, qs = separar_preguntas(t + ' <preguntas>[{"pregunta": "¿Listo?", "opciones": ["Sí", "No"]}]</preguntas>')
+    vol = qs[0].get("volver") if qs else None
+    ver(t == "Veo que cambió." and len(qs) == 2 and vol and vol["existe"] and vol["hwnd"] == esc and vol["token"] in o3.volver_tokens
+        and qs[0]["pregunta"].startswith("¿Vuelvo a mirar «") and qs[1]["pregunta"] == "¿Listo?",
+        "separar_pedido + separar_preguntas: la tarjeta «¿Vuelvo a mirar…?» sale primero y las preguntas normales siguen")
+    ver(o3.tarjeta_volver("Excel") ["volver"]["hwnd"] == esc, "una ventana pedida por título que no coincide cae en la última aprobada")
+    r = o3.volver("r999", "si")
+    ver(not r["ok"] and "sesión" in r["error"], "volver(): un token que no existe (o una ventana no aprobada) no captura nada")
+    o3.aprobadas.discard(esc)
+    ver(not o3.volver(vol["token"], "si")["ok"], "volver(): si la ventana ya no está aprobada, no captura")
+    o3.aprobadas.add(esc); o3.titulos[9999999] = ("Cerrada", "x"); o3.aprobadas.add(9999999); o3.volver_tokens["rx"] = 9999999
+    r = o3.volver("rx", "si")
+    ver(not r["ok"] and r.get("cerrada") and "📷" in r["error"], "volver(): ventana que ya no existe → aviso que ofrece la cámara")
+    ver("<volver_a_mirar" in REGLAS_OJOS and "UNA sola vez" in REGLAS_VOLVER, "el prompt compartido trae la regla de volver a mirar")
+    ujs = (AQUI / "ojos_ui.js").read_text(encoding="utf-8"); pjs = (AQUI / "preguntas_ui.js").read_text(encoding="utf-8")
+    ver("tarjetaVolver" in ujs and "ojos_volver" in ujs and "Recortar" in ujs and "tarjetaVolver" in pjs, "la página trae la tarjeta (ojos_ui.js) y Preguntas.tarjeta la dibuja")
     html = inyectar_ui("<html><body><p>x</p></body></html>")
     ver("window.Ojos" in html and "window.Dibujante" in html and html.index("window.Dibujante") < html.index("</body>"),
         "inyectar_ui mete ojos_ui.js y el dibujante antes de </body>")

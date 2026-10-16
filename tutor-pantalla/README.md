@@ -123,6 +123,7 @@ Todo lo que sabe el asistente lo saben también los tutores del modo curso, de E
 |---|---|---|
 | Dibujos de `DIBUJOS.md` (también `svg` animado) sobre cualquier ventana aprobada | ya estaba | ya estaba |
 | Ver otras ventanas (📷, `<pedir_ventana/>`, vista previa siempre) y marcar con `"tipo": "ventana"` | ya estaba | ya estaba |
+| **Volver a mirar la misma ventana** (`<volver_a_mirar/>`, tarjeta Sí / No / Recortar) | **añadida** (2026-10-15): `ojos_panel` + `ojos_ui.js`, sin tocar las páginas | **añadida** (idéntica) |
 | Adjuntos (clip, Ctrl+V, arrastrar), tarjetas `<preguntas>`, voz 🔊 | ya estaba (la página es la misma) | ya estaba |
 | Investigar en la web (WebSearch y WebFetch, con «Buscando en la web…») | **añadida**: `capacidades.ConWeb` | por integrar (ver abajo) |
 | El prompt «tus capacidades» (qué tiene y cuándo usarlo) | **añadida**: `capacidades.reglas(app, codigo)` | por integrar |
@@ -133,6 +134,16 @@ Todo lo que sabe el asistente lo saben también los tutores del modo curso, de E
 2. La clase del tutor: `class TutorX(capacidades.ConWeb, motor.Tutor)`. Pone `--tools WebSearch,WebFetch` y reutiliza el bucle de lectura del asistente. Si su `_arrancar`/`_turno` no son los de `motor.Tutor` de Excel, basta con llamar a `asistente.Sesion._turno(self, contenido, al_trozo, self.al_aviso)`.
 3. En la API: `tutor.al_aviso = lambda t: self._empujar("window.avisoTrabajo && window.avisoTrabajo(" + json.dumps(t) + ")")` (`ojos_ui.js` ya trae `avisoTrabajo`).
 4. Si el curso tiene proyecto de código: `ojos_panel.Ojos(..., raices=capacidades.raices_curso(curso.d))` (así los dibujos aceptan `"linea"`), `capacidades.contexto_editor(raices)` en el [Estado actual], `capacidades.reglas(app, True)` y, al final de cada respuesta, `capacidades.avisos_linea(self._ojos)` para añadir «Sube/Baja…».
+
+#### Volver a mirar la misma ventana (`<volver_a_mirar/>`)
+
+Si el estudiante ya enseñó una ventana (📷 → vista previa → Enviar) y luego pregunta algo de esa misma ventana, el tutor no le pide que la enseñe otra vez: termina con `<volver_a_mirar/>` (o `<volver_a_mirar ventana="parte del título"/>` si fueron varias). El panel pone en el chat la tarjeta **«¿Vuelvo a mirar «título»?»**:
+- **Sí:** captura esa ventana (la ya aprobada) **sin vista previa**, la adjunta y la respuesta continúa sola (la tarjeta manda «Sí, vuelve a mirar…» con la captura dentro).
+- **No:** no se captura; el tutor contesta sin imagen (o dice que no puede verla).
+- **Recortar:** la vista previa de siempre sobre una captura nueva, con el recorte ya activo; al enviar sale solo ese trozo. Si cancela, la tarjeta queda para elegir otra vez.
+- Solo ventanas aprobadas **en esta sesión del panel** (`Ojos.aprobadas`); si ya se cerró, la tarjeta lo dice y ofrece 📷. Nunca la pantalla entera ni sin el clic. Una vez por respuesta y solo si la pregunta es de esa ventana (regla `REGLAS_VOLVER` en `ojos_panel.py`; ya va dentro de `REGLAS_OJOS`, o sea en `capacidades.reglas()` de todos los tutores, y en el prompt del asistente).
+- **Cómo está hecho (para no copiarlo):** `separar_pedido` quita la etiqueta y `separar_preguntas` (que los 4 paneles ya llaman) la convierte en una «pregunta» con `"volver": {token, titulo, hwnd, existe}`; `Preguntas.tarjeta` (preguntas_ui.js) la dibuja con `Ojos.tarjetaVolver` (ojos_ui.js). La captura viaja en el mismo mensaje porque ojos_ui.js envuelve `api.preguntar` de la página. La API es `OjosApi.ojos_volver(token, "si" | "recortar")` → `Ojos.volver`. Los paneles de Excel, Dia y curso comparten página y el asistente la suya: ninguno necesitó cambios. `ojos_panel.py --probar` y `capacidades.py` lo prueban sin ventanas.
+- Falla conocida menor: mientras el texto del tutor va llegando a trozos, la etiqueta puede verse un instante antes de que la limpie la respuesta final.
 
 #### Señalar una línea del editor (`"linea"`)
 
