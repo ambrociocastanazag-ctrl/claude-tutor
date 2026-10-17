@@ -171,6 +171,12 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 
 - **Artefactos HTML** para lo visual e interactivo: explicaciones con diagramas, simuladores con deslizadores, cuestionarios de repaso.
 - **Tema (claro u oscuro):** el que diga su preferencia en `contexto.md` (puede ser uno para los artefactos y otro para los paneles). Los paneles del tutor (el de Excel y el de Dia, si están instalados) lo leen los dos de `panel-excel/preferencias.json`.
+- **Todo artefacto lleva el botón ☀/🌙** (claro ↔ oscuro): sin elección sigue el tema del sistema, y lo que la persona elige se recuerda en ese artefacto.
+  - Se mete con `herramientas/boton_tema.py`: el build llama a `poner_boton_tema(html)` justo antes de escribir la página, o, si no hay build, `python herramientas/boton_tema.py <archivo.html>`. Pon `<span data-boton-tema></span>` donde deba ir; sin eso, flota arriba a la derecha.
+  - El CSS tiene los dos temas (`:root:not([data-theme="light"])` dentro de `prefers-color-scheme: dark`, y `:root[data-theme="dark"]`), y lo que se dibuja en JS (Plotly, SVG, canvas) se redibuja al cambiar `data-theme` (MutationObserver sobre `<html>`).
+  - Antes de publicar: abrirlo en oscuro, pulsar el botón y mirar que todo pase a claro, figuras incluidas.
+- **Textos largos dentro de su cuadro:** rutas, enlaces, nombres de archivo y comandos llevan `overflow-wrap: anywhere` (o `min-width: 0` en su contenedor flex o grid).
+- **Republicar un artefacto que ya existe:** compara antes lo publicado con tu archivo y publica solo tu cambio. Si lo publicado trae algo que tu copia no tiene (datos que guarda la propia página, cambios de otra sesión), parte de la versión publicada. Si otra sesión está trabajando en esa carpeta, no reconstruyas ahí: espera a que termine.
 - **Tutor dentro de las guías completas:** toda guía de un curso o tema completo lleva un tutor integrado (capacidad `sample` del artefacto; carga antes la skill `artifact-capabilities`, si existe en la cuenta) para preguntar mientras estudia. Sabe en qué módulo está y qué tocó por último, y sigue las reglas de "Cómo enseñar": primero la idea y luego la cuenta, señala el paso exacto del error y en ejercicios sin resolver solo da pistas. Las **pruebas rápidas** y los artefactos sueltos no lo llevan.
 - **3D girable** (superficies, sólidos, campos): Plotly dentro del artefacto.
 {{LÍNEA ANATOMY, solo si se instaló (ver 4.8); si no, borra esta línea}}

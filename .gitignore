@@ -39,6 +39,8 @@
 !/herramientas/
 /herramientas/*
 !/herramientas/captura.js
+!/herramientas/boton_tema.js
+!/herramientas/boton_tema.py
 !/herramientas/package.json
 !/herramientas/package-lock.json
 
