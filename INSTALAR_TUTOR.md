@@ -165,11 +165,12 @@ Para todo tema donde lo que enseña es **ver la cosa real** (animales, plantas, 
 - **Fuentes de fotos:**
   - **Wikimedia Commons:** `https://commons.wikimedia.org/w/api.php?action=query&list=search&srnamespace=6&srsearch=…` para buscar, y `prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1100` para la miniatura, el autor y la licencia.
   - **iNaturalist** para seres vivos: `https://api.inaturalist.org/v1/observations?taxon_name=…&place_id=…&photo_license=cc-by,cc-by-sa,cc0,cc-by-nc&quality_grade=research`. El `place_id` se busca con `/v1/places/autocomplete?q=…` y se verifica (ojo: hay lugares con el mismo nombre en otros países).
+- **Script:** `python herramientas/buscar_fotos.py "<especie o cosa>" --lugar <país>` busca en las dos fuentes (solo licencias libres) y `--bajar <id> <fotos/archivo.jpg>` baja la miniatura e imprime el crédito listo para el pie.
 - **Solo licencias libres** (CC0, CC BY, CC BY-SA, CC BY-NC, dominio público). El pie lleva el crédito: autor, lugar si se sabe y la licencia enlazada a la página de la foto.
 - **Prefiere fotos de su región** (la de la persona) cuando el tema lo permita.
 - **Mira cada foto con Read antes de usarla:** que muestre lo que dice el pie (la especie, la pieza, la conducta). Nada de heridas gráficas ni animales maltratados o muertos salvo que haga falta.
 - Baja la miniatura de ~1100 px, no el original, y guárdala en `fotos/` de la carpeta del tema. Una guía lleva unas 5 a 9 fotos por módulo.
-- **Videos:** canales serios (BBC Earth, National Geographic, Smithsonian, PBS, universidades, museos, revistas científicas). Cada uno se comprueba con `https://www.youtube.com/oembed?url=<url>&format=json`: si no devuelve JSON con título y canal, no existe o no se puede ver, y no se usa.
+- **Videos:** canales serios (BBC Earth, National Geographic, Smithsonian, PBS, universidades, museos, revistas científicas). Cada uno se comprueba con `https://www.youtube.com/oembed?url=<url>&format=json`: si no devuelve JSON con título y canal, no existe o no se puede ver, y no se usa. Script: `python herramientas/buscar_videos.py "búsqueda"` (solo lista los que existen).
 - **Cada dato** junto a la foto (especie, lugar, conducta) sale de una fuente confiable y se confirma; si no se confirma, no se pone.
 
 {{SECCIÓN MATLAB, solo si la tiene; ver 4.3}}

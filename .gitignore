@@ -41,6 +41,8 @@
 !/herramientas/captura.js
 !/herramientas/boton_tema.js
 !/herramientas/boton_tema.py
+!/herramientas/buscar_fotos.py
+!/herramientas/buscar_videos.py
 !/herramientas/package.json
 !/herramientas/package-lock.json
 
