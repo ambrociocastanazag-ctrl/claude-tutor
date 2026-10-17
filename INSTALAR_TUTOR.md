@@ -144,6 +144,7 @@ Antes de responder algo visual, práctico o de una app, revisa esta tabla y **of
 | hay que diagnosticar o comprobar que entendió | preguntas de opción múltiple con `AskUserQuestion` (con «no sé») |
 | pregunta algo técnico que no es de estudio (un error, la PC, un programa) | respóndele directo; si hace falta verlo, ofrécele el asistente o el puente |
 | pide algo para lo que no hay herramienta | búscala y propón opciones (sección siguiente) |
+| estudia algo que hay que ver real (animales, plantas, cuerpo, aparatos, lugares) | fotos reales con licencia libre y videos de fuentes serias («Fotos y videos reales») |
 | necesita una figura realista de un aparato | skill anatomy (si se instaló), **solo si la pide** |
 
 Si una app tiene su herramienta propia, esa gana (Excel → su panel, no el asistente genérico). Para una duda suelta, el asistente; para aprender la app desde cero, un curso. **Proponer y esperar su visto bueno es para cambios** (instalar, crear, modificar), no para responder preguntas: esas se contestan directo.
@@ -156,6 +157,20 @@ Si para un curso o proyecto no tienes lo necesario (simulador, librería, MCP, p
 - Dale la recomendada y las alternativas, y **espera su visto bueno antes de instalar** algo.
 - Prueba que funciona antes de usarla con la persona, y anota la herramienta elegida (y las descartadas con su motivo) en `contexto.md` y en el `README.md` de la carpeta.
 - Prefiere lo gratis, lo que corre en su PC o en el navegador y lo que la persona pueda manipular.
+
+### Fotos y videos reales
+
+Para todo tema donde lo que enseña es **ver la cosa real** (animales, plantas, cuerpo humano, geología, aparatos, lugares, historia), lo visual son **fotos reales con licencia libre y videos de fuentes serias**, no figuras simuladas ni MATLAB (MATLAB es para cálculo y física). Los interactivos complementan, no reemplazan las fotos.
+
+- **Fuentes de fotos:**
+  - **Wikimedia Commons:** `https://commons.wikimedia.org/w/api.php?action=query&list=search&srnamespace=6&srsearch=…` para buscar, y `prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1100` para la miniatura, el autor y la licencia.
+  - **iNaturalist** para seres vivos: `https://api.inaturalist.org/v1/observations?taxon_name=…&place_id=…&photo_license=cc-by,cc-by-sa,cc0,cc-by-nc&quality_grade=research`. El `place_id` se busca con `/v1/places/autocomplete?q=…` y se verifica (ojo: hay lugares con el mismo nombre en otros países).
+- **Solo licencias libres** (CC0, CC BY, CC BY-SA, CC BY-NC, dominio público). El pie lleva el crédito: autor, lugar si se sabe y la licencia enlazada a la página de la foto.
+- **Prefiere fotos de su región** (la de la persona) cuando el tema lo permita.
+- **Mira cada foto con Read antes de usarla:** que muestre lo que dice el pie (la especie, la pieza, la conducta). Nada de heridas gráficas ni animales maltratados o muertos salvo que haga falta.
+- Baja la miniatura de ~1100 px, no el original, y guárdala en `fotos/` de la carpeta del tema. Una guía lleva unas 5 a 9 fotos por módulo.
+- **Videos:** canales serios (BBC Earth, National Geographic, Smithsonian, PBS, universidades, museos, revistas científicas). Cada uno se comprueba con `https://www.youtube.com/oembed?url=<url>&format=json`: si no devuelve JSON con título y canal, no existe o no se puede ver, y no se usa.
+- **Cada dato** junto a la foto (especie, lugar, conducta) sale de una fuente confiable y se confirma; si no se confirma, no se pone.
 
 {{SECCIÓN MATLAB, solo si la tiene; ver 4.3}}
 
