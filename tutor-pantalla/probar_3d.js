@@ -90,7 +90,32 @@ bien(!F3.es3d('# esfera(A,1) en un comentario\nA=(1,1)'), 'un comentario no cuen
 });
 bien(F3.aGuion(casos.parametrica) === null && F3.aGuion(casos.malla) === null, 'lo que no tiene comando en el guion → null');
 
-// ---------- 7. girar: tamaño fijo y rápido ----------
+// ---------- 7. anotaciones que se apagan, relleno global y marcas de ángulos y lados ----------
+{
+  const tri = 'A=(0,0,0)\nB=(4,0,0)\nC=(0,3,0)\nt=triangulo(A,B,C, angulos=si)\nmarcaigual(AB, 2)\nmarcaigual(A, C, 1)\nmarcaangulo(B, C, A, 2)\nangulorecto(B, A, C)\nd=distancia(B,C)';
+  const g = F3.guion(tri);
+  bien(sano(g) && !g.errores.length, 'triángulo con ángulos y marcas: ' + JSON.stringify(g.errores));
+  bien(/>90°</.test(g.svg) === false && />36\.87°</.test(g.svg) && />53\.13°</.test(g.svg), 'ángulos del triángulo 3-4-5 (el recto va con cuadradito)');
+  const sin = F3.figura(g.spec, {anotaciones: {ejes: false, numeros: false, nombres: false, medidas: false}});
+  bien(sano(sin) && !/<text/.test(sin.svg), 'sin anotaciones no queda ningún texto');
+  const soloNum = F3.figura(g.spec, {anotaciones: {nombres: false, medidas: false}});
+  bien(/>x</.test(soloNum.svg) && !/>A</.test(soloNum.svg) && !/°</.test(soloNum.svg), 'apagar nombres y medidas deja los ejes');
+  bien(F3.figura(g.spec, {anotaciones: {ejes: false}}).w === 480, 'sin ejes también encuadra');
+  const recto = F3.guion('A=(0,0,0)\nB=(1,0,0)\nC=(1,1,0)\nangulorecto(A, B, C)\nangulorecto(A, C, B)');
+  bien(recto.errores.length === 1 && recto.errores[0].linea === 5 && /no es recto/.test(recto.errores[0].mensaje), 'angulorecto de un ángulo que no es recto da error en su línea');
+  const transp = {objetos: [{tipo: 'cubo', en: [0, 0, 0], lado: 2, opacidad: 0.4}], ejes: false};
+  bien((F3.figura(transp, {vista: [30, 22], relleno: 'opaco'}).svg.match(/<path d="M[^"]+Z"/g) || []).length === 3, 'relleno opaco: el cubo transparente pasa a opaco (3 caras)');
+  bien(/fill-opacity="0\.35"/.test(F3.figura({objetos: [{tipo: 'esfera'}]}, {relleno: 'transparente'}).svg), 'relleno transparente');
+  bien(F3.figura({objetos: [{tipo: 'esfera'}], nombres: false, relleno: 'opaco'}).svg.length > 0, 'nombres y relleno también en la spec');
+  const dentro = F3.figura({objetos: [{tipo: 'cubo', en: [0, 0, 0], lado: 2}, {tipo: 'esfera', centro: [1, 1, 1], radio: 0.6, color: 'rojo'}], ejes: false}, {vista: [30, 22]});
+  bien(dentro.svg.indexOf('<circle') < dentro.svg.lastIndexOf('Z"'), 'una esfera dentro de un cubo opaco se pinta antes que él (el cubo la tapa)');
+  const ida = F3.aGuion(g.spec), vuelta = F3.aSpec(ida);
+  bien(!vuelta.errores.length && vuelta.spec.objetos.length === g.spec.objetos.length, 'aGuion con marcas y angulos=si se vuelve a leer: ' + ida);
+  const vs = F3.vistasGiro([30, 20], 'vaiven', 48), vv = F3.vistasGiro([30, 20], 'vuelta', 48);
+  bien(vs.length === 48 && Math.max(...vs.map(v => v[0])) <= 60.01 && Math.min(...vs.map(v => v[0])) >= -0.01 && vv[47][0] < 390 && vv[1][0] - vv[0][0] === 7.5, 'vistas del vaivén y de la vuelta');
+}
+
+// ---------- 8. girar: tamaño fijo y rápido ----------
 {
   const e = F3.escena(casos.solidos), a = e.dibujar([10, 10], {encuadre: 'esfera'}), b = e.dibujar([200, -40], {encuadre: 'esfera'});
   bien(a.w === b.w && a.h === b.h, 'con encuadre esfera el tamaño no cambia al girar');

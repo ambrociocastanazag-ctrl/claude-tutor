@@ -155,6 +155,13 @@ class Api:
         try: copiar(texto=texto); return {"ok": True}
         except Exception as e: return {"ok": False, "error": str(e)}
 
+    def copiar_gif(self, fotos, ms, nombre="figura 3d"):
+        """El GIF de una figura 3D: los fotogramas PNG de la página → .gif en Descargas y copiado como archivo (tutor-pantalla/gif3d.py)."""
+        try:
+            import gif3d
+            return gif3d.guardar_y_copiar(fotos, ms, nombre)
+        except Exception as e: return {"ok": False, "error": f"No pude hacer el GIF: {e}"}
+
     def archivo_svg(self, svg, nombre="figura"):
         """El .svg en una carpeta temporal (para arrastrarlo o abrirlo); devuelve la ruta."""
         TEMP.mkdir(exist_ok=True)

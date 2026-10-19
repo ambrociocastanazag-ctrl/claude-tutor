@@ -461,7 +461,7 @@ Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edg
   4. Vuelve a lanzar `esperar`. Si dice «panel cerrado», se acabó.
   - `puente.py pedir-captura "…"` solo le abre la vista previa: la persona decide si la manda.
 - **Ilustraciones en el chat** (todos los tutores): `$…$`/`$$…$$`, bloques ` ```svg `, ` ```grafica {json} ` y ` ```geometria ` (guion), dibujados exactos por `tutor-pantalla/motor_figuras.js`; cada figura trae «Editar en la tarjeta».
-- **Figuras 3D** (todos los tutores): bloque ` ```3d {json} ` que se gira arrastrando (superficies, sólidos de revolución con disco o capa, curvas, vectores, planos, sólidos, cargas y campos), SVG vectorial hecho por `tutor-pantalla/motor_3d.js`. «Ponlo en la app» la pone encima del programa girando sola (forma de dibujo `"3d"`). Formato en `tutor-pantalla/CONTRATO-3D.md`; prueba: `node tutor-pantalla/probar_3d.js`.
+- **Figuras 3D** (todos los tutores): bloque ` ```3d {json} ` que se gira arrastrando (superficies, sólidos de revolución con disco o capa, curvas, vectores, planos, sólidos, cargas y campos), SVG vectorial hecho por `tutor-pantalla/motor_3d.js`. «Ponlo en la app» la pone encima del programa girando sola (forma de dibujo `"3d"`) y «GIF» la guarda girando en Descargas y la copia (`tutor-pantalla/gif3d.py`, con Pillow). Marca ángulos y lados iguales, y las anotaciones y la transparencia son opcionales. Formato en `tutor-pantalla/CONTRATO-3D.md`; pruebas: `node tutor-pantalla/probar_3d.js` y `python tutor-pantalla/gif3d.py --probar`.
 ````
 
 ### 4.10 Tarjeta SVG (opcional, necesita la 4.9)
@@ -469,7 +469,7 @@ Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edg
 Una ventanita pegada al borde derecho (**Ctrl+Alt+L** la abre y la pliega) para sacar figuras en SVG y copiarlas a cualquier app. Tiene cuatro pestañas:
 - **Escribir:** ecuaciones con MathLive, guardado en `tarjeta-svg/vendor/`, sin internet.
 - **Gráfica.**
-- **Geometría:** un guion por líneas, `A=(0,0)`, `t=triangulo(A,B,C)`, `h=altura(A,BC)`… Si el guion tiene un punto `(x,y,z)` o un comando 3D (`esfera`, `cubo`, `cilindro`, `revolucion`, `superficie`…), la figura pasa sola a 3D y se gira con el ratón.
+- **Geometría:** un guion por líneas, `A=(0,0)`, `t=triangulo(A,B,C)`, `h=altura(A,BC)`… Si el guion tiene un punto `(x,y,z)` o un comando 3D (`esfera`, `cubo`, `cilindro`, `revolucion`, `superficie`…), la figura pasa sola a 3D y se gira con el ratón; ahí aparecen los botones Ejes · Números · Nombres · Medidas, el relleno (auto, opaco o transparente) y «GIF».
 - **Asistente:** dibuja exacto lo que se le pide.
 
 «Copiar SVG» pone en el portapapeles el archivo `.svg`, el SVG y un PNG. Lo que la tarjeta no hace (construcciones complejas) puede abrirse en otra app de la persona si la pone en `tarjeta-svg/config.json` como `{"mathstudio": "<carpeta>"}`; si no, el botón lo avisa.

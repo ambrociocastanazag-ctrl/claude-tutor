@@ -29,6 +29,10 @@ vista(30, 20)
 
 Los comandos están en `tutor-pantalla/CONTRATO-3D.md` §3.
 
+**Con figura 3D, la tarjeta añade (2026-10-19, segunda tanda):**
+- **Chips Ejes · Números · Nombres · Medidas** y **Relleno** (Auto = la opacidad de cada objeto → Opaco → Transparente), en una fila bajo la cabecera de la figura. Se recuerdan en `estado.json` y afectan a lo que se ve y a Copiar SVG, PNG y arrastrar (la vista girada no se pierde). Apagar un chip manda sobre el guion; encendido, manda el guion (`ejes(no)` sigue apagando).
+- **Botón «GIF»** junto a «Copiar PNG»: menú con **Vaivén** o **Vuelta entera**. Usa el tamaño S/M/L, el fondo (Sin fondo → GIF con transparencia de 1 bit; Blanco → blanco), las anotaciones y el relleno elegidos, estilo claro y la vista actual. Guarda en Descargas y copia el `.gif` como archivo. En 2D queda apagado («El GIF es para figuras 3D») y los chips no aparecen.
+
 **Cómo se abre:**
 - desde **«Mis clases»** (pie del menú, «Tarjeta SVG»);
 - con el botón **«Tarjeta»** de los paneles (asistente, Excel, Dia, curso);
@@ -43,9 +47,9 @@ Es un solo ejemplar: si ya está abierta, la trae al frente.
 
 | Archivo | Qué es |
 |---|---|
-| `tarjeta.py` | La ventana (pywebview: plegada o desplegada, siempre encima, Ctrl+Alt+L). Contiene la API de la página (copiar, MathStudio, estado, asistente) y el servidor local `127.0.0.1:4748`. Ese servidor da un solo ejemplar, recibe órdenes de fuera y sirve la página y los estáticos de `tarjeta-svg/` y `tutor-pantalla/`. `--probar`. |
+| `tarjeta.py` | La ventana (pywebview: plegada o desplegada, siempre encima, Ctrl+Alt+L). Contiene la API de la página (copiar, `copiar_gif`, MathStudio, estado, asistente) y el servidor local `127.0.0.1:4748`. Ese servidor da un solo ejemplar, recibe órdenes de fuera y sirve la página y los estáticos de `tarjeta-svg/` y `tutor-pantalla/`. `--probar`. |
 | `abrir_tarjeta.py` | La abre o la trae al frente, y con `--figura '<json>'` le carga una figura. Lo usan «Mis clases» y los paneles. |
-| `tarjeta.html` | La ventana con el diseño de Claude Design: pestañas, plegada, figura central con su cabecera (arrastrar, medidas, fondo, S/M/L, MathStudio), copiar, recordar lo escrito. Carga `motor_3d.js` y deja a una pestaña llevar el lienzo girable (`vivo`). |
+| `tarjeta.html` | La ventana con el diseño de Claude Design: pestañas, plegada, figura central con su cabecera (arrastrar, medidas, fondo, S/M/L, MathStudio), la fila de chips 3D (anotaciones y relleno), copiar, el botón GIF con su menú, recordar lo escrito. Carga `motor_3d.js` y deja a una pestaña llevar el lienzo girable (`vivo`). |
 | `pestana_escribir.js` · `atajos.js` | Escribir: MathLive con los atajos de MathStudio y la ecuación con MathJax, con la misma holgura del viewBox que MathStudio. |
 | `pestana_grafica.js` · `pestana_geometria.js` | Gráfica y Geometría, sobre `tutor-pantalla/motor_figuras.js`; Geometría también hace 3D girable con `tutor-pantalla/motor_3d.js` (resaltado de `color=`, `eje=`… incluido). |
 | `asistente_tarjeta.py` · `pestana_asistente.js` | El asistente (`claude -p`, solo WebSearch y WebFetch): responde con bloques que la tarjeta dibuja exactos. `--probar`, `--vivo "pedido"`. |
@@ -62,6 +66,7 @@ Es un solo ejemplar: si ya está abierta, la trae al frente.
   - `node tutor-pantalla/probar_figuras.js` y `node tutor-pantalla/probar_3d.js`;
   - 3D en el navegador sin tocar la tarjeta abierta: sirve la raíz de Cursos con `python -m http.server 4799 --bind 127.0.0.1` y abre `http://127.0.0.1:4799/tarjeta-svg/tarjeta.html` con puppeteer simulando `window.pywebview.api` (`tema`, `leer_estado`, `guardar_estado`, `copiar_svg`, `copiar_png`…); `Tarjeta._plegada(false)` la despliega y `Tarjeta.ir('geometria', {tipo: 'geometria', guion})` carga un guion;
   - con IA: `python tarjeta-svg/asistente_tarjeta.py --vivo "un cono dentro de un cilindro"`.
+- **Probar el 3D nuevo (chips y GIF):** con la misma página en el navegador y `pywebview.api` simulado, añade `copiar_gif(fotos, ms, nombre)` que guarde los fotogramas; arma el .gif con `gif3d.hacer_gif(fotos, ms, nombre, carpeta=...)` (en una carpeta tuya, no en Descargas). `python tutor-pantalla/gif3d.py --probar` prueba el GIF sin la página.
 - **El diseño:** cuando llegue, se reemplaza `tarjeta.html` y los estilos con prefijo de cada pestaña (`te-`, `tg-`, `tgeo-`, `ta-`) sin tocar la lógica. El estilo de las figuras va en `Figuras.estilo` (`tutor-pantalla/motor_figuras.js`).
 - **Dependencias:**
   - `pywebview` y `pywin32` (el portapapeles);

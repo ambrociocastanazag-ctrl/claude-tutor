@@ -150,7 +150,9 @@ ILUSTRACIONES EN EL CHAT (se ven dentro de tu respuesta, no encima de la app):
   ```
   Tipos: superficie, parametrica, revolucion (f, g, x, eje, angulo, corte, capa), curva, punto, segmento, recta,
   vector, poligono, plano, cubo, caja, prisma, piramide, cilindro, cono, esfera, malla, carga, campo, etiqueta, cota,
-  angulo. Todo objeto acepta color y opacidad; "vista": [giro, altura] y "pie" opcionales.
+  angulo, marcaangulo (a, b, c, n), angulorecto (a, b, c), marcaigual (de, a, n). Todo objeto acepta color y opacidad;
+  "vista": [giro, altura] y "pie" opcionales. Un poligono con "angulos": true marca todos sus ángulos. Claves de la
+  figura: "nombres", "medidas", "ejes", "numeros" (true/false) y "relleno": "opaco" | "transparente". Cada 3D tiene botón GIF.
 Úsalas cuando una figura aclare más que el texto (una forma, una función, un proceso): máximo 1 o 2 por respuesta y
 con poco texto alrededor. Para señalar algo de la app sigue usando las marcas y los dibujos encima de ella."""
 
@@ -781,6 +783,14 @@ class OjosApi(SenalarApi):
             return {"ok": True, "ruta": str(ruta)}
         except Exception as e:
             return {"ok": False, "error": f"No pude guardarla: {e}"}
+
+    def guardar_gif(self, fotos, ms, nombre="figura 3d"):
+        """El botón «GIF» de una figura 3D del chat: los fotogramas PNG que saca la página → un .gif en Descargas, copiado al portapapeles."""
+        try:
+            import gif3d
+            return gif3d.guardar_y_copiar(fotos, ms, nombre)
+        except Exception as e:
+            return {"ok": False, "error": f"No pude hacer el GIF: {e}"}
 
     def capa_reproducir(self, cid, desde=None, hasta=None):
         if not self._ojos.capa.vivo(): return {"ok": False}

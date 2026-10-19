@@ -77,6 +77,16 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
 .tamanos button{width:22px;border:0;background:none;font:700 11.5px var(--f);color:var(--tenue);padding:0}
 .tamanos button+button{border-left:1px solid var(--borde)}
 .tamanos button[aria-pressed="true"]{background:var(--acento-suave);color:var(--acento-texto)}
+/* 3D: anotaciones y relleno (solo se ven con una figura 3D) */
+.fig-notas{display:flex;align-items:center;gap:3px;padding:4px 5px;border-bottom:1px solid var(--borde);flex:none;min-width:0}
+.fig-notas .esp{flex:1;min-width:0}
+.chip{height:22px;padding:0 7px;border:1px solid var(--borde);border-radius:999px;background:none;font:600 11.5px var(--f);color:var(--tenue);white-space:nowrap;display:inline-flex;align-items:center;gap:4px;min-width:0}
+.chip:hover{color:var(--tinta);background:var(--sup-2)}
+.chip[aria-pressed="true"]{background:var(--acento-suave);border-color:var(--acento);color:var(--acento-texto)}
+.chip[aria-pressed="true"]::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--acento);flex:none}
+.chip[aria-pressed="false"]{text-decoration:line-through;text-decoration-color:var(--tenue);opacity:.85}
+.chip.relleno{border-radius:6px;color:var(--tinta)}
+.chip.relleno[data-v="opaco"],.chip.relleno[data-v="transparente"]{background:var(--acento-suave);border-color:var(--acento);color:var(--acento-texto)}
 .lienzo{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:10px;cursor:grab;position:relative}
 .lienzo.transparente{background:repeating-conic-gradient(var(--cuadro) 0 25%,transparent 0 50%) 0 0/14px 14px}
 .lienzo.blanco{background:#fff}
@@ -98,6 +108,11 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
 .btn .atajo{font:500 11.5px var(--mono);opacity:.72}
 .btn.hecho,.btn.principal.hecho{background:var(--ok);border-color:var(--ok);color:var(--sobre-acento)}
 .btn.hecho-2{color:var(--ok);border-color:var(--ok)}
+.gif-menu{position:fixed;right:8px;bottom:52px;z-index:5;display:flex;flex-direction:column;min-width:170px;padding:4px;border:1px solid var(--borde);border-radius:10px;background:var(--sup);box-shadow:0 6px 20px oklch(0 0 0 / .22)}
+.gif-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:6px 10px;border:0;border-radius:6px;background:none;text-align:left;font-weight:700;font-size:13px;min-width:0}
+.gif-menu button small{font-weight:500;font-size:11.5px;color:var(--tenue);overflow-wrap:anywhere}
+.gif-menu button:hover{background:var(--acento-suave);color:var(--acento-texto)}
+.gif-menu button:hover small{color:inherit}
 #aviso{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);max-width:92%;padding:6px 12px;border-radius:999px;background:var(--tinta);color:var(--fondo);font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;text-align:center}
 #aviso.ver{opacity:.94}
 </style>
@@ -128,13 +143,23 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
       </div>
       <button class="mini-btn" id="mathstudio" title="Abrir en MathStudio (para lo complejo)" aria-label="Abrir en MathStudio"><span data-ic="abrirFuera" data-t="14"></span></button>
     </div>
+    <div class="fig-notas" id="notas3d" hidden role="group" aria-label="Anotaciones de la figura 3D">
+      <button class="chip" data-anot="ejes" title="Ejes">Ejes</button><button class="chip" data-anot="numeros" title="Números de los ejes">Números</button><button class="chip" data-anot="nombres" title="Nombres de puntos y etiquetas">Nombres</button><button class="chip" data-anot="medidas" title="Medidas: cotas, ángulos y lados iguales">Medidas</button>
+      <span class="esp"></span>
+      <button class="chip relleno" id="relleno" data-v="auto" title="Relleno de los sólidos"></button>
+    </div>
     <div class="lienzo transparente" id="lienzo" draggable="true" data-arrastra title="Arrastra la figura a otra app o a una carpeta"><div class="lamina" id="lamina"></div></div>
   </div>
   <div class="acciones">
     <button class="btn principal" id="copiarSvg"><span data-ic="copiar" data-t="16" id="icCopiar"></span><span class="lbl">Copiar SVG</span><span class="atajo">Ctrl+C</span></button>
     <button class="btn" id="copiarPng" title="Copiar como imagen PNG"><span class="lbl">Copiar PNG</span></button>
+    <button class="btn" id="gif" title="El GIF es para figuras 3D" aria-haspopup="menu" aria-expanded="false"><span class="lbl">GIF</span></button>
   </div>
  </div>
+</div>
+<div class="gif-menu" id="gifMenu" role="menu" hidden>
+  <button role="menuitem" data-giro="vaiven">Vaivén<small>va y viene unos 30°</small></button>
+  <button role="menuitem" data-giro="vuelta">Vuelta entera<small>360° en bucle</small></button>
 </div>
 <div id="aviso" role="status"></div>
 
@@ -149,7 +174,7 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
   var api = function(){ return window.pywebview && window.pywebview.api; };
   var $ = function(id){ return document.getElementById(id); };
   var PESTANAS = {}, ORDEN = ['escribir', 'grafica', 'geometria', 'asistente'], activa = null, anterior = null;
-  var opc = {tam: 'M', fondo: 'transparente'}, ANCHOS = {S: 320, M: 480, L: 720};
+  var opc = {tam: 'M', fondo: 'transparente', anot: {ejes: true, numeros: true, nombres: true, medidas: true}, relleno: 'auto'}, ANCHOS = {S: 320, M: 480, L: 720};
   var ICONOS = {escribir: 'Σ', grafica: '∿', geometria: '△', asistente: '✦'};       // los glifos de las pestañas (no los del diseño)
   var VACIO = {escribir: 'Escribe una ecuación arriba.', grafica: 'Escribe una función, por ejemplo sqrt(x).', geometria: 'Escribe el guion: un objeto por línea.'};
 
@@ -227,14 +252,14 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
 
   // ---- avisos, figura central, miniatura y botones ----
   var tAviso;
-  function aviso(t){ var a = $('aviso'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); tAviso = setTimeout(function(){ a.classList.remove('ver'); }, 1800); }
+  function aviso(t, fijo){ var a = $('aviso'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); if (!fijo) tAviso = setTimeout(function(){ a.classList.remove('ver'); }, 1800); }
   function medidas(svg){ var m = /width="([\d.]+)[^"]*"\s+height="([\d.]+)/.exec(svg || ''); return m ? Math.round(m[1]) + ' × ' + Math.round(m[2]) : ''; }
   function ajustarEcuacion(){            // una ecuación se enseña a su tamaño, sin pasar de la lámina
     var l = $('lamina'), s = l.querySelector('svg'); if (!s || !l.classList.contains('ecuacion')) return;
     var w = parseFloat(s.getAttribute('width')), h = parseFloat(s.getAttribute('height')), k = Math.min(1, l.clientWidth / w, l.clientHeight / h) || 1;
     s.style.width = Math.round(w * k) + 'px'; s.style.height = Math.round(h * k) + 'px';
   }
-  var vivoActual = null;
+  var vivoActual = null, haciendoGif = false;
   function refrescar(){
     var f = figura(), v = vista(), hay = !!f;
     $('copiarSvg').disabled = $('copiarPng').disabled = $('miniCopiar').disabled = !hay;
@@ -247,6 +272,9 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
       lam.innerHTML = v ? v.svg : '<span class="vacio">' + (VACIO[activa] || '') + '</span>';
     }
     $('medidas').textContent = v ? medidas(v.vivo ? f.svg : v.svg) : '';
+    var es3 = !!(v && v.vivo && PESTANAS[activa] && PESTANAS[activa].fotogramas);
+    $('notas3d').hidden = !es3; if (!es3) cerrarMenuGif();
+    $('gif').disabled = !es3 || haciendoGif; $('gif').title = es3 ? 'GIF de la figura girando' : 'El GIF es para figuras 3D';
     $('mathstudio').disabled = !!(v && v.vivo);
     $('mathstudio').title = v && v.vivo ? 'MathStudio no tiene 3D' : 'Abrir en MathStudio (para lo complejo)';
     $('lienzo').classList.toggle('blanco', blanco); $('lienzo').classList.toggle('transparente', !blanco);
@@ -349,9 +377,32 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
   };
   $('tam').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; opc.tam = b.dataset.v; marcarOpc(); refrescar(); });
   $('fondo').addEventListener('click', function(){ opc.fondo = opc.fondo === 'blanco' ? 'transparente' : 'blanco'; marcarOpc(); refrescar(); });
+  $('notas3d').addEventListener('click', function(e){
+    var b = e.target.closest('[data-anot]'); if (!b) return;
+    opc.anot[b.dataset.anot] = opc.anot[b.dataset.anot] === false; marcarOpc(); refrescar();
+  });
+  $('relleno').addEventListener('click', function(){ opc.relleno = {auto: 'opaco', opaco: 'transparente', transparente: 'auto'}[opc.relleno] || 'auto'; marcarOpc(); refrescar(); });
+  // GIF: menú con vaivén o vuelta entera; los fotogramas los saca la pestaña y Python arma el .gif (tarjeta.py: copiar_gif)
+  function cerrarMenuGif(){ $('gifMenu').hidden = true; $('gif').setAttribute('aria-expanded', 'false'); }
+  $('gif').addEventListener('click', function(e){
+    e.stopPropagation(); if ($('gif').disabled) return;
+    var abrir = $('gifMenu').hidden; $('gifMenu').hidden = !abrir; $('gif').setAttribute('aria-expanded', String(abrir));
+  });
+  document.addEventListener('click', function(e){ if (!e.target.closest('#gifMenu')) cerrarMenuGif(); });
+  $('gifMenu').addEventListener('click', function(e){ var b = e.target.closest('[data-giro]'); if (b){ cerrarMenuGif(); hacerGif(b.dataset.giro); } });
+  function hacerGif(giro){
+    var p = PESTANAS[activa]; if (!p || !p.fotogramas || haciendoGif || !api()) return;
+    haciendoGif = true; $('gif').disabled = true; aviso('Haciendo el GIF…', true);
+    p.fotogramas(giro).then(function(r){ return api().copiar_gif(r.fotos, r.ms, 'figura 3d'); }).then(function(r){
+      aviso(r && r.ok ? 'GIF copiado y guardado en Descargas (' + r.kb + ' KB)' : (r && r.error) || 'No se pudo hacer el GIF');
+    }, function(e){ aviso('No pude hacer el GIF: ' + e.message); }).then(function(){ haciendoGif = false; refrescar(); });
+  }
   function marcarOpc(){
     [].forEach.call($('tam').children, function(b){ b.setAttribute('aria-pressed', String(b.dataset.v === opc.tam)); });
     $('fondoTxt').textContent = opc.fondo === 'blanco' ? 'Blanco' : 'Sin fondo';
+    [].forEach.call($('notas3d').querySelectorAll('[data-anot]'), function(b){ b.setAttribute('aria-pressed', String(opc.anot[b.dataset.anot] !== false)); });
+    var rl = $('relleno'); rl.dataset.v = opc.relleno; rl.textContent = {auto: 'Relleno auto', opaco: 'Opaco', transparente: 'Transparente'}[opc.relleno];
+    rl.title = {auto: 'Relleno: el de cada objeto (automático). Clic: todo opaco', opaco: 'Relleno opaco en todo. Clic: transparente', transparente: 'Relleno transparente en todo. Clic: el de cada objeto'}[opc.relleno];
     $('fondo').title = opc.fondo === 'blanco' ? 'Fondo blanco. Clic: sin fondo' : 'Sin fondo. Clic: fondo blanco';
   }
   // arrastrar: el archivo .svg (a otra app, al escritorio o a una carpeta)
@@ -367,6 +418,7 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
   });
   document.addEventListener('keydown', function(e){
     var plg = document.body.classList.contains('plegada');
+    if (e.key === 'Escape' && !$('gifMenu').hidden){ cerrarMenuGif(); return; }
     if (e.key === 'Escape' && !plg && api()) api().plegar();
     var enCampo = /INPUT|TEXTAREA|MATH-FIELD/.test(document.activeElement && document.activeElement.tagName);
     if (e.ctrlKey && !e.altKey && (e.key === 'c' || e.key === 'C') && !enCampo && !String(getSelection())){ e.preventDefault(); e.shiftKey ? copiarPng() : copiarSvg(); }
@@ -379,7 +431,11 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
       window.Tarjeta.tema = r[0] === 'oscuro' ? 'oscuro' : 'claro';
       document.documentElement.setAttribute('data-theme', window.Tarjeta.tema === 'oscuro' ? 'dark' : 'light');
       estadoGuardado = r[1] || {};
-      if (estadoGuardado.opc){ opc.tam = estadoGuardado.opc.tam || opc.tam; opc.fondo = estadoGuardado.opc.fondo || opc.fondo; }
+      if (estadoGuardado.opc){
+        opc.tam = estadoGuardado.opc.tam || opc.tam; opc.fondo = estadoGuardado.opc.fondo || opc.fondo;
+        var an = estadoGuardado.opc.anot || {}; ['ejes', 'numeros', 'nombres', 'medidas'].forEach(function(k){ opc.anot[k] = an[k] !== false; });
+        if (/^(opaco|transparente)$/.test(estadoGuardado.opc.relleno)) opc.relleno = estadoGuardado.opc.relleno;
+      }
       marcarOpc();
       ['atajos.js', 'pestana_escribir.js', 'pestana_grafica.js', 'pestana_geometria.js', 'pestana_asistente.js'].forEach(function(n){
         var s = document.createElement('script'); s.src = '/tarjeta-svg/' + n; s.async = false; document.body.appendChild(s);

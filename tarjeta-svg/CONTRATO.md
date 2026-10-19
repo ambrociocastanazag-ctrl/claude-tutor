@@ -59,6 +59,7 @@ Tarjeta.tema                                           // 'claro' | 'oscuro'
 - Una pestaña puede devolver en `figura(tema)` (solo con tema, el de enseñarla) un campo `vivo(lienzo)`: la cáscara no escribe el SVG, le da el lienzo y la pestaña dibuja y gira ahí (`Figuras3D.girable`). Debe ser idempotente (la cáscara lo llama en cada `cambio()`). Sin tema, `figura()` es lo que se copia: la vista actual, encuadre justo, estilo claro.
 - Una pestaña con `vivo` puede traer `soltar()`: la cáscara la llama al mostrar otra cosa (quita los eventos de giro).
 - Con `vivo`: el arrastre del lienzo gira (se saca la figura por «Arrastra la figura»), ↗ MathStudio se apaga con el título «MathStudio no tiene 3D» y las medidas son las de lo que se copia.
+- **Anotaciones, relleno y GIF (segunda tanda):** la cáscara tiene `Tarjeta.opciones = {tam, fondo, anot: {ejes, numeros, nombres, medidas} (booleanos, true por defecto), relleno: 'auto'|'opaco'|'transparente'}`, se guarda en `estado.json` con `opc`. Con `vivo` y una pestaña con `fotogramas(giro)` (`'vaiven'|'vuelta'` → `Promise<{fotos, ms, w, h}>`, con tamaño, fondo, anotaciones y relleno de `Tarjeta.opciones`, estilo claro y la vista actual) la cáscara enseña la fila de chips y el botón GIF; sin ellas, los oculta o apaga. La pestaña pasa a `Figuras3D` solo lo que apaga (`anotaciones: {ejes:false…}`) o fuerza (`relleno`) y rehace con `girable.cambiar(...)` si solo cambian esas opciones.
 - Geometría: `estado()` → `{guion, vista}` (`vista` es la que giró la persona, o null); una `vista(az, el)` nueva en el guion manda sobre la girada.
 
 ## 3. Python de la ventana (`tarjeta.py`, la API que llama la página)
@@ -69,6 +70,7 @@ Tarjeta.tema                                           // 'claro' | 'oscuro'
   - el texto;
   - PNG.
 - `copiar_png(b64)`.
+- `copiar_gif(fotos, ms, nombre)` → `{ok, ruta, kb}`: `gif3d.guardar_y_copiar` (`tutor-pantalla/gif3d.py`): GIF en Descargas y copiado como archivo.
 - `abrir_mathstudio(guion?)`: arranca su servidor en el puerto 8000 si no está y abre el navegador.
 - `guardar_estado(obj)` / `leer_estado()`: en `tarjeta-svg/estado.json`, que es suyo y no va al repo.
 - `plegar()` / `desplegar()`.

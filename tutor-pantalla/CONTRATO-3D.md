@@ -29,10 +29,17 @@ Figuras3D.es3d(texto)           // → ¿el guion de Geometría es 3D? (un punto
 Figuras3D.girable(el, spec | {guion}, opts)
   // dibuja dentro de `el` y lo gira arrastrando (doble clic: vuelve a la vista inicial). Usa encuadre 'esfera' (el tamaño
   // no cambia al girar) y el modo rápido mientras arrastras. opts.alGirar(vista, rapido) avisa de cada cambio.
-  // → {vista(), poner([az, el]), svg(opts2) → figura de la vista actual con encuadre 'justo' (para copiar), errores, ultimo(), destruir()}
+  // → {vista(), poner([az, el]), svg(opts2) → figura de la vista actual con encuadre 'justo' (para copiar), errores, ultimo(), destruir(),
+  //    cambiar(opts2) → rehace con otras opciones (anotaciones, relleno, tema…) en la misma vista, opciones()}
+Figuras3D.vistasGiro(vista, 'vaiven' | 'vuelta', n)   // → n vistas de una animación (vaivén ±30° suave; vuelta 360°)
+Figuras3D.fotogramas(spec | {guion} | escena, opts)  // solo navegador → Promise<{fotos: [dataURL PNG], ms, w, h}>
+  // opts: los de la figura (tema, tam, fondo, anotaciones, relleno…) + vista, giro ('vaiven' | 'vuelta'), n (8–72, 48 por defecto).
+  // Tamaño fijo (encuadre 'esfera'). Vaivén: 4 s por ciclo; vuelta: 6 s. Con fondo '' los PNG son transparentes.
 ```
 
-`opts`: los de `Figuras` (`tema: 'claro'|'oscuro'`, `tam: 'S'|'M'|'L'`, `ancho`, `fondo: 'transparente'|'blanco'|'tema'|'#hex'`, `paleta` del panel) y además `vista: [az, el]` en grados, `encuadre: 'justo'|'esfera'`, `rapido`.
+`opts`: los de `Figuras` (`tema: 'claro'|'oscuro'`, `tam: 'S'|'M'|'L'`, `ancho`, `fondo: 'transparente'|'blanco'|'tema'|'#hex'`, `paleta` del panel) y además `vista: [az, el]` en grados, `encuadre: 'justo'|'esfera'`, `rapido`,
+`anotaciones: {ejes, numeros, nombres, medidas}` (false apaga; manda sobre la spec; se aplican al dibujar) y `relleno: 'opaco'|'transparente'` (manda sobre la `opacidad` de cada objeto; sin él, cada objeto la suya).
+- **ejes:** ejes, flechas y rótulos x, y, z (sin ejes, la figura se encuadra sin ellos). **numeros:** los números de los ejes. **nombres:** nombres de puntos y vectores y las `etiqueta`. **medidas:** cotas y `distancia`, ángulos (arcos, valores, cuadradito) y marcas de lados iguales.
 
 **Cómo dibuja:** proyección ortográfica y pintor (caras de atrás hacia adelante). Cada sólido convexo opaco tapa: sus aristas ocultas y lo que pasa detrás de él (un eje, una recta) salen **a trazos**; los puntos tapados salen **huecos**. Un polígono dentro de un plano se pinta con el plano sin pelearse.
 
@@ -46,6 +53,7 @@ Figuras3D.girable(el, spec | {guion}, opts)
 
 - `vista`: [giro, altura] en grados. Por defecto [30, 22] (x hacia ti, y a la derecha, z arriba); con una revolución, [-70, 18] (eje x horizontal).
 - `proporcion`: `auto` estira los ejes solo si hay una superficie z = f(x, y) muy alta o muy plana; `igual` o `cubo` a mano.
+- `ejes`, `numeros`, `nombres`, `medidas` (true por defecto) y `relleno` (`"opaco"` | `"transparente"`): lo mismo que las opciones de arriba, escrito en la figura.
 - `x`, `y`, `z` (opcionales): la caja de la escena (los planos, rectas y campos se recortan a ella).
 - **Atajos:** `{"superficie": "x^2-y^2", "x": [-2, 2], "y": [-2, 2]}` y `{"revolucion": "sqrt(x)", "x": [0, 4], "angulo": 300}`.
 - Todo objeto acepta `color` (azul, rojo, verde, morado, naranja, turquesa, amarillo, tinta, acento o #hex), `opacidad` (0.05–1) y `nombre`. Los números pueden ser expresiones (`"2*pi"`, `"sqrt(2)"`).
@@ -74,7 +82,12 @@ Figuras3D.girable(el, spec | {guion}, opts)
 | `campo` | `E: ["ex", "ey", "ez"]` (en x, y, z) o nada (lo calcula de las cargas; si están en un plano, lo dibuja en ese plano), `n` |
 | `etiqueta` | `en`, `texto` |
 | `cota` | `de`, `a`, `texto` (por defecto la longitud) |
-| `angulo` | `a`, `b` (vértice), `c` |
+| `angulo` | `a`, `b` (vértice), `c`: arco y valor en grados (si es recto, el cuadradito) |
+| `marcaangulo` | `a`, `b`, `c`, `n` (1–3 arcos, para ángulos iguales; sin número) |
+| `angulorecto` | `a`, `b`, `c` (el cuadradito; error si no mide 90°) |
+| `marcaigual` | `de`, `a`, `n` (1–3 rayitas: lados iguales) |
+
+`poligono` (y `triangulo`) acepta además `"angulos": true`: marca todos sus ángulos con su valor.
 
 ## 3. El guion 3D (pestaña Geometría de la tarjeta)
 
@@ -93,7 +106,9 @@ C = curva(cos(t), sin(t), t/4, 0, 4pi)
 R = revolucion(sqrt(x), 0, 4) · revolucion(x, x^2, 0, 1, corte=0.5) · revolucion(4 - x^2, 0, 2, eje=y, capa=1)
 q = carga(A, 1)          E = campo()
 d = distancia(A, B)      ang = angulo(A, B, C)
-etiqueta(A, "texto")     vista(30, 20)     ejes(no)     numeros(no)     proporcion(igual | cubo)
+t = triangulo(A, B, C, angulos=si)       marcaangulo(A, B, C, 2)       angulorecto(A, B, C)       marcaigual(AB, 2) · marcaigual(A, B, 1)
+etiqueta(A, "texto")     vista(30, 20)     ejes(no)     numeros(no)     nombres(no)     medidas(no)     relleno(opaco | transparente)
+proporcion(igual | cubo)
 ```
 
 `Figuras3D.es3d(guion)` decide si la figura es 3D: basta un punto con tres coordenadas o un comando que solo existe en 3D. Un comando de geometría plana en un guion 3D (circunferencia, arco…) da su error en su línea.
@@ -125,7 +140,13 @@ etiqueta(A, "texto")     vista(30, 20)     ejes(no)     numeros(no)     proporci
 - `ilustracion3d_en_app(spec_json, vista)` en `ojos_panel.py`: igual que `ilustracion_en_app`, pero con la forma `"3d"`.
 - `REGLAS_DIBUJOS` y `DIBUJOS.md`: la forma nueva, corta.
 
-## 7. Cómo se prueba (cada uno lo suyo, antes de entregar)
+## 7. GIF (2026-10-19, segunda tanda)
+
+- La página saca los fotogramas con `Figuras3D.fotogramas(…)` (con las mismas opciones que se ven: tamaño S/M/L, fondo, anotaciones, relleno, tema claro para copiar) y se los pasa a Python.
+- `tutor-pantalla/gif3d.py` (hecho): `guardar_y_copiar(fotos, ms, nombre)` → `{ok, ruta, kb}`: una paleta común con tramado, bucle infinito, guardado en **Descargas** y copiado como archivo (CF_HDROP: al pegar, la app recibe el `.gif`). Con fondo transparente, transparencia de 1 bit. `python tutor-pantalla/gif3d.py --probar`.
+- **Botón «GIF»** con dos opciones, **vaivén** o **vuelta entera** (un menú pequeño o un botón partido), en la Tarjeta (junto a «Copiar PNG») y en las figuras 3D del chat. Mientras se arma: «Haciendo el GIF…»; al terminar: «GIF copiado y guardado en Descargas (N KB)».
+
+## 8. Cómo se prueba (cada uno lo suyo, antes de entregar)
 
 - `node tutor-pantalla/probar_3d.js` y `node tutor-pantalla/probar_figuras.js` siguen en «todo bien».
 - A: `node tutor-pantalla/probar_ilustraciones.js` + capturas del chat con ` ```3d ` en claro y oscuro, y una de después de arrastrar (puppeteer: el ratón arrastra y la vista cambia).

@@ -46,8 +46,8 @@
   var area, canal, resalte, avisos, lista, nota, temporizador = null, errActuales = [];
   // 3D: la figura girable (gir) vive en el lienzo de la cáscara; la vista que giró la persona (null: la de la spec) sobrevive a reescribir el guion
   var gir = null, girClave = '', es3 = false, hay3 = false, spec3 = null, externa = null, vistaUsuario = null, vistaGuion = null;
-  var copiaEsc = null, copiaClave = '', tNotif = null;
-  var OPC3D = /^(color|opacidad|eje|angulo|corte|capa|malla|n|ecuador|flecha)$/, PAL3D = /^(no|igual|cubo)$/;
+  var copiaEsc = null, copiaClave = '', tNotif = null, girExtra = '';
+  var OPC3D = /^(color|opacidad|eje|angulo|angulos|corte|capa|malla|n|ecuador|flecha)$/, PAL3D = /^(no|igual|cubo|opaco|transparente)$/;
 
   function F() { return window.Figuras; }
   function F3() { return window.Figuras3D; }
@@ -65,7 +65,7 @@
       if (!par) {                                       // 3D: «color=azul», «eje=y»… dentro del paréntesis, y «no», «igual», «cubo» de ejes(no) / proporcion(igual)
         var antes = todo.slice(0, pos), dentro = (antes.match(/\(/g) || []).length > (antes.match(/\)/g) || []).length;
         if (dentro && OPC3D.test(id) && /^\s*=/.test(todo.slice(pos + m.length))) return '<span class="k-opc">' + esc(id) + '</span>';
-        if (dentro && PAL3D.test(id) && /(ejes|numeros|proporcion)\s*\([^)]*$/i.test(antes)) return '<span class="k-opc">' + esc(id) + '</span>';
+        if (dentro && PAL3D.test(id) && /(ejes|numeros|nombres|medidas|relleno|proporcion)\s*\([^)]*$/i.test(antes)) return '<span class="k-opc">' + esc(id) + '</span>';
       }
       return (par ? '<span class="k-cmd">' + esc(id) + '</span>' + esc(par) : '<span class="k-pt">' + esc(id) + '</span>');
     });
@@ -163,32 +163,55 @@
   function igual(a, b) { return !!a && !!b && Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6; }
   function clave3(extra) { try { return JSON.stringify(spec3) + '|' + extra; } catch (e) { return String(Math.random()); } }
 
+  // anotaciones y relleno que eligió la persona (Tarjeta.opciones): solo lo que apaga o fuerza; lo demás lo decide la spec
+  function extra() {
+    var o = (window.Tarjeta && window.Tarjeta.opciones) || {}, an = o.anot || {}, a = {}, r = {};
+    ['ejes', 'numeros', 'nombres', 'medidas'].forEach(function (k) { if (an[k] === false) a[k] = false; });
+    if (Object.keys(a).length) r.anotaciones = a;
+    if (o.relleno === 'opaco' || o.relleno === 'transparente') r.relleno = o.relleno;
+    return r;
+  }
+  function conExtra(base) { var e = extra(); for (var k in e) base[k] = e[k]; return base; }
+
   // la escena de lo que se copia: siempre en estilo claro, con el tamaño S/M/L; se rearma solo si cambia la spec o el tamaño
   function copia() {
-    var tam = (window.Tarjeta && window.Tarjeta.opciones && window.Tarjeta.opciones.tam) || 'M', k = clave3(tam);
+    var tam = (window.Tarjeta && window.Tarjeta.opciones && window.Tarjeta.opciones.tam) || 'M', k = clave3(tam + JSON.stringify(extra()));
     if (copiaEsc && copiaClave === k) return copiaEsc;
-    try { copiaEsc = F3().escena(spec3, { tema: (window.Tarjeta && window.Tarjeta.temaFigura) || 'claro', tam: tam, fondo: 'transparente' }); } catch (e) { copiaEsc = null; }
+    try { copiaEsc = F3().escena(spec3, conExtra({ tema: (window.Tarjeta && window.Tarjeta.temaFigura) || 'claro', tam: tam, fondo: 'transparente' })); } catch (e) { copiaEsc = null; }
     copiaClave = k; return copiaEsc;
   }
   function vistaActual() { return gir ? gir.vista() : (vistaUsuario || (copia() && copia().vista) || null); }
 
   // la cáscara pide el lienzo: aquí vive la figura girable (se rehace solo si cambia la spec o el tema)
   function vivo(caja, t) {
-    var k = clave3(t);
-    if (gir && girClave === k && caja.firstChild) return;
+    var k = clave3(t), ex = JSON.stringify(extra());
+    if (gir && girClave === k && caja.firstChild) {        // mismas figura y tema: si solo cambian anotaciones o relleno, se rehace en la misma vista
+      if (girExtra !== ex) { girExtra = ex; var o = { anotaciones: undefined, relleno: undefined }; gir.cambiar(conExtra(o)); }
+      return;
+    }
     soltar();
     var enConstruccion = true, base = copia() ? copia().vista : null;
-    gir = F3().girable(caja, spec3, {
+    girExtra = ex;
+    gir = F3().girable(caja, spec3, conExtra({
       tema: t, tam: 'M', fondo: 'transparente', vista: vistaUsuario || undefined,
       alGirar: function (v, rapido) {
         if (enConstruccion) return;
         vistaUsuario = igual(v, base) ? null : v;        // la vista inicial no cuenta como «la giró»
         if (!rapido) { clearTimeout(tNotif); tNotif = setTimeout(cambio, 120); }
       }
-    });
+    }));
     enConstruccion = false; girClave = k;
   }
   function soltar() { if (gir) { try { gir.destruir(); } catch (e) {} } gir = null; girClave = ''; }
+
+  // el GIF: los fotogramas de la vista actual, con el tamaño, el fondo, las anotaciones y el relleno elegidos y en estilo claro
+  // (giro: 'vaiven' | 'vuelta') → Promise<{fotos, ms, w, h}>; la cáscara los pasa a Python (tarjeta.py: copiar_gif)
+  function fotogramas(giro) {
+    var o = (window.Tarjeta && window.Tarjeta.opciones) || {}, e = copia();
+    if (!es3 || !hay3 || !e) return Promise.reject(new Error('El GIF es para figuras 3D'));
+    return F3().fotogramas(e, conExtra({ tema: (window.Tarjeta && window.Tarjeta.temaFigura) || 'claro', tam: o.tam || 'M',
+                                         fondo: o.fondo === 'blanco' ? 'blanco' : 'transparente', vista: vistaActual(), giro: giro, n: 48 }));
+  }
 
   var SVG_VACIO = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"/>';
   function figura(t) {
@@ -229,5 +252,5 @@
     }
   }
 
-  window.Tarjeta.registrar('geometria', { titulo: 'Geometría', icono: 'geometria', montar: montar, figura: figura, soltar: soltar, cargar: cargar, estado: estado, restaurar: restaurar });
+  window.Tarjeta.registrar('geometria', { titulo: 'Geometría', icono: 'geometria', montar: montar, figura: figura, fotogramas: fotogramas, soltar: soltar, cargar: cargar, estado: estado, restaurar: restaurar });
 })();

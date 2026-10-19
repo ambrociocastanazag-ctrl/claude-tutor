@@ -102,7 +102,10 @@ vista(30,20)
    poligono(A,B,C,D), plano(A,B,C) o plano(2x+y-z=3) o plano(A,normal), esfera(centro,r), cubo(A,lado), caja(A,B) (esquinas opuestas),
    prisma(A,B,C,altura), piramide(A,B,C,D,ápice), tetraedro(A,B,C,D), cilindro(A,B,radio) (A y B, centros de las bases), cono(centro,ápice,radio),
    superficie(x^2-y^2) o superficie(f,xmin,xmax,ymin,ymax), curva(cos(t),sin(t),t/4,0,4*pi), carga(A,q), campo(), distancia(A,B),
-   angulo(A,B,C), etiqueta(A,"texto"), vista(giro,altura), ejes(no), numeros(no), proporcion(igual). Al final de cualquier comando:
+   angulo(A,B,C), etiqueta(A,"texto"), vista(giro,altura), ejes(no), numeros(no), nombres(no), medidas(no), relleno(opaco|transparente),
+   proporcion(igual). Marcas de ángulos y lados (para geometría): triangulo(A,B,C,angulos=si) (todos sus ángulos con valor), marcaangulo(A,B,C,2)
+   (1 a 3 arcos: ángulos iguales), angulorecto(A,B,C) (cuadradito; error si no mide 90°), marcaigual(A,B,2) o marcaigual(AB,2) (1 a 3 rayitas:
+   lados iguales). La tarjeta tiene botones Ejes/Números/Nombres/Medidas/Relleno y GIF: no hace falta pedirlos en el guion. Al final de cualquier comando:
    color=azul|rojo|verde|morado|naranja|turquesa|amarillo|#hex, opacidad=0.4 (para ver lo de dentro).
    SÓLIDOS DE REVOLUCIÓN: revolucion(f,a,b) | revolucion(f,g,a,b) (entre dos curvas) con eje=x (por defecto) | eje=y | eje=y=2 | eje=x=-1,
    y angulo=300 (menos de 360 deja ver el corte), corte=0.5 (un disco o arandela en ese valor), capa=1 (casquete cilíndrico). Ejemplo:
@@ -229,7 +232,7 @@ COMANDOS = ["segmento", "recta", "semirrecta", "circunferencia", "poligono", "tr
 
 
 COMANDOS_3D = ["esfera", "cubo", "caja", "prisma", "piramide", "tetraedro", "cilindro", "cono", "plano", "vector", "superficie", "curva",
-               "revolucion", "carga", "vista"]
+               "revolucion", "carga", "vista", "marcaangulo", "angulorecto", "marcaigual", "relleno", "nombres", "medidas"]
 
 
 def _probar():

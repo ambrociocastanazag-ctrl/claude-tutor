@@ -7,8 +7,11 @@
      Figuras3D.aSpec(texto)           → {spec, errores:[{linea, mensaje}]}
      Figuras3D.es3d(texto)            → bool: ¿el guion de Geometría es 3D? (un punto (x,y,z) o un comando que solo existe en 3D)
      Figuras3D.aGuion(spec)           → el guion equivalente a una spec (para «Editar en la tarjeta»), o null si no se puede
+     Figuras3D.vistasGiro(vista, 'vaiven' | 'vuelta', n) → n vistas de una animación
+     Figuras3D.fotogramas(spec | {guion} | escena, opts) → Promise<{fotos: [dataURL PNG], ms, w, h}>  (GIF: gif3d.py)
      Figuras3D.girable(elemento, spec | {guion}, opts) → {vista(), poner([az, el]), svg(opts2) → la vista actual 'justa', destruir()}
-   opts: los de Figuras (tema, tam, ancho, fondo, paleta) y además vista:[az, el] (grados), encuadre:'justo'|'esfera', rapido:bool.
+   opts: los de Figuras (tema, tam, ancho, fondo, paleta) y además vista:[az, el] (grados), encuadre:'justo'|'esfera', rapido:bool,
+         anotaciones:{ejes, numeros, nombres, medidas} (false apaga; manda sobre la spec) y relleno:'opaco'|'transparente' (manda sobre cada objeto).
    Cómo dibuja: proyección ortográfica; caras ordenadas de atrás hacia adelante (pintor); cada sólido convexo opaco es un grupo que tapa,
    y las líneas que quedan detrás de él (sus aristas ocultas, un eje que lo atraviesa) salen a trazos, como en los libros. */
 (function(RAIZ){
@@ -72,8 +75,9 @@
   }
   function opac(v, def){ var n = Number(v); return v == null || v === '' || !isFinite(n) ? def : Math.max(0.05, Math.min(1, n)); }
   function entero(v, def, lo, hi){ var n = Math.round(Number(v)); return v == null || !isFinite(n) ? def : Math.max(lo, Math.min(hi, n)); }
+  var CON_RELLENO = /^\s*(superficie|param[eé]trica|revoluci[oó]n|pol[ií]gono|tri[aá]ngulo|plano|cubo|caja|ortoedro|prisma|pir[aá]mide|tetraedro|cilindro|cono|esfera|malla)\s*$/i;
   var TIPOS = {superficie: 1, parametrica: 1, revolucion: 1, curva: 1, punto: 1, segmento: 1, recta: 1, vector: 1, poligono: 1, plano: 1,
-               cubo: 1, caja: 1, prisma: 1, piramide: 1, cilindro: 1, cono: 1, esfera: 1, malla: 1, carga: 1, campo: 1, etiqueta: 1, cota: 1, angulo: 1};
+               cubo: 1, caja: 1, prisma: 1, piramide: 1, cilindro: 1, cono: 1, esfera: 1, malla: 1, carga: 1, campo: 1, etiqueta: 1, cota: 1, angulo: 1, marcaangulo: 1, angulorecto: 1, marcaigual: 1};
   var ALIAS_TIPO = {triangulo: 'poligono', tetraedro: 'piramide', ortoedro: 'caja', paralelepipedo: 'caja', superficieparametrica: 'parametrica',
                     surface: 'superficie', sphere: 'esfera', cube: 'cubo', cylinder: 'cilindro', cone: 'cono', plane: 'plano', curve: 'curva',
                     point: 'punto', segment: 'segmento', line: 'recta', polygon: 'poligono', pyramid: 'piramide', prism: 'prisma', label: 'etiqueta'};
@@ -88,19 +92,20 @@
   // 2. La escena: caras, polilíneas, puntos y textos en el espacio (antes de mirar)
   // =====================================================================================================
   function nueva(P, k, rapido){
-    return {P: P, k: k, rapido: !!rapido, caras: [], polis: [], puntos: [], textos: [], solidos: [], diferidos: [], color: 0, rev: null, supZ: false};
+    return {P: P, k: k, rapido: !!rapido, caras: [], polis: [], puntos: [], textos: [], solidos: [], diferidos: [], marcas: [], color: 0, rev: null, supZ: false};
   }
   function siguienteColor(sc){ var c = sc.P.colores[sc.color % sc.P.colores.length]; sc.color++; return c; }
   function colorObj(sc, o, def){ return o.color ? U.colorDe(sc.P, o.color, def || siguienteColor(sc)) : (def || siguienteColor(sc)); }
   function claro(sc, c){ return U.mezcla(c, sc.P.fondo, 0.5); }                       // relleno de sólidos (estilo libro)
   function cara(sc, p, o){
-    var c = {p: p, color: o.color, op: o.op == null ? 1 : o.op, n: o.n || newell(p), malla: !!o.malla, sol: o.sol == null ? -1 : o.sol, huecos: o.huecos || null, idx: sc.caras.length};
+    var c = {p: p, color: o.color, op: o.op == null ? 1 : o.op, n: o.n || newell(p), malla: !!o.malla, sol: o.sol == null ? -1 : o.sol, huecos: o.huecos || null, idx: sc.caras.length,
+             medida: !!sc.medida};
     sc.caras.push(c);
     return c;
   }
   function poli(sc, pts, o){
     sc.polis.push({pts: pts, color: o.color, ancho: o.ancho || 2, guion: o.guion || null, oculta: o.oculta || 'guion', flecha: !!o.flecha,
-                   sol: o.sol == null ? -1 : o.sol, op: o.op == null ? 1 : o.op});
+                   sol: o.sol == null ? -1 : o.sol, op: o.op == null ? 1 : o.op, eje: !!o.eje, medida: !!(o.medida || sc.medida)});
   }
   function texto(sc, p, t, o){ o = o || {}; sc.textos.push({p: p, texto: String(t).slice(0, 80), tipo: o.tipo || 'nota', dir: o.dir, fin: o.fin, col: o.col, tam: o.tam, peso: o.peso, cur: o.cur}); }
   function solido(sc, o, datos){
@@ -171,6 +176,9 @@
     cara(sc, ps, {color: c, op: op});
     poli(sc, ps.concat([ps[0]]), {color: U.mezcla(sc.P.tinta, c, 0.25), ancho: 1.75});
     if (o.nombre) texto(sc, centro(ps), o.nombre, {tipo: 'nombre'});
+    if (o.angulos === true || /^(si|sí|true|1)$/i.test(String(o.angulos))) ps.forEach(function(p, i){   // los ángulos de cada vértice, con su valor
+      marcaAngulo(sc, ps[(i + ps.length - 1) % ps.length], p, ps[(i + 1) % ps.length], 'valor', {radio: 0.22});
+    });
   };
   HAZ.plano = function(sc, o){
     var n, p0;
@@ -396,24 +404,46 @@
   HAZ.etiqueta = function(sc, o){ texto(sc, pt(o.en || o.p, 'en'), o.texto == null ? '' : o.texto, {tipo: 'nota', col: o.color ? U.colorDe(sc.P, o.color, sc.P.tinta) : null}); };
   HAZ.cota = function(sc, o){
     var a = pt(o.de, 'de'), b = pt(o.a, 'a'), L = lon(dif(b, a));
-    poli(sc, [a, b], {color: sc.P.texto.tenue, ancho: 1.1, guion: [4, 3], oculta: 'nada'});
+    poli(sc, [a, b], {color: sc.P.texto.tenue, ancho: 1.1, guion: [4, 3], oculta: 'nada', medida: true});
     texto(sc, interp(a, b, 0.5), o.texto != null ? o.texto : String(U.r2(L)), {tipo: 'medida'});
   };
-  HAZ.angulo = function(sc, o){
-    var A = pt(o.a, 'a'), B = pt(o.b || o.vertice, 'b'), C = pt(o.c, 'c'), u = dif(A, B), w = dif(C, B);
+  // marca de un ángulo en el vértice B (en el plano de A, B, C): modo 'valor' (arco y grados), 'marca' (n arcos, para ángulos iguales)
+  // o 'recto' (el cuadradito). Es una medida: se apaga con «medidas».
+  function marcaAngulo(sc, A, B, C, modo, o){
+    var u = dif(A, B), w = dif(C, B);
     if (lon(u) < 1e-12 || lon(w) < 1e-12) throw new Error('el ángulo es degenerado: un extremo coincide con el vértice');
     var e1 = uni(u), e2 = uni(dif(w, por(e1, pe(w, e1)))), phi = Math.acos(Math.max(-1, Math.min(1, pe(e1, uni(w)))));
-    var rho = 0.3 * Math.min(lon(u), lon(w)), c = sc.P.naranja, arco = [], i;
     if (lon(e2) < 0.5) throw new Error('los tres puntos están alineados');
-    if (Math.abs(phi - Math.PI / 2) < 0.0175){
-      var s = rho * 0.6, q = [sum(B, por(e1, s)), sum(B, sum(por(e1, s), por(e2, s))), sum(B, por(e2, s))];
-      cara(sc, [B].concat(q), {color: c, op: 0.25}); poli(sc, q, {color: c, ancho: 1.4, oculta: 'nada'});
-    } else {
-      for (i = 0; i <= 24; i++){ var t = phi * i / 24; arco.push(sum(B, sum(por(e1, rho * Math.cos(t)), por(e2, rho * Math.sin(t))))); }
-      cara(sc, [B].concat(arco), {color: c, op: 0.25}); poli(sc, arco, {color: c, ancho: 1.4, oculta: 'nada'});
-    }
-    var bis = sum(B, por(uni(sum(e1, por(uni(w), 1))), rho * 1.7));
-    texto(sc, bis, (o.nombre ? o.nombre + ' = ' : '') + U.r2(phi / GR) + '°', {tipo: 'medida'});
+    var rho = (o.radio || 0.3) * Math.min(lon(u), lon(w)), c = o.color ? U.colorDe(sc.P, o.color, sc.P.naranja) : sc.P.naranja, i, j;
+    var recto = Math.abs(phi - Math.PI / 2) < 0.0175;
+    if (modo === 'recto' && !recto) throw new Error('el ángulo no es recto (mide ' + U.r2(phi / GR) + '°)');
+    sc.medida = true;
+    try {
+      if (modo === 'recto' || (modo === 'valor' && recto)){
+        var s = rho * 0.6, q = [sum(B, por(e1, s)), sum(B, sum(por(e1, s), por(e2, s))), sum(B, por(e2, s))];
+        cara(sc, [B].concat(q), {color: c, op: 0.25}); poli(sc, q, {color: c, ancho: 1.4, oculta: 'nada'});
+      } else {
+        var n = modo === 'marca' ? Math.max(1, Math.min(3, Math.round(o.n || 1))) : 1;
+        for (j = 0; j < n; j++){
+          var r = rho * (1 + 0.17 * j), arco = [];
+          for (i = 0; i <= 24; i++){ var t = phi * i / 24; arco.push(sum(B, sum(por(e1, r * Math.cos(t)), por(e2, r * Math.sin(t))))); }
+          if (!j) cara(sc, [B].concat(arco), {color: c, op: 0.22});
+          poli(sc, arco, {color: c, ancho: 1.4, oculta: 'nada'});
+        }
+      }
+      if (modo === 'valor' && !recto){                     // el recto ya lo dice el cuadradito
+        var bis = sum(B, por(uni(sum(e1, por(uni(w), 1))), rho * 1.75));
+        texto(sc, bis, (o.nombre ? o.nombre + ' = ' : '') + U.r2(phi / GR) + '°', {tipo: 'medida'});
+      }
+    } finally { sc.medida = false; }
+  }
+  HAZ.angulo = function(sc, o){ marcaAngulo(sc, pt(o.a, 'a'), pt(o.b || o.vertice, 'b'), pt(o.c, 'c'), 'valor', o); };
+  HAZ.marcaangulo = function(sc, o){ marcaAngulo(sc, pt(o.a, 'a'), pt(o.b || o.vertice, 'b'), pt(o.c, 'c'), 'marca', o); };
+  HAZ.angulorecto = function(sc, o){ marcaAngulo(sc, pt(o.a, 'a'), pt(o.b || o.vertice, 'b'), pt(o.c, 'c'), 'recto', o); };
+  HAZ.marcaigual = function(sc, o){                         // rayitas de lados iguales (1, 2 o 3) en el medio de un segmento
+    var a = pt(o.de, 'de'), b = pt(o.a, 'a');
+    if (lon(dif(b, a)) < 1e-12) throw new Error('el segmento mide 0');
+    sc.marcas.push({a: a, b: b, n: Math.max(1, Math.min(3, Math.round(o.n || 1))), color: o.color ? U.colorDe(sc.P, o.color, sc.P.tinta) : sc.P.tinta});
   };
   // ---- sólido de revolución: la región entre f y g en [a, b] gira alrededor de un eje horizontal (y = k) o vertical (x = k) ----
   // Plano de la región → espacio: la x sigue siendo x, la y de la región sube (z del espacio) y la profundidad es la otra; los ejes se
@@ -607,12 +637,16 @@
       b = limites(sc);
     }
     sc.S = S;
-    if (spec.ejes !== false) ejes(sc, b, S, spec);
-    // centro y radio de todo (para encuadrar y trocear)
-    var todos = [];
+    ejes(sc, b, S, spec);                                    // siempre: «ejes» y «numeros» se apagan al dibujar
+    // centro y radio de todo (para encuadrar y trocear), con ejes y sin ellos
+    var todos = [], deEjes = new Set();
+    sc.polis.forEach(function(l){ if (l.eje) l.pts.forEach(function(p){ deEjes.add(p); }); });
+    sc.textos.forEach(function(t){ if (t.tipo === 'eje' || t.tipo === 'tick') deEjes.add(t.p); });
     recorrer(sc, function(p){ todos.push(p); });
     var nucleo = todos.filter(function(p){ return !sc.textos.some(function(t){ return t.tipo === 'eje' && t.p === p; }); }), E = esferaMin(nucleo);
+    var sinEjes = todos.filter(function(p){ return !deEjes.has(p); }), E2 = sinEjes.length ? esferaMin(sinEjes) : E;
     sc.centro = E.c; sc.radio = Math.max(E.r, 1e-9); sc.todos = todos;
+    sc.sinEjes = {centro: E2.c, radio: Math.max(E2.r, 1e-9), todos: sinEjes.length ? sinEjes : todos};
     // líneas: cada polilínea en trozos cortos (ordenan bien con las caras y se ocultan por partes)
     var maxL = sc.radio / (sc.rapido ? 10 : 18), g = 0;
     sc.lineas = [];
@@ -721,14 +755,14 @@
     });
     return out;
   }
-  function encuadre(sc, cam, W, k, modo){
-    var M = Math.round(30 * k), H, s, cx, cy;
+  function encuadre(sc, cam, W, k, modo, conEjes){
+    var M = Math.round(30 * k), H, s, cx, cy, B = conEjes ? sc : sc.sinEjes;
     if (modo === 'esfera'){
-      H = Math.round(W * 0.78); s = (Math.min(W, H) - 2 * M) / (2 * sc.radio);
-      cx = pe(sc.centro, cam.r); cy = pe(sc.centro, cam.u);
+      H = Math.round(W * 0.78); s = (Math.min(W, H) - 2 * M) / (2 * B.radio);
+      cx = pe(B.centro, cam.r); cy = pe(B.centro, cam.u);
     } else {
       var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      sc.todos.forEach(function(p){ var x = pe(p, cam.r), y = pe(p, cam.u); if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; });
+      B.todos.forEach(function(p){ var x = pe(p, cam.r), y = pe(p, cam.u); if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; });
       var bw = Math.max(x1 - x0, 1e-9), bh = Math.max(y1 - y0, 1e-9), Hmax = W * 1.1;
       s = (W - 2 * M) / bw;
       if (bh * s > Hmax - 2 * M) s = (Hmax - 2 * M) / bh;
@@ -749,14 +783,17 @@
 
   function dibujar(sc, vista, opts){
     opts = opts || {};
-    var P = sc.P, k = sc.k, W = U.anchoDe(opts), cam = camara(vista[0], vista[1]), d = cam.d, Q = encuadre(sc, cam, W, k, opts.encuadre === 'esfera' ? 'esfera' : 'justo');
+    var A = {}, kk;                                          // anotaciones: las de la spec, y encima las de opts.anotaciones (los botones)
+    for (kk in sc.anot) A[kk] = sc.anot[kk];
+    if (opts.anotaciones) for (kk in A) if (opts.anotaciones[kk] != null) A[kk] = !!opts.anotaciones[kk];
+    var P = sc.P, k = sc.k, W = U.anchoDe(opts), cam = camara(vista[0], vista[1]), d = cam.d, Q = encuadre(sc, cam, W, k, opts.encuadre === 'esfera' ? 'esfera' : 'justo', A.ejes);
     var Lz = uni(sum(sum(por(cam.r, -0.4), por(cam.u, 0.65)), por(d, 0.7))), oscuro = P.modo === 'oscuro', tol = 1e-5 * sc.radio, bias = 0.004 * sc.radio;
     var tapan = sc.solidos.filter(function(s){ return s.convexo && s.opaco && s.planos.length >= 4; });
     var grupos = {}, items = [];
     tapan.forEach(function(s){ grupos[s.id] = {prof: pe(s.centro, d), antes: [], caras: [], vis: [], ocu: [], extra: [], s: s}; });
     // caras: las de atrás de un sólido cerrado opaco no se ven
     sc.caras.forEach(function(c){
-      if (c.quitar) return;
+      if (c.quitar || (c.medida && !A.medidas)) return;
       var nd = pe(c.n, d), sol = c.sol >= 0 ? sc.solidos[c.sol] : null;
       if (sol && sol.cerrado && sol.opaco && nd <= 1e-9) return;
       var cc = centro(c.p), it = {t: 'c', c: c, prof: c.ancla ? pe(centro(c.ancla.p), d) + 1e-6 * sc.radio : pe(cc, d), nd: nd};
@@ -766,6 +803,7 @@
     });
     // líneas: si un sólido opaco las tapa, a trazos dentro de su grupo (o nada)
     sc.lineas.concat(siluetas(sc, cam)).forEach(function(l){
+      if ((l.l.eje && !A.ejes) || (l.l.medida && !A.medidas)) return;
       var m = interp(l.a, l.b, 0.5), quien = null;
       for (var i = 0; i < tapan.length; i++) if (tapa(m, d, tapan[i], tol)){ quien = tapan[i]; break; }
       if (quien){ if (l.l.oculta === 'guion') grupos[quien.id].ocu.push(l); return; }
@@ -777,11 +815,18 @@
       var it = {t: 'o', s: s, prof: pe(s.datos.C, d) + s.datos.r};
       if (grupos[s.id]) grupos[s.id].extra.push(it); else items.push(it);
     });
+    tapan.forEach(function(s){                              // un sólido dentro de otro (su centro dentro): va antes, y el de fuera lo tapa
+      tapan.forEach(function(t){
+        if (s !== t && s.radio <= t.radio && t.planos.every(function(pl){ return pe(pl.n, s.centro) <= pl.c + tol; }))
+          grupos[s.id].prof = Math.min(grupos[s.id].prof, grupos[t.id].prof - 1e-3 * sc.radio);
+      });
+    });
     Object.keys(grupos).forEach(function(id){ items.push({t: 'g', g: grupos[id], prof: grupos[id].prof}); });
     sc.textos.forEach(function(t){                          // los números de los ejes se tapan como cualquier cosa
-      if (t.tipo !== 'tick' || tapan.some(function(s){ return tapa(t.p, d, s, tol); })) return;
+      if (t.tipo !== 'tick' || !A.ejes || !A.numeros || tapan.some(function(s){ return tapa(t.p, d, s, tol); })) return;
       items.push({t: 'k', x: t, prof: pe(t.p, d) + 2 * bias});
     });
+    if (A.medidas) sc.marcas.forEach(function(m){ items.push({t: 'm', m: m, prof: pe(interp(m.a, m.b, 0.5), d) + 2 * bias}); });
     items.sort(orden);
 
     var out = [], ocupados = [];
@@ -834,6 +879,17 @@
       out.push(U.textoSvg(P, tx, ty + tn * 0.35, t.texto, {tam: tn, peso: P.numeros.peso, col: P.numeros.color, hg: 2.5 * k}));
       ocupados.push([tx - tw / 2, ty - tn / 2, tw, tn]);
     }
+    function pintaIgual(m){                                 // n rayitas perpendiculares al lado, en su punto medio
+      var a = Q.f(m.a), b = Q.f(m.b), ux = b[0] - a[0], uy = b[1] - a[1], ln = Math.hypot(ux, uy);
+      if (ln < 4 * k) return;
+      ux /= ln; uy /= ln;
+      var mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, px = -uy, py = ux, L = 6 * k, sep = 4 * k, dd = '';
+      for (var i = 0; i < m.n; i++){
+        var o = (i - (m.n - 1) / 2) * sep, cx = mx + ux * o, cy = my + uy * o;
+        dd += 'M' + n1(cx - px * L) + ' ' + n1(cy - py * L) + 'L' + n1(cx + px * L) + ' ' + n1(cy + py * L);
+      }
+      out.push('<path d="' + dd + '" stroke="' + m.color + '" stroke-width="' + n1(1.6 * k) + '" stroke-linecap="round" fill="none"/>');
+    }
     function pintaContorno(it){
       var D = it.s.datos, c = Q.f(D.C);
       out.push('<circle cx="' + n1(c[0]) + '" cy="' + n1(c[1]) + '" r="' + n1(D.r * Q.s) + '" fill="none" stroke="' + D.borde + '" stroke-width="' + n1(1.6 * k) + '"/>');
@@ -843,6 +899,7 @@
       else if (it.t === 'l') pintaLinea(it.l, false);
       else if (it.t === 'o') pintaContorno(it);
       else if (it.t === 'k') pintaMarca(it.x);
+      else if (it.t === 'm') pintaIgual(it.m);
       else {
         var g = it.g;
         g.antes.sort(orden).forEach(pintaCara);
@@ -853,9 +910,9 @@
       }
     });
     // puntos (los tapados, huecos y tenues) y textos encima de todo
-    var cen = Q.f(sc.centro);
+    var cen = Q.f(A.ejes ? sc.centro : sc.sinEjes.centro);
     sc.textos.forEach(function(t){                          // los rótulos de los ejes y los puntos, antes que los nombres que se colocan
-      if (t.tipo !== 'eje') return;
+      if (t.tipo !== 'eje' || !A.ejes) return;
       var q = Q.f(t.p), te = P.ejes.etiqueta.tam * k, w = anchoTexto(t.texto, te, 500);
       ocupados.push([q[0] - w / 2 - 2, q[1] - te / 2, w + 4, te]);
     });
@@ -868,7 +925,7 @@
                  '" stroke="#ffffff" stroke-width="' + n1(1.8 * k) + '" stroke-linecap="round"/>');
       } else if (oculto) out.push('<circle cx="' + n1(q[0]) + '" cy="' + n1(q[1]) + '" r="' + n1(r) + '" fill="' + P.fondo + '" stroke="' + p.color + '" stroke-width="' + n1(1.4 * k) + '" opacity="0.65"/>');
       else out.push('<circle cx="' + n1(q[0]) + '" cy="' + n1(q[1]) + '" r="' + n1(r) + '" fill="' + p.color + '" stroke="' + P.punto.borde + '" stroke-width="' + n1(P.punto.bordeGrosor * k) + '"/>');
-      if (p.nombre) etiquetaJunto(q, r, p.nombre, P.etiqueta.tam * k, P.etiqueta.peso, null);
+      if (p.nombre && A.nombres) etiquetaJunto(q, r, p.nombre, P.etiqueta.tam * k, P.etiqueta.peso, null);
     });
     function etiquetaJunto(q, r, t, tam, peso, col){         // hacia fuera de la figura; si choca con otro texto, prueba las otras 7 direcciones
       var dx = q[0] - cen[0], dy = q[1] - cen[1], ln = Math.hypot(dx, dy), w = anchoTexto(t, tam, peso), elegido = null;
@@ -888,7 +945,7 @@
     }
     sc.textos.forEach(function(t){
       var q = Q.f(t.p);
-      if (t.tipo === 'tick') return;
+      if (t.tipo === 'tick' || (t.tipo === 'eje' && !A.ejes) || ((t.tipo === 'nombre' || t.tipo === 'nota') && !A.nombres) || (t.tipo === 'medida' && !A.medidas)) return;
       if (t.tipo === 'eje'){
         var te = P.ejes.etiqueta.tam * k;
         out.push(U.textoSvg(P, q[0], q[1] + te * 0.35, t.texto, {tam: te, peso: P.ejes.etiqueta.peso, cur: true, col: P.ejes.etiqueta.color, hg: 3 * k}));
@@ -924,7 +981,14 @@
     if (!spec || typeof spec !== 'object') throw new Error('la figura 3D es un objeto JSON');
     var P = U.estiloDe(opts), k = U.escalaDe(opts), sc = nueva(P, k, opts.rapido), errores = [];
     sc.titulo = spec.titulo ? String(spec.titulo).slice(0, 120) : '';
-    var objs = objetosDe(spec);
+    sc.anot = {ejes: spec.ejes !== false, numeros: spec.numeros !== false, nombres: spec.nombres !== false, medidas: spec.medidas !== false};
+    var objs = objetosDe(spec), relleno = String(opts.relleno || spec.relleno || '').toLowerCase();
+    if (relleno === 'opaco' || relleno === 'transparente') objs = objs.map(function(o){   // el interruptor global manda sobre cada objeto
+      if (!o || typeof o !== 'object' || !CON_RELLENO.test(String(o.tipo || ''))) return o;
+      var c = {}, kk; for (kk in o) c[kk] = o[kk];
+      c.opacidad = relleno === 'opaco' ? 1 : Math.min(opac(o.opacidad, 1), 0.35);
+      return c;
+    });
     if (objs.length > 300) throw new Error('demasiados objetos (máximo 300)');
     // primero las cargas (el campo las usa), luego lo demás en su orden
     var orden = objs.map(function(o, i){ return i; }).sort(function(a, b){ var ca = /^carga$/i.test(objs[a] && objs[a].tipo) ? 0 : 1, cb = /^carga$/i.test(objs[b] && objs[b].tipo) ? 0 : 1; return ca - cb || a - b; });
@@ -969,7 +1033,7 @@
   // ---- el lenguaje 3D de la pestaña Geometría (como el de MathStudio: nombre = comando(…), una instrucción por línea) ----
   var SOLO3D = {esfera: 1, cubo: 1, caja: 1, ortoedro: 1, paralelepipedo: 1, prisma: 1, piramide: 1, tetraedro: 1, cilindro: 1, cono: 1, plano: 1,
                 superficie: 1, curva: 1, revolucion: 1, vista: 1, vector: 1, carga: 1, campo: 1, sphere: 1, cube: 1, cylinder: 1, cone: 1, plane: 1, surface: 1, prism: 1, pyramid: 1};
-  var OPCIONES = {color: 1, opacidad: 1, eje: 1, angulo: 1, corte: 1, capa: 1, malla: 1, ocultas: 1, n: 1, en: 1, ecuador: 1, flecha: 1};
+  var OPCIONES = {color: 1, opacidad: 1, eje: 1, angulo: 1, corte: 1, capa: 1, malla: 1, ocultas: 1, n: 1, en: 1, ecuador: 1, flecha: 1, angulos: 1};
   function sinComentario(s){
     var cita = false;
     for (var i = 0; i < s.length; i++){
@@ -1013,6 +1077,15 @@
       if (cab && U.claveNorm(cab[1]) === 'puntomedio') return comando(cab[1], cab[2]);
       return {tipo: 'numero', v: constante(s)};
     }
+    function parLado(s){                                    // «AB» → [A, B] si son dos puntos con nombre
+      s = String(s || '').trim();
+      if (tiene(S, s) || !/^[\p{L}_][\p{L}\p{N}_]*$/u.test(s)) return null;
+      for (var i = 1; i < s.length; i++){
+        var x = s.slice(0, i), y = s.slice(i);
+        if (tiene(S, x) && tiene(S, y) && S[x].tipo === 'punto' && S[y].tipo === 'punto') return [S[x].p, S[y].p];
+      }
+      return null;
+    }
     function P(s){
       var v = valor(s);
       if (v.tipo === 'punto') return v.p;
@@ -1033,7 +1106,7 @@
     function comando(nombreCmd, cuerpo, nombre){
       var c = U.claveNorm(nombreCmd), x = partirArgs(cuerpo), a = x.a, o = x.o, obj = null;
       if (tiene(ALIAS_TIPO, c) && ['triangulo', 'tetraedro', 'ortoedro', 'paralelepipedo'].indexOf(c) < 0) c = ALIAS_TIPO[c];
-      function con(t){ t._linea = lineaActual; for (var kk in o) if (t[kk] == null) t[kk] = o[kk]; if (nombre && t.nombre == null && /^(vector|segmento|recta|plano|curva)$/.test(t.tipo)) t.nombre = nombre; spec.objetos.push(t); return t; }
+      function con(t){ t._linea = lineaActual; for (var kk in o) if (t[kk] == null) t[kk] = o[kk]; if (nombre && t.nombre == null && t.tipo === 'vector') t.nombre = nombre; spec.objetos.push(t); return t; }
       switch (c){
         case 'punto': cuantos(a, 3, 'punto(x, y, z)'); return {tipo: 'punto', p: a.map(function(s){ return N(s); })};
         case 'puntomedio': cuantos(a, 2, 'puntomedio(A, B)'); return {tipo: 'punto', p: interp(P(a[0]), P(a[1]), 0.5)};
@@ -1085,6 +1158,20 @@
         case 'angulo':
           cuantos(a, 3, 'angulo(A, B, C), con B el vértice');
           con({tipo: 'angulo', a: P(a[0]), b: P(a[1]), c: P(a[2]), nombre: nombre}); return {tipo: 'objeto'};
+        case 'marcaangulo':
+          if (a.length !== 3 && a.length !== 4) throw new Error('se escribe marcaangulo(A, B, C) o marcaangulo(A, B, C, n), con B el vértice y n = 1, 2 o 3 arcos');
+          con({tipo: 'marcaangulo', a: P(a[0]), b: P(a[1]), c: P(a[2]), n: a[3] ? N(a[3]) : 1}); return {tipo: 'nota'};
+        case 'angulorecto': cuantos(a, 3, 'angulorecto(A, B, C), con B el vértice'); con({tipo: 'angulorecto', a: P(a[0]), b: P(a[1]), c: P(a[2])}); return {tipo: 'nota'};
+        case 'marcaigual':
+          var lado = parLado(a[0]);                         // marcaigual(AB, n) como en geometría plana, o marcaigual(A, B, n)
+          if (lado){ if (a.length > 2) throw new Error('se escribe marcaigual(AB, n) o marcaigual(A, B, n)'); con({tipo: 'marcaigual', de: lado[0], a: lado[1], n: a[1] ? N(a[1]) : 1}); }
+          else { if (a.length !== 2 && a.length !== 3) throw new Error('se escribe marcaigual(AB, n) o marcaigual(A, B, n)'); con({tipo: 'marcaigual', de: P(a[0]), a: P(a[1]), n: a[2] ? N(a[2]) : 1}); }
+          return {tipo: 'nota'};
+        case 'nombres': spec.nombres = !/^(no|false|0)$/i.test((a[0] || '').trim()); return {tipo: 'nota'};
+        case 'medidas': spec.medidas = !/^(no|false|0)$/i.test((a[0] || '').trim()); return {tipo: 'nota'};
+        case 'relleno':
+          if (!/^(opaco|transparente)$/i.test((a[0] || '').trim())) throw new Error('se escribe relleno(opaco) o relleno(transparente)');
+          spec.relleno = a[0].trim().toLowerCase(); return {tipo: 'nota'};
         case 'etiqueta': cuantos(a, 2, 'etiqueta(A, "texto")'); con({tipo: 'etiqueta', en: P(a[0]), texto: a[1].replace(/^"|"$/g, '')}); return {tipo: 'nota'};
         case 'vista': cuantos(a, 2, 'vista(giro, altura) en grados, por ejemplo vista(30, 20)'); spec.vista = [N(a[0]), N(a[1])]; return {tipo: 'nota'};
         case 'ejes': spec.ejes = !/^(no|false|0|ninguno)$/i.test((a[0] || '').trim()); return {tipo: 'nota'};
@@ -1150,7 +1237,7 @@
           if (o.v) L.push(nom(o, 'v') + ' = vector(' + (o.de ? P(o.de) + ', ' + P(sum(pt(o.de, 'de'), pt(o.v, 'v'))) : P(o.v)) + ops(o) + ')');
           else L.push(nom(o, 'v') + ' = vector(' + P(o.de || [0, 0, 0]) + ', ' + P(o.a || o.hasta) + ops(o) + ')');
           return true;
-        case 'poligono': L.push(nom(o, 'pol') + ' = poligono(' + (o.puntos || []).map(P).join(', ') + ops(o) + ')'); return true;
+        case 'poligono': L.push(nom(o, 'pol') + ' = poligono(' + (o.puntos || []).map(P).join(', ') + ops(o, ['angulos']) + ')'); return true;
         case 'plano':
           if (o.por) L.push(nom(o, 'pl') + ' = plano(' + o.por.map(P).join(', ') + ops(o) + ')');
           else if (o.ecuacion) L.push(nom(o, 'pl') + ' = plano(' + o.ecuacion + ops(o) + ')');
@@ -1177,6 +1264,9 @@
         case 'etiqueta': L.push('etiqueta(' + P(o.en || o.p) + ', "' + String(o.texto == null ? '' : o.texto).replace(/"/g, "'") + '")'); return true;
         case 'cota': L.push(nom(o, 'd') + ' = distancia(' + P(o.de) + ', ' + P(o.a) + ')'); return true;
         case 'angulo': L.push(nom(o, 'ang') + ' = angulo(' + P(o.a) + ', ' + P(o.b || o.vertice) + ', ' + P(o.c) + ')'); return true;
+        case 'marcaangulo': L.push('marcaangulo(' + P(o.a) + ', ' + P(o.b || o.vertice) + ', ' + P(o.c) + (o.n ? ', ' + num(o.n) : '') + ')'); return true;
+        case 'angulorecto': L.push('angulorecto(' + P(o.a) + ', ' + P(o.b || o.vertice) + ', ' + P(o.c) + ')'); return true;
+        case 'marcaigual': L.push('marcaigual(' + P(o.de) + ', ' + P(o.a) + (o.n ? ', ' + num(o.n) : '') + ')'); return true;
         default: return false;
       }
     });
@@ -1184,8 +1274,43 @@
     if (Array.isArray(spec.vista)) L.push('vista(' + num(spec.vista[0]) + ', ' + num(spec.vista[1]) + ')');
     if (spec.ejes === false) L.push('ejes(no)');
     if (spec.numeros === false) L.push('numeros(no)');
+    if (spec.nombres === false) L.push('nombres(no)');
+    if (spec.medidas === false) L.push('medidas(no)');
+    if (spec.relleno === 'opaco' || spec.relleno === 'transparente') L.push('relleno(' + spec.relleno + ')');
     if (spec.proporcion === 'cubo' || spec.proporcion === 'igual') L.push('proporcion(' + spec.proporcion + ')');
     return L.join('\n');
+  }
+
+  // ---- el giro de una animación (GIF, forma "3d"): n vistas; 'vaiven' = ±30° con suavizado, 'vuelta' = 360° ----
+  function vistasGiro(vista, giro, n){
+    var v0 = vistaDe(vista, [30, 22]), out = [];
+    n = Math.max(2, Math.round(n || 48));
+    for (var i = 0; i < n; i++) out.push(giro === 'vuelta' ? [v0[0] + 360 * i / n, v0[1]] : [v0[0] + 30 * Math.sin(2 * Math.PI * i / n), v0[1]]);
+    return out;
+  }
+  // fotogramas PNG de la figura girando (solo navegador): fuente = spec | {guion} | una escena ya hecha.
+  // opts: los de la figura (tema, tam/ancho, fondo, anotaciones, relleno…) y vista, giro ('vaiven' | 'vuelta'), n (fotogramas).
+  // → Promise<{fotos: [dataURL], ms, w, h}> (tamaño fijo: encuadre 'esfera'). Para el GIF: gif3d.py.
+  function fotogramas(fuente, opts){
+    opts = opts || {};
+    var e = fuente && typeof fuente.dibujar === 'function' ? fuente : escena(fuente && typeof fuente.guion === 'string' ? aSpec(fuente.guion).spec : fuente, opts);
+    var giro = opts.giro === 'vuelta' ? 'vuelta' : 'vaiven', n = Math.max(8, Math.min(72, Math.round(opts.n || 48))), dur = giro === 'vuelta' ? 6000 : 4000;
+    var o2 = {}, kk; for (kk in opts) o2[kk] = opts[kk];
+    o2.encuadre = 'esfera';
+    var svgs = vistasGiro(opts.vista || e.vista, giro, n).map(function(v){ return e.dibujar(v, o2); });
+    if (!svgs[0].svg) return Promise.reject(new Error('no hay nada que dibujar'));
+    var w = svgs[0].w, h = svgs[0].h, lienzo = document.createElement('canvas'), ctx = lienzo.getContext('2d');
+    lienzo.width = w; lienzo.height = h;
+    return svgs.reduce(function(cadena, r){
+      return cadena.then(function(fotos){
+        return new Promise(function(listo, falla){
+          var im = new Image();
+          im.onload = function(){ ctx.clearRect(0, 0, w, h); ctx.drawImage(im, 0, 0, w, h); fotos.push(lienzo.toDataURL('image/png')); listo(fotos); };
+          im.onerror = function(){ falla(new Error('no pude pasar un fotograma a imagen')); };
+          im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(r.svg);
+        });
+      });
+    }, Promise.resolve([])).then(function(fotos){ return {fotos: fotos, ms: Math.round(dur / n), w: w, h: h}; });
   }
 
   // ---- girar con el ratón (solo navegador) ----
@@ -1221,6 +1346,11 @@
     return {
       vista: function(){ return vista.slice(); },
       poner: function(v){ vista = vistaDe(v, vista); pintar(false); },
+      cambiar: function(o2){                                // otras opciones (anotaciones, relleno, tema, paleta…) en la misma vista
+        for (var k2 in o2 || {}) o1[k2] = o2[k2];
+        sc = escena(sp, o1); rap = null; pintar(false);
+      },
+      opciones: function(){ var c = {}; for (var k2 in o1) c[k2] = o1[k2]; return c; },
       svg: function(o2){ return sc.dibujar(vista, Object.assign({encuadre: 'justo'}, o2 || {})); },
       errores: sc.errores,
       ultimo: function(){ return ult; },
@@ -1231,7 +1361,8 @@
     };
   }
 
-  var API = {figura: figura, escena: escena, guion: guion, aSpec: aSpec, aGuion: aGuion, es3d: es3d, girable: girable, tipos: Object.keys(TIPOS)};
+  var API = {figura: figura, escena: escena, guion: guion, aSpec: aSpec, aGuion: aGuion, es3d: es3d, girable: girable, vistasGiro: vistasGiro,
+             fotogramas: fotogramas, tipos: Object.keys(TIPOS)};
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (RAIZ) RAIZ.Figuras3D = API;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

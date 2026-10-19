@@ -242,7 +242,8 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
   - Bloques ` ```svg Pie ` con colores por nombre que siguen el tema.
   - Bloques ` ```grafica {json} `: una gráfica exacta, con un intérprete de expresiones propio (sin `eval`).
   - Bloques ` ```3d {json} `: figura 3D exacta que se **gira arrastrando** (superficies, sólidos de revolución con disco o capa, curvas, vectores, planos, sólidos, cargas y campos). Motor: `motor_3d.js`; contrato y formato en `CONTRATO-3D.md`.
-  - Cada figura trae Ampliar, Copiar SVG, Guardar PNG (a Descargas) y «Ponlo en la app». En 3D copian la vista que dejaste, «Ponlo en la app» la pone girando sola encima de la app (forma `"3d"`) y «Editar en la tarjeta» la abre en Geometría como guion.
+  - Cada figura trae Ampliar, Copiar SVG, Guardar PNG (a Descargas) y «Ponlo en la app». En 3D copian la vista que dejaste, «Ponlo en la app» la pone girando sola encima de la app (forma `"3d"`), «Editar en la tarjeta» la abre en Geometría como guion y **GIF** (vaivén o vuelta entera) la guarda en Descargas y la copia como archivo (`gif3d.py`).
+  - En 3D también hay marcas de geometría (`angulo`, `marcaangulo`, `angulorecto`, `marcaigual`, `"angulos": true` en polígonos), anotaciones que se apagan (`ejes`, `numeros`, `nombres`, `medidas`) y `relleno` opaco o transparente para toda la figura.
   - Pruebas: `node tutor-pantalla/probar_ilustraciones.js` y `node tutor-pantalla/probar_3d.js`.
 
 ## Archivos
@@ -285,6 +286,7 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
 | `senalar.py` + `senalar_ui.js` | ✏️ Señalar: ventana que recoge el trazo con el ratón sobre la app, y el botón y el flujo hasta la vista previa. `python senalar.py --probar`. |
 | `ilustraciones_ui.js` | Fórmulas, figuras SVG, gráficas exactas y figuras 3D girables dentro del chat, con sus botones. `node probar_ilustraciones.js` prueba el intérprete de expresiones y los bloques. |
 | `motor_3d.js` | El motor 3D común (chat, Tarjeta SVG y forma `"3d"`): spec JSON y guion 3D → SVG, girable. Usa `motor_figuras.js` (intérprete con varias variables, estilo y texto). `node probar_3d.js` = pruebas. |
+| `gif3d.py` | El GIF de una figura 3D: fotogramas PNG de la página → `.gif` en bucle (Pillow, paleta común con tramado), guardado en Descargas y copiado como archivo. `python gif3d.py --probar`. |
 | `formas_3d.js` | La forma de dibujo `"3d"`: la figura encima de la app, girando sola (vaivén o vuelta entera), con fotogramas de `motor_3d.js`. Muestras: `muestras/3d.json` y `3d_vuelta.json`. |
 | `CONTRATO-3D.md` | El contrato de las figuras 3D: API del motor, formato JSON, guion 3D, y qué hace cada pieza. |
 | `barra_ventana.js` | La barra de la ventana de los cuatro paneles: van sin el marco de Windows (sin el logo de Python) y aquí se ponen minimizar y ✕, como en la Tarjeta SVG. Arrastrar desde la barra de arriba (pestañas o la fila del asistente); los botones y pestañas no arrastran. Python: `OjosApi.ventana_minimizar/ventana_cerrar`. |

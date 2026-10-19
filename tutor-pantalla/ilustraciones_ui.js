@@ -145,6 +145,10 @@
     '.ilu-bar button{width:26px;height:26px;padding:0;border:1px solid var(--line,#d6d3c8);border-radius:7px;background:color-mix(in srgb,var(--surface,#fff) 90%,transparent);color:var(--ink2,#555);display:grid;place-items:center;cursor:pointer}',
     '.ilu-bar button:hover{background:var(--acc-soft,#e8eaff);color:var(--acc-text,#3340b8);border-color:var(--acc-mid,#aab)}',
     '.ilu-bar svg{width:15px;height:15px}',
+    '.ilu-gifmenu{position:absolute;top:36px;right:6px;z-index:5;display:flex;flex-direction:column;min-width:130px;padding:4px;border:1px solid var(--line,#d6d3c8);border-radius:9px;background:var(--surface,#fff);box-shadow:0 4px 14px rgba(0,0,0,.2)}',
+    '.ilu-gifmenu button{padding:6px 10px;border:0;border-radius:6px;background:none;color:var(--ink,#222);font:500 12px var(--sans,system-ui);text-align:left;cursor:pointer;white-space:nowrap}',
+    '.ilu-gifmenu button:hover{background:var(--acc-soft,#e8eaff);color:var(--acc-text,#3340b8)}',
+    '.ilu-gifmenu small{padding:2px 10px 3px;font-size:10.5px;color:var(--ink3,#777)}',
     '.ilu-aviso{display:flex;gap:8px;align-items:flex-start;padding:7px 12px;font-size:12px;line-height:1.4;color:var(--warn,#8a5a00);background:var(--warn-soft,#fff6df);overflow-wrap:anywhere}',
     '.ilu-aviso b{flex-shrink:0}',
     '.ilu-hueco{margin:4px 0;padding:22px 12px;border:1px dashed var(--line,#d6d3c8);border-radius:10px;text-align:center;font-size:12.5px;color:var(--ink3,#777);background:var(--sunk,#f2f0ea)}',
@@ -230,6 +234,7 @@
     copiar: icono('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'),
     png: icono('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
     app: icono('<path d="M5 4l14 7-6 2-2 6z"/>'),
+    gif: icono('<rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M10 10.5a2 2 0 1 0 0 3v-1.2H9M13 10v4M15.5 14v-4h2.2M15.5 12h1.6"/>'),
     tarjeta: icono('<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1zM14 7l3 3"/>')
   };
 
@@ -410,6 +415,41 @@
         function(){ descargar(); });
     }, function(e){ avisar(btn, e.message, true); });
   }
+  function nombreGif(fig){                                  // el pie (o el título) de la figura, o «figura 3d»
+    var t = String(fig._reg.pie || (fig._r && fig._r.pie) || (fig._r && fig._r.spec && fig._r.spec.titulo) || '').replace(/[^\w\- áéíóúñÁÉÍÓÚÑü]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return t.slice(0, 50) || 'figura 3d';
+  }
+  function hacerGif(fig, btn, giro){                        // fotogramas de la vista actual (claro, fondo blanco) → Python arma y guarda el GIF
+    var a = RAIZ.pywebview && RAIZ.pywebview.api, r = fig._r, M = F3();
+    if (!a || !a.guardar_gif || !M || !r || !r.g) return;
+    if (fig._haciendoGif){ avisar(btn, 'Ya estoy haciendo un GIF…'); return; }
+    fig._haciendoGif = true; avisar(btn, 'Haciendo el GIF…');
+    var o = r.g.opciones(), op = {tema: 'claro', tam: 'M', fondo: 'blanco', vista: r.g.vista(), giro: giro, n: 48};
+    if (o.anotaciones) op.anotaciones = o.anotaciones;
+    if (o.relleno) op.relleno = o.relleno;
+    var nombre = nombreGif(fig);
+    // la spec sin la paleta del panel: el GIF se copia a otras apps, va en claro
+    M.fotogramas(r.spec, op).then(function(res){ return a.guardar_gif(res.fotos, res.ms, nombre); }).then(function(x){
+      fig._haciendoGif = false;
+      if (x && x.ok) avisar(btn, 'GIF copiado y guardado en Descargas (' + x.kb + ' KB)');
+      else avisar(btn, (x && x.error) || 'No pude hacer el GIF', true);
+    }, function(e){ fig._haciendoGif = false; avisar(btn, 'No pude hacer el GIF: ' + String((e && e.message) || e).slice(0, 100), true); });
+  }
+  function menuGif(fig, btn){                               // botón GIF: menú pequeño con vaivén o vuelta entera
+    var previo = fig.querySelector('.ilu-gifmenu');
+    if (previo){ previo.remove(); return; }
+    var m = document.createElement('div'); m.className = 'ilu-gifmenu';
+    function cerrar(){ m.remove(); document.removeEventListener('pointerdown', fuera, true); }
+    function fuera(e){ if (!m.contains(e.target) && !btn.contains(e.target)) cerrar(); }
+    [['Vaivén', 'vaiven'], ['Vuelta entera', 'vuelta']].forEach(function(d){
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = d[0];
+      b.addEventListener('click', function(e){ e.stopPropagation(); cerrar(); hacerGif(fig, btn, d[1]); });
+      m.appendChild(b);
+    });
+    var sm = document.createElement('small'); sm.textContent = 'de la vista actual'; m.appendChild(sm);
+    fig.appendChild(m);
+    document.addEventListener('pointerdown', fuera, true);
+  }
   var abierto = null;
   function cerrarAmpliado(){ if (abierto){ abierto.remove(); abierto = null; document.removeEventListener('keydown', alTeclear, true); } }
   function alTeclear(e){ if (e.key === 'Escape'){ e.stopPropagation(); cerrarAmpliado(); } }
@@ -490,6 +530,12 @@
       b.addEventListener('click', function(e){ e.stopPropagation(); sincronizar3d(fig); d[2](b); });
       bar.appendChild(b);
     });
+    var ag = RAIZ.pywebview && RAIZ.pywebview.api;
+    if (r.g && ag && ag.guardar_gif){                       // solo las figuras 3D, y si el panel sabe armar GIF
+      var bg = document.createElement('button'); bg.type = 'button'; bg.className = 'ilu-bgif'; bg.title = 'GIF de la figura girando'; bg.setAttribute('aria-label', 'GIF'); bg.innerHTML = IC.gif;
+      bg.addEventListener('click', function(e){ e.stopPropagation(); menuGif(fig, bg); });
+      bar.insertBefore(bg, bar.children[3] || null);
+    }
   }
   var FIGURAS = {};                                         // id → figura ya hecha: al llegar más texto no se rehace (ni se reinicia su animación)
   function elFigura(reg){
