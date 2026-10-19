@@ -461,6 +461,7 @@ Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edg
   4. Vuelve a lanzar `esperar`. Si dice «panel cerrado», se acabó.
   - `puente.py pedir-captura "…"` solo le abre la vista previa: la persona decide si la manda.
 - **Ilustraciones en el chat** (todos los tutores): `$…$`/`$$…$$`, bloques ` ```svg `, ` ```grafica {json} ` y ` ```geometria ` (guion), dibujados exactos por `tutor-pantalla/motor_figuras.js`; cada figura trae «Editar en la tarjeta».
+- **Figuras 3D** (todos los tutores): bloque ` ```3d {json} ` que se gira arrastrando (superficies, sólidos de revolución con disco o capa, curvas, vectores, planos, sólidos, cargas y campos), SVG vectorial hecho por `tutor-pantalla/motor_3d.js`. «Ponlo en la app» la pone encima del programa girando sola (forma de dibujo `"3d"`). Formato en `tutor-pantalla/CONTRATO-3D.md`; prueba: `node tutor-pantalla/probar_3d.js`.
 ````
 
 ### 4.10 Tarjeta SVG (opcional, necesita la 4.9)
@@ -468,7 +469,7 @@ Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edg
 Una ventanita pegada al borde derecho (**Ctrl+Alt+L** la abre y la pliega) para sacar figuras en SVG y copiarlas a cualquier app. Tiene cuatro pestañas:
 - **Escribir:** ecuaciones con MathLive, guardado en `tarjeta-svg/vendor/`, sin internet.
 - **Gráfica.**
-- **Geometría:** un guion por líneas, `A=(0,0)`, `t=triangulo(A,B,C)`, `h=altura(A,BC)`…
+- **Geometría:** un guion por líneas, `A=(0,0)`, `t=triangulo(A,B,C)`, `h=altura(A,BC)`… Si el guion tiene un punto `(x,y,z)` o un comando 3D (`esfera`, `cubo`, `cilindro`, `revolucion`, `superficie`…), la figura pasa sola a 3D y se gira con el ratón.
 - **Asistente:** dibuja exacto lo que se le pide.
 
 «Copiar SVG» pone en el portapapeles el archivo `.svg`, el SVG y un PNG. Lo que la tarjeta no hace (construcciones complejas) puede abrirse en otra app de la persona si la pone en `tarjeta-svg/config.json` como `{"mathstudio": "<carpeta>"}`; si no, el botón lo avisa.
@@ -477,7 +478,7 @@ Una ventanita pegada al borde derecho (**Ctrl+Alt+L** la abre y la pliega) para 
 2. **Prueba:**
    - `python tarjeta-svg/tarjeta.py --probar`: avísale antes, porque deja una figura de prueba en su portapapeles;
    - `python tarjeta-svg/asistente_tarjeta.py --probar`;
-   - `node tutor-pantalla/probar_figuras.js`.
+   - `node tutor-pantalla/probar_figuras.js` y `node tutor-pantalla/probar_3d.js`.
    Cada una termina en «todo bien».
 3. **Ábrela con su permiso:** `python tarjeta-svg/abrir_tarjeta.py`. Es un solo ejemplar: si ya está abierta, la trae al frente. Los paneles la abren con su botón «Tarjeta».
 4. En su `CLAUDE.md`, añade a la tabla de herramientas la fila de la Tarjeta SVG; si no se instaló, quítala.

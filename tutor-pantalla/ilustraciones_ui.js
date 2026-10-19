@@ -57,15 +57,15 @@
   function marcaMate(tex, bloque){ return marca({tipo: 'mate', tex: tex, bloque: bloque}, (bloque ? 'B' : 'I') + tex); }
 
   function figuraEnBloque(p, cerrado){                      // p = lo que hay entre ``` y ```; devuelve la marca o null si no es svg/gráfica
-    var m = /^[ \t]*(svg|grafica|gráfica|geometria|geometría)(?=[ \t\r\n]|$)([^\n]*)(?:\n([\s\S]*))?$/i.exec(p);
+    var m = /^[ \t]*(svg|grafica|gráfica|geometria|geometría|3d)(?=[ \t\r\n]|$)([^\n]*)(?:\n([\s\S]*))?$/i.exec(p);
     if (!m){
       var w = p.trim().toLowerCase();
-      if (!cerrado && w && p.indexOf('\n') < 0 && ('svg'.indexOf(w) === 0 || 'grafica'.indexOf(w) === 0 || 'gráfica'.indexOf(w) === 0 || 'geometria'.indexOf(w) === 0 || 'geometría'.indexOf(w) === 0))
+      if (!cerrado && w && p.indexOf('\n') < 0 && ('svg'.indexOf(w) === 0 || 'grafica'.indexOf(w) === 0 || 'gráfica'.indexOf(w) === 0 || 'geometria'.indexOf(w) === 0 || 'geometría'.indexOf(w) === 0 || '3d'.indexOf(w) === 0))
         return marca({tipo: 'hueco', texto: 'dibujando…'}, 'hueco');
       return null;
     }
-    var esSvg = m[1].toLowerCase() === 'svg', esGeo = /^geometr/i.test(m[1]);
-    if (!cerrado) return marca({tipo: 'hueco', texto: esSvg || esGeo ? 'dibujando la figura…' : 'dibujando la gráfica…'}, 'hueco' + (esSvg ? 's' : esGeo ? 'm' : 'g'));
+    var esSvg = m[1].toLowerCase() === 'svg', esGeo = /^geometr/i.test(m[1]), es3d = m[1].toLowerCase() === '3d';
+    if (!cerrado) return marca({tipo: 'hueco', texto: esSvg || esGeo ? 'dibujando la figura…' : es3d ? 'dibujando la figura 3D…' : 'dibujando la gráfica…'}, 'hueco' + (esSvg ? 's' : esGeo ? 'm' : es3d ? 't' : 'g'));
     if (esSvg){
       var pie = m[2].trim(), cuerpo = (m[3] || '').trim();
       if (!cuerpo && /^<svg/i.test(pie)){ cuerpo = pie; pie = ''; }
@@ -73,6 +73,11 @@
     }
     var json = (m[2] + '\n' + (m[3] || '')).trim();
     if (esGeo) return marca({tipo: 'geometria', guion: json}, 'm' + json);
+    if (es3d){                                              // «```3d Pie» (como svg) también vale: el texto de la primera línea es el pie
+      var pie3 = '', cuerpo3 = json, ml = /^(?!\s*[{\[])([^\n]+)\n([\s\S]*)$/.exec(json);
+      if (ml){ pie3 = ml[1].trim(); cuerpo3 = ml[2].trim(); }
+      return marca({tipo: '3d', json: cuerpo3, pie: pie3}, 't' + json);
+    }
     return marca({tipo: 'grafica', json: json}, 'g' + json);
   }
   function matesEnLinea(seg){                               // $…$ de una línea de texto (no precios como «$5», no celdas como $B$2)
@@ -128,7 +133,11 @@
 
   var CSS = [
     '.ilu-fig{position:relative;margin:4px 0;border:1px solid var(--line,#d6d3c8);border-radius:10px;background:var(--surface,#fff);overflow:hidden;max-width:100%;min-width:0;color:var(--ink,#222)}',
-    '.ilu-lienzo{padding:8px 10px 4px;display:flex;justify-content:center;min-width:0}',
+    '.ilu-lienzo{position:relative;padding:8px 10px 4px;display:flex;justify-content:center;min-width:0}',
+    '.ilu-3d{position:relative;width:100%;max-width:100%;min-width:0;touch-action:none;user-select:none;-webkit-user-select:none}',
+    '.ilu-3d svg{display:block;width:100%;height:auto;max-width:100%}',
+    '.ilu-giro{position:absolute;left:8px;bottom:2px;font-size:10.5px;color:var(--ink3,#777);opacity:.8;pointer-events:none;transition:opacity .5s;user-select:none}',
+    '.ilu-giro.visto{opacity:0}',
     '.ilu-lienzo img{display:block;width:100%;height:auto;max-width:100%;-webkit-user-drag:none;user-select:none}',
     '.ilu-fig figcaption{padding:2px 14px 9px;font-size:11.5px;line-height:1.4;color:var(--ink3,#777);text-align:center;overflow-wrap:anywhere}',
     '.ilu-bar{position:absolute;top:6px;right:6px;display:flex;gap:3px;opacity:0;transition:opacity .15s;pointer-events:none}',
@@ -306,16 +315,20 @@
     if (!raiz.hasAttribute('font-family')) raiz.setAttribute('font-family', FUENTE);
     return {svg: new XMLSerializer().serializeToString(raiz), w: w, h: h};
   }
-  function graficaTexto(json, P){
-    var spec;
-    try { spec = JSON.parse(json); }
+  function jsonDe(json, que){                               // JSON del tutor (tolera comas de más) → {spec} o {aviso}
+    try { return {spec: JSON.parse(json)}; }
     catch (e) {
-      try { spec = JSON.parse(json.replace(/,(\s*[}\]])/g, '$1')); }
+      try { return {spec: JSON.parse(json.replace(/,(\s*[}\]])/g, '$1'))}; }
       catch (e2) {
         var ln = /line (\d+)/.exec(String(e.message));
-        return {aviso: 'No pude dibujar la gráfica: el JSON está mal escrito (revisa comas, comillas y llaves' + (ln ? ', cerca de la línea ' + ln[1] : '') + ').'};
+        return {aviso: 'No pude dibujar ' + que + ': el JSON está mal escrito (revisa comas, comillas y llaves' + (ln ? ', cerca de la línea ' + ln[1] : '') + ').'};
       }
     }
+  }
+  function graficaTexto(json, P){
+    var spec, j = jsonDe(json, 'la gráfica');
+    if (j.aviso) return j;
+    spec = j.spec;
     try {
       if (!F) return {aviso: 'el motor de figuras no está disponible'};
       var g = F.grafica(spec, {paleta: P, tema: P.modo, ancho: ANCHO_CHAT});
@@ -332,6 +345,35 @@
       return {aviso: 'No pude dibujar la figura. ' + m};
     }
     return {svg: g.svg, w: g.w, h: g.h, errores: g.errores};
+  }
+  var F3 = function(){ return RAIZ.Figuras3D || null; };
+  function figura3d(json, P, lienzo, vistaPrevia, alGirar){  // ```3d: spec → figura girable dentro de `lienzo`; {g, spec, errores} o {aviso}
+    var j = jsonDe(json, 'la figura 3D');
+    if (j.aviso) return j;
+    var M = F3();
+    if (!M) return {aviso: 'el motor 3D no está disponible'};
+    if (!j.spec || typeof j.spec !== 'object' || Array.isArray(j.spec)) return {aviso: 'No pude dibujar la figura 3D: la spec es un objeto JSON {"objetos": [...]}.'};
+    var caja = document.createElement('div'); caja.className = 'ilu-3d';
+    var g;
+    try { g = M.girable(caja, j.spec, {paleta: P, tema: P.modo, ancho: ANCHO_CHAT, vista: vistaPrevia, alGirar: alGirar}); }
+    catch (e) { return {aviso: 'No pude dibujar la figura 3D: ' + String(e.message || e).slice(0, 140)}; }
+    var u = g.ultimo();
+    if (!u || !u.svg){
+      g.destruir();
+      var m = g.errores && g.errores.length ? g.errores.slice(0, 3).map(function(x){ return (x.objeto >= 0 ? 'objeto ' + (x.objeto + 1) + ': ' : '') + x.mensaje; }).join(' · ') : 'no hay nada que dibujar';
+      return {aviso: 'No pude dibujar la figura 3D. ' + m};
+    }
+    lienzo.appendChild(caja);
+    var pista = document.createElement('span'); pista.className = 'ilu-giro'; pista.textContent = 'arrastra para girar'; lienzo.appendChild(pista);
+    return {g: g, spec: j.spec, w: u.w, h: u.h, pista: pista,
+            errores: (g.errores || []).map(function(x){ return {linea: x.objeto + 1, mensaje: x.mensaje, objeto: true}; }),
+            pie: j.spec.pie ? String(j.spec.pie).slice(0, 200) : ''};
+  }
+  function sincronizar3d(fig){                              // lo que se copia, guarda o amplía es la vista actual (encuadre justo)
+    var r = fig._r;
+    if (!r || !r.g) return;
+    var v = r.g.svg({});
+    if (v && v.svg){ fig._svg = r.svg = v.svg; r.w = v.w; r.h = v.h; }
   }
   function urlSvg(svg){ return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }
 
@@ -385,7 +427,9 @@
   function ponerEnApp(fig, btn){
     var a = RAIZ.pywebview && RAIZ.pywebview.api;
     if (!a || !a.ilustracion_en_app){ avisar(btn, 'Este panel no puede ponerlo en la app', true); return; }
-    a.ilustracion_en_app(fig._svg).then(function(r){
+    sincronizar3d(fig);
+    var llamada = fig._reg.tipo === '3d' && fig._r.g && a.ilustracion3d_en_app ? a.ilustracion3d_en_app(JSON.stringify(fig._r.spec), fig._r.g.vista()) : a.ilustracion_en_app(fig._svg);
+    Promise.resolve(llamada).then(function(r){
       if (r && r.ok){ if (RAIZ.Dibujante) Dibujante.mostrar(r.dibujos, '', {sinVoz: true}); avisar(btn, 'Puesto encima de la app'); }
       else avisar(btn, (r && r.error) || 'No pude ponerlo en la app', true);
     }, function(e){ avisar(btn, String((e && e.message) || e).slice(0, 100), true); });
@@ -394,6 +438,11 @@
     var a = RAIZ.pywebview && RAIZ.pywebview.api, reg = fig._reg, r = fig._r, contenido;
     if (!a || !a.tarjeta_abrir){ avisar(btn, 'Este panel no puede abrir la tarjeta', true); return; }
     if (reg.tipo === 'geometria') contenido = {tipo: 'geometria', guion: reg.guion};
+    else if (reg.tipo === '3d' && r.g){
+      var v = r.g.vista(), sp = Object.assign({}, r.spec, {vista: v}), gu = null;
+      try { gu = RAIZ.Figuras3D.aGuion(sp); } catch (e0) {}
+      contenido = gu ? {tipo: 'geometria', guion: gu} : {tipo: '3d', spec: r.spec, vista: v};
+    }
     else if (reg.tipo === 'grafica' && r.spec) contenido = {tipo: 'grafica', spec: r.spec};
     else contenido = {tipo: 'svg', svg: fig._svg};
     Promise.resolve(a.tarjeta_abrir(contenido)).then(function(res){
@@ -403,10 +452,17 @@
   function hayTarjeta(){ var a = RAIZ.pywebview && RAIZ.pywebview.api; return !!(a && a.tarjeta_abrir); }
   function rellenarFigura(fig){
     var reg = fig._reg, P = paleta(), r;
-    try { r = reg.tipo === 'svg' ? svgTexto(reg.cuerpo, P) : reg.tipo === 'geometria' ? geometriaTexto(reg.guion, P) : graficaTexto(reg.json, P); } catch (e) { r = {aviso: 'No pude dibujar la figura: ' + String(e.message || e).slice(0, 120)}; }
     var lienzo = fig.querySelector('.ilu-lienzo'), pie = fig.querySelector('figcaption'), bar = fig.querySelector('.ilu-bar');
+    var vPrev = null;                                       // ```3d: al rehacerla (tema nuevo) se queda en la misma vista
+    if (fig._r && fig._r.g){ vPrev = fig._r.g.vista(); fig._r.g.destruir(); }
     lienzo.textContent = ''; bar.textContent = '';
+    try {
+      r = reg.tipo === 'svg' ? svgTexto(reg.cuerpo, P) : reg.tipo === 'geometria' ? geometriaTexto(reg.guion, P)
+        : reg.tipo === '3d' ? figura3d(reg.json, P, lienzo, vPrev, function(v, rapido){ if (rapido){ fig._girado = true; if (fig._r && fig._r.pista) fig._r.pista.classList.add('visto'); } })
+        : graficaTexto(reg.json, P);
+    } catch (e) { r = {aviso: 'No pude dibujar la figura: ' + String(e.message || e).slice(0, 120)}; }
     fig._r = r; fig._svg = r.svg || null;
+    if (r.g){ r.pista.classList.toggle('visto', !!fig._girado); sincronizar3d(fig); }
     pie.textContent = reg.pie || r.pie || ''; pie.hidden = !pie.textContent;
     if (fig._aviso){ fig._aviso.remove(); fig._aviso = null; }
     if (!r.svg){
@@ -417,19 +473,21 @@
     lienzo.hidden = false; bar.hidden = false;
     if (r.errores && r.errores.length){                     // geometría: se dibujó lo válido y cada error sale con su línea
       var av2 = document.createElement('div'); av2.className = 'ilu-aviso'; av2.innerHTML = '<b>⚠</b><span></span>';
-      av2.lastChild.textContent = r.errores.slice(0, 5).map(function(x){ return 'Línea ' + x.linea + ': ' + x.mensaje; }).join('\n');
+      av2.lastChild.textContent = r.errores.slice(0, 5).map(function(x){ return (x.objeto ? 'Objeto ' : 'Línea ') + x.linea + ': ' + x.mensaje; }).join('\n');
       av2.lastChild.style.whiteSpace = 'pre-line';
       lienzo.parentNode.insertBefore(av2, pie); fig._aviso = av2;
     }
+    if (!r.g){
     var im = document.createElement('img'); im.alt = reg.pie || (reg.tipo === 'grafica' ? 'Gráfica' : 'Figura'); im.draggable = false;
     im.style.maxWidth = r.w + 'px'; im.setAttribute('width', r.w); im.setAttribute('height', r.h); im.src = urlSvg(r.svg);
     lienzo.appendChild(im);
+    }
     [['ampliar', 'Ampliar', function(b){ ampliar(fig); }],
      ['copiar', 'Copiar SVG', function(b){ copiarTexto(fig._svg).then(function(ok){ avisar(b, ok ? 'SVG copiado' : 'No pude copiar', !ok); }); }],
      ['png', 'Guardar PNG', function(b){ guardarPng(fig, b); }],
      ['app', 'Ponlo en la app', function(b){ ponerEnApp(fig, b); }]].concat(hayTarjeta() ? [['tarjeta', 'Editar en la tarjeta', function(b){ editarEnTarjeta(fig, b); }]] : []).forEach(function(d){
       var b = document.createElement('button'); b.type = 'button'; b.title = d[1]; b.setAttribute('aria-label', d[1]); b.innerHTML = IC[d[0]];
-      b.addEventListener('click', function(e){ e.stopPropagation(); d[2](b); });
+      b.addEventListener('click', function(e){ e.stopPropagation(); sincronizar3d(fig); d[2](b); });
       bar.appendChild(b);
     });
   }

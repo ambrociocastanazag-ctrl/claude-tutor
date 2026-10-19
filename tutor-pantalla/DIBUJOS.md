@@ -36,12 +36,15 @@ voz; si falta, se usa `texto`), `"n"` (número de orden).
 | `mano` | trazo a mano alzada que se va dibujando | `trazo`: `circulo` \| `subrayado` \| `flecha` \| `tache` \| `check` |
 | `lupa` | la zona, aumentada al lado y **en vivo** | `aumento` (2.5). Solo en una ventana que la persona ya aprobó |
 | `svg` | el dibujo propio del tutor, encajado en el objetivo; puede ir **animado** (SMIL o CSS `@keyframes`) | `svg`: `"<svg viewBox=...>...</svg>"` (se filtra) |
+| `3d` | figura 3D (`motor_3d.js`, spec de `CONTRATO-3D.md` §2) que **gira sola**, despacio (encima de la app no se arrastra); sin objetivo, centrada en la ventana | `spec` (objeto o su JSON), `vista`: `[giro, altura]`, `giro`: `"vaiven"` (±30°, por defecto) \| `"vuelta"` (360°) \| `"no"` |
 | `fantasma` | cursor animado que hace los pasos | `pasos`: `[{"accion": "mover"\|"clic"\|"doble"\|"derecho"\|"arrastrar"\|"escribir", objetivo, "hasta": objetivo (arrastrar), "texto": (escribir), "decir"}]` |
 | `guia` | contorno punteado que se dibuja: «hazlo aquí» | `figura`: `rect` \| `elipse` \| `linea` \| `flecha` |
 | `secuencia` | 1 → 2 → 3 en orden, con flechas curvas | `pasos`: `[{objetivo, "texto", "decir"}]` |
 | `formula` | la fórmula bien escrita, flotando junto al objetivo | `latex`; en Excel con `celda` sola sale de la celda, y `grafica: true` añade la mini gráfica |
 | `rayos_x` | Excel: de las celdas que usa la fórmula al resultado, con los valores viajando | `celda` |
 | `desarmar` | copia ampliada del texto con una llave y una explicación por parte | `original` (en Excel, con `celda`, sale de la celda), `partes`: `[{"texto", "nota"}]` |
+
+**Forma `3d`.** `{"tipo": "dibujo", "forma": "3d", "spec": {…}, "vista": [30, 22], "giro": "vaiven"}` (`formas_3d.js`). Arma la escena una vez con `Figuras3D.escena` y saca ≤ 60 fotogramas con `dibujar(vista, {encuadre: 'esfera'})` (el tamaño no cambia al girar); `U.fotos` los pasa a PNG y capa.py los repite. Vaivén: giro = vista + 30°·sen (ciclo de 8 s); vuelta: 360° en 9 s; `no`: un solo fotograma. Va sobre una tarjeta con el fondo y el borde del tema del panel (variables `--surface`, `--line`…; `"tema": "claro" | "oscuro"` lo fuerza) y sombra ligera. Con objetivo se encaja en él; sin él, un tercio de la ventana al centro. Si la spec trae errores dibuja lo válido (aviso en consola); si no queda nada, el dibujo da error. `Ojos_panel.ilustracion3d_en_app(spec_json, vista)` es el «Ponlo en la app» de las figuras ```3d del chat.
 
 **Objetivo `"linea"` (cursos de código).** Además de `id`, `caja`, `celda` y `nombre`, un dibujo (o un paso de `fantasma`/`secuencia`) puede apuntar a una línea del editor de VS Code: `{"tipo": "dibujo", "forma": "foco", "linea": 14, "archivo": "Prueba.java", "texto": "Aquí"}`. `archivo` es opcional (si no es el abierto, el dibujo no sale y el tutor lo sabe). El panel lo ubica con `editor_vscode.rect_linea` (ver README, «Señalar una línea del editor»); si la línea no se ve, se dibuja en el borde del editor y se añade «Sube/Baja…» a la respuesta. Necesita `Ojos(raices=[carpetas del curso])`.
 

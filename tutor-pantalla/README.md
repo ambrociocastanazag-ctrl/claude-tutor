@@ -241,8 +241,9 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
   - `$…$` y `$$…$$` con MathJax (📋 LaTeX; copiar devuelve el LaTeX; «$5» y «$B$2» no son fórmulas).
   - Bloques ` ```svg Pie ` con colores por nombre que siguen el tema.
   - Bloques ` ```grafica {json} `: una gráfica exacta, con un intérprete de expresiones propio (sin `eval`).
-  - Cada figura trae Ampliar, Copiar SVG, Guardar PNG (a Descargas) y «Ponlo en la app».
-  - Pruebas: `node tutor-pantalla/probar_ilustraciones.js`.
+  - Bloques ` ```3d {json} `: figura 3D exacta que se **gira arrastrando** (superficies, sólidos de revolución con disco o capa, curvas, vectores, planos, sólidos, cargas y campos). Motor: `motor_3d.js`; contrato y formato en `CONTRATO-3D.md`.
+  - Cada figura trae Ampliar, Copiar SVG, Guardar PNG (a Descargas) y «Ponlo en la app». En 3D copian la vista que dejaste, «Ponlo en la app» la pone girando sola encima de la app (forma `"3d"`) y «Editar en la tarjeta» la abre en Geometría como guion.
+  - Pruebas: `node tutor-pantalla/probar_ilustraciones.js` y `node tutor-pantalla/probar_3d.js`.
 
 ## Archivos
 
@@ -282,7 +283,10 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
 | `reajustar.py` | 🎯: vuelve a encontrar lo señalado (controles por nombre; o el trozo de imagen con varias escalas, correlación con FFT). `python reajustar.py --probar`. |
 | `marcas_ui.js` | El botón 🎯 Reajustar y el texto enlazado (la palabra de la respuesta hace latir su marca). |
 | `senalar.py` + `senalar_ui.js` | ✏️ Señalar: ventana que recoge el trazo con el ratón sobre la app, y el botón y el flujo hasta la vista previa. `python senalar.py --probar`. |
-| `ilustraciones_ui.js` | Fórmulas, figuras SVG y gráficas exactas dentro del chat, con sus botones. `node probar_ilustraciones.js` prueba el intérprete de expresiones. |
+| `ilustraciones_ui.js` | Fórmulas, figuras SVG, gráficas exactas y figuras 3D girables dentro del chat, con sus botones. `node probar_ilustraciones.js` prueba el intérprete de expresiones y los bloques. |
+| `motor_3d.js` | El motor 3D común (chat, Tarjeta SVG y forma `"3d"`): spec JSON y guion 3D → SVG, girable. Usa `motor_figuras.js` (intérprete con varias variables, estilo y texto). `node probar_3d.js` = pruebas. |
+| `formas_3d.js` | La forma de dibujo `"3d"`: la figura encima de la app, girando sola (vaivén o vuelta entera), con fotogramas de `motor_3d.js`. Muestras: `muestras/3d.json` y `3d_vuelta.json`. |
+| `CONTRATO-3D.md` | El contrato de las figuras 3D: API del motor, formato JSON, guion 3D, y qué hace cada pieza. |
 | `barra_ventana.js` | La barra de la ventana de los cuatro paneles: van sin el marco de Windows (sin el logo de Python) y aquí se ponen minimizar y ✕, como en la Tarjeta SVG. Arrastrar desde la barra de arriba (pestañas o la fila del asistente); los botones y pestañas no arrastran. Python: `OjosApi.ventana_minimizar/ventana_cerrar`. |
 | `CONTRATO-MARCAS.md` | El contrato entre las piezas de lo anterior (quién hace qué y con qué forma). |
 | `para-claude-design/` | El encargo del kit de anotaciones a Claude Design, con capturas de cómo se veía antes; lo que entregue va a `recibido/`. |

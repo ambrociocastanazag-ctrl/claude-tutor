@@ -111,6 +111,10 @@
 !/tutor-pantalla/curso_pantalla.py
 !/tutor-pantalla/panel_curso.py
 !/tutor-pantalla/motor_figuras.js
+!/tutor-pantalla/motor_3d.js
+!/tutor-pantalla/probar_3d.js
+!/tutor-pantalla/formas_3d.js
+!/tutor-pantalla/CONTRATO-3D.md
 !/tutor-pantalla/probar_figuras.js
 !/tutor-pantalla/barra_ventana.js
 !/tutor-pantalla/formas_marcas.js
@@ -139,6 +143,8 @@
 !/tutor-pantalla/muestras/formulas.json
 !/tutor-pantalla/muestras/svg_animado.json
 !/tutor-pantalla/muestras/marcas.json
+!/tutor-pantalla/muestras/3d.json
+!/tutor-pantalla/muestras/3d_vuelta.json
 !/tutor-pantalla/vendor/
 /tutor-pantalla/vendor/*
 !/tutor-pantalla/vendor/tex-svg.js

@@ -1,0 +1,9 @@
+{"dibujos": [
+  {"id": "solidos", "hwnd": 1, "cliente": [1280, 720], "escala": 1.25, "forma": "3d", "color": "azul", "texto": "", "evitar": [],
+   "giro": "vuelta", "vista": [30, 22],
+   "spec": {"titulo": "Sólidos geométricos", "ejes": false,
+            "objetos": [{"tipo": "cubo", "en": [0, 0, 0], "lado": 2, "color": "azul"},
+                        {"tipo": "esfera", "centro": [4, 1, 1], "radio": 1, "color": "rojo", "ecuador": true},
+                        {"tipo": "cono", "base": [1, 4, 0], "apice": [1, 4, 2.5], "radio": 1, "color": "naranja"},
+                        {"tipo": "cilindro", "de": [4, 4, 0], "a": [4, 4, 2], "radio": 0.8, "color": "verde"}]}}
+]}

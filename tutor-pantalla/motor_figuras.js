@@ -157,35 +157,37 @@
              tanh: Math.tanh, floor: Math.floor, ceil: Math.ceil, sign: Math.sign};
   var ALIAS = {sen: 'sin', tg: 'tan', arcsin: 'asin', arccos: 'acos', arctan: 'atan', raiz: 'sqrt', lg: 'log10'};
   var CONST = {pi: Math.PI, e: Math.E, tau: 2 * Math.PI};
-  var NOMBRES = Object.keys(FUN).concat(Object.keys(ALIAS), Object.keys(CONST), ['x']).sort(function(a, b){ return b.length - a.length; });
+  function nombresCon(vars){ return Object.keys(FUN).concat(Object.keys(ALIAS), Object.keys(CONST), vars).sort(function(a, b){ return b.length - a.length; }); }
+  var NOMBRES = nombresCon(['x']);
 
   function normalizar(s){
     return String(s).replace(/[−–—]/g, '-').replace(/[×·]/g, '*').replace(/÷/g, '/').replace(/π/g, ' pi ')
       .replace(/√/g, ' sqrt ').replace(/²/g, '^2').replace(/³/g, '^3').replace(/ /g, ' ')
       .replace(/(\d),(\d)/g, '$1.$2').replace(/\*\*/g, '^').replace(/^\s*(y|f\s*\(\s*x\s*\))\s*=\s*/i, '');
   }
-  function partir(id){                                      // «sinx» → sin, x · «pix» → pi, x
+  function partir(id, nombres){                             // «sinx» → sin, x · «pix» → pi, x
     var out = [];
+    nombres = nombres || NOMBRES;
     while (id){
       var h = null;
-      for (var i = 0; i < NOMBRES.length; i++) if (id.indexOf(NOMBRES[i]) === 0){ h = NOMBRES[i]; break; }
+      for (var i = 0; i < nombres.length; i++) if (id.indexOf(nombres[i]) === 0){ h = nombres[i]; break; }
       if (!h) throw new Error('no entiendo «' + id + '»');
       out.push(h); id = id.slice(h.length);
     }
     return out;
   }
-  function conocido(n){ return tiene(FUN, n) || tiene(ALIAS, n) || tiene(CONST, n) || n === 'x'; }
-  function tokens(s){
-    var t = [], i = 0, m;
+  function conocido(n, vars){ return tiene(FUN, n) || tiene(ALIAS, n) || tiene(CONST, n) || (vars || ['x']).indexOf(n) >= 0; }
+  function tokens(s, vars){
+    var t = [], i = 0, m, nombres = vars ? nombresCon(vars) : NOMBRES;
     while (i < s.length){
       var rest = s.slice(i), c = s.charAt(i);
       if (/\s/.test(c)){ i++; continue; }
       if ((m = /^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i.exec(rest))){ t.push({k: 'num', v: parseFloat(m[0])}); i += m[0].length; continue; }
       if ((m = /^[A-Za-z_]+\d*/.exec(rest))){
         var id = m[0].toLowerCase();
-        if (!conocido(id)) id = /^[A-Za-z_]+/.exec(rest)[0].toLowerCase();
+        if (!conocido(id, vars)) id = /^[A-Za-z_]+/.exec(rest)[0].toLowerCase();
         i += id.length;
-        (conocido(id) ? [id] : partir(id)).forEach(function(n){ t.push({k: 'id', v: tiene(ALIAS, n) ? ALIAS[n] : n}); });
+        (conocido(id, vars) ? [id] : partir(id, nombres)).forEach(function(n){ t.push({k: 'id', v: tiene(ALIAS, n) ? ALIAS[n] : n}); });
         continue;
       }
       if ('+-*/^()'.indexOf(c) >= 0){ t.push({k: 'op', v: c}); i++; continue; }
@@ -203,12 +205,14 @@
     }
     return Math.pow(a, n);
   }
+  // opciones.vars: ['x', 'y'] → f(x, y) con esas variables en ese orden (el 3D); sin ella, f(x)
   function compilar(texto, opciones){
     var constante = !!(opciones && opciones.constante);     // constante: «x» es una variable libre y no se acepta (coordenadas)
+    var vars = opciones && opciones.vars ? opciones.vars.map(function(v){ return String(v).toLowerCase(); }) : null, V = [];
     texto = normalizar(texto);
     if (!texto.trim()) throw new Error('expresión vacía');
     if (texto.length > 300) throw new Error('expresión demasiado larga');
-    var tk = tokens(texto), p = 0, prof = 0;
+    var tk = tokens(texto, vars), p = 0, prof = 0;
     function es(v){ var t = tk[p]; return !!t && t.k === 'op' && t.v === v; }
     function empiezaPrimario(){ var t = tk[p]; return !!t && (t.k === 'num' || t.k === 'id' || (t.k === 'op' && t.v === '(')); }
     function esperar(v){ if (!es(v)) throw new Error('falta «' + v + '»'); p++; }
@@ -245,7 +249,8 @@
       if (!t) throw new Error('la expresión termina antes de tiempo');
       if (t.k === 'num'){ var v = t.v; return function(){ return v; }; }
       if (t.k === 'id'){
-        if (t.v === 'x'){ if (constante) throw new Error('contiene una variable libre (x)'); return function(x){ return x; }; }
+        if (vars && vars.indexOf(t.v) >= 0){ var iv = vars.indexOf(t.v); return function(){ return V[iv]; }; }
+        if (t.v === 'x' && !vars){ if (constante) throw new Error('contiene una variable libre (x)'); return function(x){ return x; }; }
         if (tiene(CONST, t.v)){ var c = CONST[t.v]; return function(){ return c; }; }
         var f = FUN[t.v], a;
         if (es('(')){ p++; a = suma(); esperar(')'); }
@@ -260,6 +265,7 @@
     }
     var fn = suma();
     if (p < tk.length) throw new Error('sobra «' + (tk[p].v) + '»');
+    if (vars) return function(){ for (var i = 0; i < vars.length; i++) V[i] = arguments[i]; return fn(); };
     return fn;
   }
   function numeroDe(v, nombre){                             // un límite del JSON: número o expresión constante («-2*pi»)
@@ -1201,7 +1207,11 @@
   }
 
   var API = {estilo: ESTILO, tamanos: TAMANOS, compilar: compilar, grafica: function(spec, opts){ return grafica(spec, opts, false); }, geometria: geometria, plano: plano,
-             _etiquetaPi: etiquetaPi, _estiloDe: estiloDe, _colorDe: colorDe};
+             _etiquetaPi: etiquetaPi, _estiloDe: estiloDe, _colorDe: colorDe,
+             // piezas comunes que usa motor_3d.js (no son contrato de la tarjeta)
+             _u: {estiloDe: estiloDe, colorDe: colorDe, anchoDe: anchoDe, escalaDe: escalaDe, colorFondo: colorFondo, esc: esc, redondo: redondo,
+                  r2: r2, textoSvg: textoSvg, punta: punta, cabecera: cabecera, ticksNum: ticksNum, etiquetaNum: etiquetaNum, mezcla: mezcla,
+                  numeroDe: numeroDe, claveNorm: claveNorm, partirTop: partirTop}};
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (RAIZ) RAIZ.Figuras = API;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

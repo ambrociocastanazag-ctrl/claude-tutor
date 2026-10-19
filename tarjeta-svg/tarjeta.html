@@ -71,7 +71,8 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
 #tarjeta[data-copiado] .fig-cab .listo{display:flex}
 .fig-cab .esp{flex:1}
 .mini-btn{height:22px;padding:0 6px;border:0;border-radius:5px;background:none;font-size:12px;font-weight:600;color:var(--tenue);display:inline-flex;align-items:center;gap:4px}
-.mini-btn:hover{background:var(--sup-2);color:var(--tinta)}
+.mini-btn:hover:not(:disabled){background:var(--sup-2);color:var(--tinta)}
+.mini-btn:disabled{opacity:.4;cursor:default}
 .tamanos{display:flex;height:22px;border:1px solid var(--borde);border-radius:6px;overflow:hidden}
 .tamanos button{width:22px;border:0;background:none;font:700 11.5px var(--f);color:var(--tenue);padding:0}
 .tamanos button+button{border-left:1px solid var(--borde)}
@@ -141,6 +142,7 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
 <script src="/tutor-pantalla/vendor/tex-svg.js"></script>
 <script src="/tutor-pantalla/marcas.js"></script>
 <script src="/tutor-pantalla/motor_figuras.js"></script>
+<script src="/tutor-pantalla/motor_3d.js"></script>
 <script>
 /* La cáscara: pestañas, plegar/desplegar, la figura central, copiar, arrastrar, tamaño y fondo, y recordar lo escrito (CONTRATO.md §2). */
 (function(){
@@ -206,7 +208,7 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
   function vista(){
     var p = PESTANAS[activa], t = opc.fondo === 'blanco' ? 'claro' : window.Tarjeta.tema, f = null;
     try { f = p && p.figura ? p.figura(t) : null; } catch (e) {}
-    return f && f.svg ? {svg: preparar(f.svg), nombre: f.nombre || activa} : null;
+    return f && f.svg ? {svg: preparar(f.svg), nombre: f.nombre || activa, vivo: f.vivo} : null;     // vivo(lienzo): figura girable (3D), la pestaña la dibuja y la gira ella
   }
   function dataUrl(svg){ return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg))); }
   function aPng(svg, escala){
@@ -232,15 +234,24 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
     var w = parseFloat(s.getAttribute('width')), h = parseFloat(s.getAttribute('height')), k = Math.min(1, l.clientWidth / w, l.clientHeight / h) || 1;
     s.style.width = Math.round(w * k) + 'px'; s.style.height = Math.round(h * k) + 'px';
   }
+  var vivoActual = null;
   function refrescar(){
     var f = figura(), v = vista(), hay = !!f;
     $('copiarSvg').disabled = $('copiarPng').disabled = $('miniCopiar').disabled = !hay;
     var lam = $('lamina'), blanco = opc.fondo === 'blanco';
     lam.classList.toggle('ecuacion', activa === 'escribir');
-    lam.innerHTML = v ? v.svg : '<span class="vacio">' + (VACIO[activa] || '') + '</span>';
-    $('medidas').textContent = v ? medidas(v.svg) : '';
+    if (v && v.vivo){                         // 3D: el lienzo lo lleva la pestaña (no se reescribe al girar); lo que se copia da las medidas
+      vivoActual = PESTANAS[activa]; v.vivo(lam); v.svg = lam.innerHTML;
+    } else {
+      if (vivoActual){ if (vivoActual.soltar) vivoActual.soltar(); vivoActual = null; }
+      lam.innerHTML = v ? v.svg : '<span class="vacio">' + (VACIO[activa] || '') + '</span>';
+    }
+    $('medidas').textContent = v ? medidas(v.vivo ? f.svg : v.svg) : '';
+    $('mathstudio').disabled = !!(v && v.vivo);
+    $('mathstudio').title = v && v.vivo ? 'MathStudio no tiene 3D' : 'Abrir en MathStudio (para lo complejo)';
     $('lienzo').classList.toggle('blanco', blanco); $('lienzo').classList.toggle('transparente', !blanco);
-    $('lienzo').draggable = $('mini').draggable = hay;
+    $('lienzo').draggable = hay && !(v && v.vivo);       // en 3D el arrastre del lienzo gira la figura; se saca por «Arrastra la figura»
+    $('mini').draggable = hay;
     var mini = $('mini'); mini.innerHTML = v ? v.svg : ''; mini.classList.toggle('blanco', blanco); mini.classList.toggle('vacio', !v);
     if (!document.body.classList.contains('plegada')) ajustarEcuacion();
     guardar();
@@ -291,7 +302,7 @@ body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;heigh
     });
   }
   function ir(id, contenido){
-    if (!id && contenido) id = {grafica: 'grafica', geometria: 'geometria', latex: 'escribir', svg: 'asistente'}[contenido.tipo] || activa;
+    if (!id && contenido) id = {grafica: 'grafica', geometria: 'geometria', '3d': 'geometria', latex: 'escribir', svg: 'asistente'}[contenido.tipo] || activa;
     if (!PESTANAS[id]) return;
     if (activa && activa !== 'asistente') anterior = activa;
     activa = id; copiado = null; pintarCopiado();

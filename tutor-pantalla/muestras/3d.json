@@ -1,0 +1,9 @@
+{"dibujos": [
+  {"id": "revolucion", "hwnd": 1, "cliente": [1280, 720], "escala": 1.25, "forma": "3d", "color": "azul", "texto": "", "evitar": [], "r": [40, 120, 480, 400],
+   "giro": "vaiven",
+   "spec": {"titulo": "Sólido de revolución de y = √x", "ejes": true,
+            "objetos": [{"tipo": "revolucion", "f": "sqrt(x)", "x": [0, 4], "eje": "x", "angulo": 300, "corte": 2}]}},
+  {"id": "revolucion_objetivo", "hwnd": 1, "cliente": [1280, 720], "escala": 1.25, "forma": "3d", "color": "verde", "texto": "Gira solo", "evitar": [],
+   "r": [700, 120, 480, 400], "giro": "vaiven", "vista": [-70, 18],
+   "spec": {"revolucion": "sqrt(x)", "x": [0, 4], "angulo": 300}}
+]}

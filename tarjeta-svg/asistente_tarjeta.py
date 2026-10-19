@@ -1,7 +1,7 @@
 """El asistente de la Tarjeta SVG: responde muy corto y siempre con la figura en un bloque que la tarjeta dibuja exacta.
 
 Usa tutor-pantalla/asistente.Sesion (un `claude -p` vivo, solo WebSearch y WebFetch) con sus propias REGLAS.
-La respuesta trae bloques  ```grafica {json}  ```geometria (guion del lenguaje de MathStudio)  $$latex$$  o ```svg;
+La respuesta trae bloques  ```grafica {json}  ```geometria (guion del lenguaje de MathStudio, o guion 3D del motor_3d.js)  $$latex$$  o ```svg;
 separar() los saca del texto y los devuelve como contenidos {tipo, spec|guion|latex|svg}, el mismo formato de
 Tarjeta.ir() / cargar() (ver CONTRATO.md §2 y §5).
 
@@ -82,10 +82,32 @@ h=altura(A,BC)
      angulorecto(A,B,C)       cuadradito de ángulo recto en B
      marcaparalela(AB,1)      paralelas
      etiqueta(AB,"5 cm")      texto sobre un segmento, recta, polígono...
-   NO existen todavía: baricentro, circuncentro, incentro, ortocentro, circunscrita, inscrita, poligonoregular, vectores,
-   cónicas ni sólidos. Si lo pedido necesita eso, dilo en una frase y sugiere «Abrir en MathStudio» (el botón de la tarjeta); no inventes comandos ni lo aproximes con otra cosa.
+   NO existen todavía: baricentro, circuncentro, incentro, ortocentro, circunscrita, inscrita, poligonoregular y cónicas. Si lo pedido
+   necesita eso, dilo en una frase y sugiere «Abrir en MathStudio» (el botón de la tarjeta); no inventes comandos ni lo aproximes con otra cosa.
    Si te piden un triángulo rectángulo, ponlo con coordenadas reales (por ejemplo A=(0,0), B=(4,0), C=(0,3)) y añade
    angulorecto. Para "la altura sobre la hipotenusa" usa altura(vértice_recto, hipotenusa) y su pie con interseccion.
+
+2b) EN EL ESPACIO (un sólido, una superficie z = f(x, y), una curva, una revolución, vectores o planos en 3D): el mismo bloque
+   geometria, pero con guion 3D; la tarjeta lo dibuja girable con el ratón (nada de ```svg a mano para el 3D). Mismas reglas
+   (nombre a la izquierda, puntos con MAYÚSCULA y tres coordenadas, un objeto por línea):
+```geometria
+A=(0,0,0)
+c=cubo(A,2,opacidad=0.4)
+e=esfera((1,1,1),1,color=rojo)
+V=(2,2,2)
+etiqueta(V,"vértice")
+vista(30,20)
+```
+   Comandos 3D: A=(x,y,z), puntomedio(A,B), segmento(A,B), recta(A,B), vector(A,B) o vector((1,2,3)), triangulo(A,B,C),
+   poligono(A,B,C,D), plano(A,B,C) o plano(2x+y-z=3) o plano(A,normal), esfera(centro,r), cubo(A,lado), caja(A,B) (esquinas opuestas),
+   prisma(A,B,C,altura), piramide(A,B,C,D,ápice), tetraedro(A,B,C,D), cilindro(A,B,radio) (A y B, centros de las bases), cono(centro,ápice,radio),
+   superficie(x^2-y^2) o superficie(f,xmin,xmax,ymin,ymax), curva(cos(t),sin(t),t/4,0,4*pi), carga(A,q), campo(), distancia(A,B),
+   angulo(A,B,C), etiqueta(A,"texto"), vista(giro,altura), ejes(no), numeros(no), proporcion(igual). Al final de cualquier comando:
+   color=azul|rojo|verde|morado|naranja|turquesa|amarillo|#hex, opacidad=0.4 (para ver lo de dentro).
+   SÓLIDOS DE REVOLUCIÓN: revolucion(f,a,b) | revolucion(f,g,a,b) (entre dos curvas) con eje=x (por defecto) | eje=y | eje=y=2 | eje=x=-1,
+   y angulo=300 (menos de 360 deja ver el corte), corte=0.5 (un disco o arandela en ese valor), capa=1 (casquete cilíndrico). Ejemplo:
+   R=revolucion(sqrt(x),0,4,angulo=300). Un cono dentro de un cilindro: A=(0,0,0), B=(0,0,3), ci=cilindro(A,B,1,opacidad=0.3), co=cono(A,B,1).
+   Aquí NO uses circunferencia, arco ni sector (son planos). Si un guion tiene un punto (x,y,z) o un comando de esta lista, es 3D.
 
 3) UNA ECUACIÓN o fórmula suelta: en su propia línea con $$...$$ en LaTeX (la tarjeta la dibuja y la pega como figura):
 $$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
@@ -95,8 +117,7 @@ $$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
    verde, rojo, naranja, morado, amarillo (fill="acento", stroke="tinta"). viewBox de hasta 640x400.
 
 Siempre UNA figura por respuesta (dos solo si te piden comparar). Nada de LaTeX fuera de $$...$$ ni de $...$ pequeños en el
-texto. Si te piden algo que la tarjeta no hace (3D, animaciones, cónicas, construcciones notables, resolver sistemas,
-gráficas de varias variables o paramétricas), dilo en una frase y sugiere abrir MathStudio con el botón de la tarjeta.
+texto. Si te piden algo que la tarjeta no hace (animaciones, cónicas, construcciones notables, resolver sistemas), dilo en una frase y sugiere abrir MathStudio con el botón de la tarjeta.
 
 Si te dan la figura que hay ahora en la pestaña activa (te llega como «Pestaña activa»), un pedido como «retócalo»,
 «ponle el área» o «agrégale la altura» significa devolver la figura COMPLETA modificada (todo el guion o todo el JSON, no solo
@@ -207,6 +228,10 @@ COMANDOS = ["segmento", "recta", "semirrecta", "circunferencia", "poligono", "tr
             "distancia", "angulo", "area", "perimetro", "marcaigual", "marcaangulo", "angulorecto", "marcaparalela", "etiqueta"]
 
 
+COMANDOS_3D = ["esfera", "cubo", "caja", "prisma", "piramide", "tetraedro", "cilindro", "cono", "plano", "vector", "superficie", "curva",
+               "revolucion", "carga", "vista"]
+
+
 def _probar():
     fallos = []
 
@@ -244,7 +269,7 @@ def _probar():
     ok(contexto_texto(None) == "" and "vacía" in contexto_texto({"pestana": "grafica"}), "contexto vacío")
     if fallos:
         print("\n".join("✘ " + f for f in fallos)); sys.exit(1)
-    print(f"Asistente de la tarjeta: todo bien ({len(REGLAS)} caracteres de reglas, {len(COMANDOS)} comandos explicados)")
+    print(f"Asistente de la tarjeta: todo bien ({len(REGLAS)} caracteres de reglas, {len(COMANDOS)} comandos y {len(COMANDOS_3D)} de 3D explicados)")
 
 
 if __name__ == "__main__":

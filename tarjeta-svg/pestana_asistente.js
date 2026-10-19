@@ -4,6 +4,8 @@
    Llama a:    window.pywebview.api.asistente_preguntar(texto, contexto) → la respuesta completa (texto) o {texto, contenidos}
                window.pywebview.api.asistente_reiniciar()   ·   api.copiar_svg(svg, nombre)
    Recibe:     window.Tarjeta.trozo(t)  (trozos de la respuesta mientras Claude escribe; si la cáscara no lo define, lo define este archivo)
+   3D:         un bloque geometria con guion 3D (Figuras3D.es3d, tutor-pantalla/motor_3d.js) se dibuja girable con el ratón; al copiar sale la vista actual;
+               «Llevar a Geometría» manda el guion con vista(az, el) al final.
    Necesita:   Figuras.grafica(spec, {tema, tam}) y Figuras.geometria(guion, {tema, tam}) (tutor-pantalla/motor_figuras.js) → {svg}
                y MathJax (tutor-pantalla/vendor/tex-svg.js) para las ecuaciones. Si faltan, la figura sale como texto.
    De la cáscara: Tarjeta.registrar / ir / aviso / cambio / tema, y (opcional) Tarjeta.contexto() → {pestana, contenido}
@@ -130,14 +132,18 @@
   function tema() { return (window.Tarjeta && Tarjeta.tema) || (matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro'); }
 
   /* → {svg, errores, texto} (texto: lo que se enseña si no hay motor o falla) */
-  function dibujar(c, temaFig) {
+  function es3(g) { return !!(window.Figuras3D && Figuras3D.es3d && Figuras3D.es3d(g)); }
+  var vista3;                                        // la vista [az, el] con que dibujar() hace un guion 3D (undefined: la suya)
+  function dibujar(c, temaFig, vista) {
     var o = { svg: null, errores: [], texto: null }, th = temaFig || tema();
+    vista3 = vista || undefined;
     try {
       if (c.tipo === 'grafica') {
         if (!window.Figuras || !Figuras.grafica) o.texto = JSON.stringify(c.spec, null, 1);
         else o.svg = Figuras.grafica(c.spec, { tema: th, tam: 'S' }).svg;
       } else if (c.tipo === 'geometria') {
         if (!window.Figuras || !Figuras.geometria) o.texto = c.guion;
+        else if (es3(c.guion)) { var r3 = Figuras3D.guion(c.guion, { tema: th, tam: 'S', vista: vista3 }); o.svg = r3.svg; o.errores = r3.errores || []; o.es3 = true; }
         else { var r = Figuras.geometria(c.guion, { tema: th, tam: 'S' }); o.svg = r.svg; o.errores = r.errores || []; }
       } else if (c.tipo === 'latex') {
         o.svg = tex(c.latex, true);
@@ -154,7 +160,7 @@
      currentColor (MathJax) no existe fuera de la página: tinta fija. */
   function svgParaCopiar(f, t) {                    // t: el tema de la ventana, solo para enseñarla en la tarjeta plegada
     var th = t || (window.Tarjeta && Tarjeta.temaFigura) || 'claro';
-    var d = dibujar(f.contenido, th);
+    var d = dibujar(f.contenido, th, f.gir ? f.gir.vista() : f.vista);
     return d.svg ? d.svg.replace(/currentColor/g, th === 'oscuro' ? '#e8eaed' : '#1b1d24') : null;
   }
 
@@ -164,10 +170,16 @@
   }
 
   function pintarFigura(f) {
-    var d = dibujar(f.contenido);
+    if (f.gir) { f.vista = f.gir.vista(); try { f.gir.destruir(); } catch (e) {} f.gir = null; }     // se redibuja en la misma vista
+    var d = dibujar(f.contenido, null, f.vista);
     f.svg = d.svg;
     f.lienzo.className = 'ta-lienzo' + (f.contenido.tipo === 'latex' ? ' ta-tex' : '');
     f.lienzo.innerHTML = d.svg ? d.svg : '<pre>' + esc(d.texto || '') + '</pre>';
+    f.lienzo.title = '';
+    if (d.es3 && d.svg) {                              // 3D: se gira arrastrando; lo que se copia sale de la vista actual
+      f.lienzo.innerHTML = ''; f.lienzo.title = 'Arrastra para girar · doble clic: vista inicial';
+      try { f.gir = Figuras3D.girable(f.lienzo, { guion: f.contenido.guion }, { tema: tema(), tam: 'S', vista: f.vista }); } catch (e) { f.lienzo.innerHTML = d.svg; }
+    }
     f.errs.hidden = !d.errores.length;
     f.errs.innerHTML = d.errores.map(function (e) { return 'Línea ' + esc(e.linea) + ': ' + esc(e.mensaje); }).join('<br>');
   }
@@ -201,7 +213,9 @@
     var esp = document.createElement('span'); esp.className = 'ta-esp';
     pie.appendChild(svg); pie.appendChild(png); pie.appendChild(esp);
     if (PESTANA[c.tipo]) pie.appendChild(boton(ic('llevar', 15) + DESTINO[c.tipo], 'Abrirla en la pestaña ' + DESTINO[c.tipo] + ' para retocarla', function () {
-      if (window.Tarjeta && Tarjeta.ir) Tarjeta.ir(PESTANA[c.tipo], c);
+      var cc = c;
+      if (f.gir && c.tipo === 'geometria') { var v = f.gir.vista(); cc = { tipo: 'geometria', guion: c.guion.replace(/^[ \t]*vista[ \t]*\(.*\)[ \t]*$/gim, '').replace(/\n{2,}/g, '\n').trim() + '\nvista(' + Math.round(v[0] * 10) / 10 + ', ' + Math.round(v[1] * 10) / 10 + ')' }; }   // 3D: con la vista que le dio
+      if (window.Tarjeta && Tarjeta.ir) Tarjeta.ir(PESTANA[c.tipo], cc);
     }, false, true));
     caja_.appendChild(f.lienzo); caja_.appendChild(f.errs); caja_.appendChild(pie);
     pintarFigura(f); figuras.push(f);
@@ -243,8 +257,8 @@
 
   function vacio() {
     var v = document.createElement('div'); v.className = 'ta-vacio';
-    v.innerHTML = '<b>Pídeme una figura</b>Una gráfica, un triángulo con su altura, una ecuación…';
-    ['grafica sen y cos de 0 a 2π', 'triángulo rectángulo con su altura', 'la fórmula general'].forEach(function (t) {
+    v.innerHTML = '<b>Pídeme una figura</b>Una gráfica, un triángulo con su altura, un sólido en 3D, una ecuación…';
+    ['grafica sen y cos de 0 a 2π', 'triángulo rectángulo con su altura', 'un cono dentro de un cilindro', 'la fórmula general'].forEach(function (t) {
       var b = boton(t, 'Probar este pedido', function () { caja.value = t; enviar(); }); b.className = 'ta-chip'; v.appendChild(b);
     });
     lista.appendChild(v);

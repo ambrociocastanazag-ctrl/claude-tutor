@@ -53,7 +53,13 @@ Tarjeta.aviso(texto)                                   // la confirmación breve
 Tarjeta.tema                                           // 'claro' | 'oscuro'
 ```
 
-`contenido` de `cargar` / `Tarjeta.ir`: `{tipo: 'grafica', spec}`, `{tipo: 'geometria', guion}`, `{tipo: 'latex', latex}` o `{tipo: 'svg', svg}`.
+`contenido` de `cargar` / `Tarjeta.ir`: `{tipo: 'grafica', spec}`, `{tipo: 'geometria', guion}`, `{tipo: 'latex', latex}`, `{tipo: 'svg', svg}` o (2026-10-19) `{tipo: '3d', spec, vista}` (una figura 3D del chat sin guion: va a Geometría, girable, con el aviso «viene del chat»).
+
+**Figuras girables (3D, 2026-10-19; contrato en `tutor-pantalla/CONTRATO-3D.md` §5):**
+- Una pestaña puede devolver en `figura(tema)` (solo con tema, el de enseñarla) un campo `vivo(lienzo)`: la cáscara no escribe el SVG, le da el lienzo y la pestaña dibuja y gira ahí (`Figuras3D.girable`). Debe ser idempotente (la cáscara lo llama en cada `cambio()`). Sin tema, `figura()` es lo que se copia: la vista actual, encuadre justo, estilo claro.
+- Una pestaña con `vivo` puede traer `soltar()`: la cáscara la llama al mostrar otra cosa (quita los eventos de giro).
+- Con `vivo`: el arrastre del lienzo gira (se saca la figura por «Arrastra la figura»), ↗ MathStudio se apaga con el título «MathStudio no tiene 3D» y las medidas son las de lo que se copia.
+- Geometría: `estado()` → `{guion, vista}` (`vista` es la que giró la persona, o null); una `vista(az, el)` nueva en el guion manda sobre la girada.
 
 ## 3. Python de la ventana (`tarjeta.py`, la API que llama la página)
 

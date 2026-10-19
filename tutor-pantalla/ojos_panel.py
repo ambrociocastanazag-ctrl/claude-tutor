@@ -27,10 +27,11 @@ import ojos, archivos, marcador                                                 
 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
-SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js",
-              "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "motor_figuras.js", "ilustraciones_ui.js", "barra_ventana.js"]
+SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "formas_3d.js",
+              "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "motor_figuras.js", "motor_3d.js", "ilustraciones_ui.js",
+              "barra_ventana.js"]
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
-FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
+FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar", "3d"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
 CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta", "en", "linea", "archivo"}    # "en": objetivo de la interfaz de Dia
 MAX_DIBUJOS = 6
@@ -79,6 +80,9 @@ Comunes: "texto" (1 a 5 palabras), "decir" (frase corta que se lee en voz alta s
         (solo formas y texto; sin scripts ni imágenes), encajado en la caja. PUEDE IR ANIMADO: <animate>,
         <animateTransform>, <animateMotion> (con <mpath href='#id'/>) o CSS con @keyframes en un <style>; ciclos de
         hasta 6 s y repeatCount='indefinite' para que se repita (p. ej. un punto que recorre una curva, barras que crecen)
+  {"tipo": "dibujo", "forma": "3d", "spec": {"revolucion": "sqrt(x)", "x": [0, 4], "angulo": 300}, "vista": [-70, 18],
+        "giro": "vaiven"}   figura 3D que gira sola, despacio (spec como el bloque 3d del chat; giro: vaiven | vuelta | no);
+        sin objetivo sale en el centro de la ventana, con él se encaja ahí
 En Excel, con "celda": "formula" sin latex escribe la de la celda ("grafica": true añade una mini gráfica de sus
 datos), "rayos_x" anima de dónde salen los valores de la fórmula y "desarmar" sin "original" usa su fórmula.
 Úsalos cuando aclaren más que una flecha (máximo 2 o 3 por respuesta); para señalar un botón basta la flecha."""
@@ -135,6 +139,18 @@ ILUSTRACIONES EN EL CHAT (se ven dentro de tu respuesta, no encima de la app):
   bisectriz(A,B,C), altura(A,BC), mediana(A,BC), tan(P,c,i) | tan(c1,c2,i), distancia, angulo(A,B,C), area,
   perimetro, marcaigual(AB,n), marcaangulo(A,B,C,n), angulorecto(A,B,C), marcaparalela(AB,n), etiqueta(AB,"texto").
   Cada figura del chat trae «Editar en la tarjeta»: la Tarjeta SVG la abre para retocarla y copiarla a Miro.
+- Figura 3D girable (exacta; él la gira arrastrando): un bloque "3d" con una spec JSON. Para volúmenes, sólidos,
+  superficies z = f(x, y), vectores y planos en el espacio: mejor que dibujar 3D a mano en SVG.
+  ```3d
+  {"titulo": "y = √x girada", "pie": "Corte a x = 2", "revolucion": "sqrt(x)", "x": [0, 4], "angulo": 300, "corte": 2}
+  ```
+  ```3d
+  {"objetos": [{"tipo": "cubo", "en": [0, 0, 0], "lado": 2, "color": "azul", "opacidad": 0.4},
+               {"tipo": "esfera", "centro": [1, 1, 1], "radio": 1, "color": "naranja"}]}
+  ```
+  Tipos: superficie, parametrica, revolucion (f, g, x, eje, angulo, corte, capa), curva, punto, segmento, recta,
+  vector, poligono, plano, cubo, caja, prisma, piramide, cilindro, cono, esfera, malla, carga, campo, etiqueta, cota,
+  angulo. Todo objeto acepta color y opacidad; "vista": [giro, altura] y "pie" opcionales.
 Úsalas cuando una figura aclare más que el texto (una forma, una función, un proceso): máximo 1 o 2 por respuesta y
 con poco texto alrededor. Para señalar algo de la app sigue usando las marcas y los dibujos encima de ella."""
 
@@ -152,8 +168,23 @@ def validar_dibujos(lista, donde="paso"):
     for k, m in enumerate(lista, 1):
         if not isinstance(m, dict) or m.get("forma") not in FORMAS:
             raise ValueError(f"{donde}, dibujo {k}: «forma» tiene que ser una de: {', '.join(sorted(FORMAS))}")
+        if m["forma"] == "3d": _validar_3d(m, f"{donde}, dibujo {k}")
         out.append(dict(m, tipo="dibujo"))
     return out
+
+
+def _validar_3d(m, donde="dibujo"):
+    """La forma «3d»: «spec» es obligatoria (un objeto, o su JSON en texto) y «giro» vaiven, vuelta o no."""
+    sp = m.get("spec")
+    if isinstance(sp, str):
+        try: sp = json.loads(sp)
+        except ValueError: raise ValueError(f"{donde}: el JSON de «spec» no se entiende")
+    if not isinstance(sp, dict) or not sp: raise ValueError(f"{donde}: la forma «3d» necesita «spec» (un objeto con la figura)")
+    if m.get("giro") not in (None, "vaiven", "vuelta", "no"): raise ValueError(f"{donde}: «giro» es vaiven, vuelta o no")
+    if m.get("vista") is not None:
+        v = m["vista"]
+        if not (isinstance(v, (list, tuple)) and len(v) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)):
+            raise ValueError(f"{donde}: «vista» es [giro, altura] en grados")
 
 
 def atajo(ventana, hwnd, accion="window.atajoMirar && window.atajoMirar()"):
@@ -506,6 +537,7 @@ class Ojos:
     def _dibujo(self, m, resolver, ventana):
         forma = str(m.get("forma") or "")
         if forma not in FORMAS: raise ValueError("esa forma no existe")
+        if forma == "3d": _validar_3d(m)
         hwnd, caja, extra = self._donde(m, resolver, ventana)
         pasos = []
         for p in (m.get("pasos") or [])[:8]:
@@ -693,6 +725,19 @@ class OjosApi(SenalarApi):
         W, H = cap.img.size
         w = min(W * 0.6, 640 * cap.k, H * 0.6 * vw / max(vh, 1)); h = w * vh / max(vw, 1)
         _, lote, avisos = self._ojos.dibujos([{"tipo": "dibujo", "forma": "svg", "svg": svg, "caja": [(W - w) / 2, (H - h) / 2, w, h]}])
+        return {"ok": True, "dibujos": lote} if lote else {"ok": False, "error": "; ".join(avisos) or "No pude ponerla en la app."}
+
+    def ilustracion3d_en_app(self, spec_json, vista=None):
+        """«Ponlo en la app» de una figura ```3d del chat: como ilustracion_en_app, pero con la forma "3d" (gira sola, centrada
+        en la última ventana que vio el tutor). spec_json: la spec en JSON; vista: [giro, altura] de la figura del chat."""
+        cap = self._ojos.ultima
+        if cap is None or not ojos.u32.IsWindow(cap.hwnd):
+            return {"ok": False, "error": "Primero enséñame la ventana con la cámara (📷) para saber dónde ponerla."}
+        m = {"tipo": "dibujo", "forma": "3d", "spec": spec_json, "giro": "vaiven"}
+        if isinstance(vista, (list, tuple)) and len(vista) == 2: m["vista"] = list(vista)
+        try: _validar_3d(m)
+        except ValueError as e: return {"ok": False, "error": str(e)}
+        _, lote, avisos = self._ojos.dibujos([m])
         return {"ok": True, "dibujos": lote} if lote else {"ok": False, "error": "; ".join(avisos) or "No pude ponerla en la app."}
 
     # --- la barra de la ventana (barra_ventana.js): los paneles van sin el marco de Windows ---
