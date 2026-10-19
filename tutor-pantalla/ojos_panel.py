@@ -28,7 +28,7 @@ import ojos, archivos, marcador                                                 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
 SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js",
-              "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "motor_figuras.js", "ilustraciones_ui.js"]
+              "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "motor_figuras.js", "ilustraciones_ui.js", "barra_ventana.js"]
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
 FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
@@ -694,6 +694,22 @@ class OjosApi(SenalarApi):
         w = min(W * 0.6, 640 * cap.k, H * 0.6 * vw / max(vh, 1)); h = w * vh / max(vw, 1)
         _, lote, avisos = self._ojos.dibujos([{"tipo": "dibujo", "forma": "svg", "svg": svg, "caja": [(W - w) / 2, (H - h) / 2, w, h]}])
         return {"ok": True, "dibujos": lote} if lote else {"ok": False, "error": "; ".join(avisos) or "No pude ponerla en la app."}
+
+    # --- la barra de la ventana (barra_ventana.js): los paneles van sin el marco de Windows ---
+    def ventana_sin_marco(self):
+        v = getattr(self, "_ventana", None)
+        return bool(v is not None and getattr(v, "frameless", False))
+
+    def ventana_minimizar(self):
+        v = getattr(self, "_ventana", None)
+        if v is not None: v.minimize()
+        return {"ok": True}
+
+    def ventana_cerrar(self):
+        """La ✕ de la barra: lo mismo que la ✕ de Windows (los paneles limpian al cerrarse la ventana)."""
+        v = getattr(self, "_ventana", None)
+        if v is not None: threading.Timer(0.05, v.destroy).start()      # fuera de la llamada de la página
+        return {"ok": True}
 
     def tarjeta_abrir(self, contenido=None):
         """El botón «Tarjeta» y «Editar en la tarjeta» de cada figura del chat: abre la Tarjeta SVG (../tarjeta-svg) o la

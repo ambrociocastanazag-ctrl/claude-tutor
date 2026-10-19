@@ -2,8 +2,8 @@
 
 Una ventanita para sacar figuras matemáticas en SVG y pegarlas en **Miro** (o donde sea).
 
-- **Plegada:** una pestaña de 46 px en el borde derecho, siempre encima, con la última figura y «Copiar».
-- **Desplegada:** **Ctrl+Alt+L** o un clic la abre en 420 × 560 px; Esc o el mismo atajo la pliegan.
+- **Plegada:** una pestaña de 44 × 150 px en el borde derecho, siempre encima, con la última figura y «Copiar».
+- **Desplegada:** **Ctrl+Alt+L** o un clic la abre en 420 × 560 px; Esc o el mismo atajo la pliegan. La **✕** de arriba la cierra del todo (con ella se va Ctrl+Alt+L); se vuelve a abrir desde «Mis clases» o con el botón «Tarjeta».
 - **Pestañas:**
   - **Escribir:** ecuaciones con MathLive y los atajos de MathStudio.
   - **Gráfica:** hasta 3 funciones, rango y área.
@@ -25,7 +25,7 @@ Una ventanita para sacar figuras matemáticas en SVG y pegarlas en **Miro** (o d
 
 Es un solo ejemplar: si ya está abierta, la trae al frente.
 
-**Estado:** funciona con una interfaz **provisional**. Falta el diseño de Claude Design (encargo en `para-claude-design/ENCARGO.md`), que solo cambia cómo se ve.
+**Estado:** funciona, con el diseño de Claude Design (2026-10-18). Ctrl+C copia el SVG y Ctrl+Mayús+C el PNG cuando no estás escribiendo en un campo. Falta que la pruebe pegando en Miro.
 
 ## Archivos
 
@@ -33,7 +33,7 @@ Es un solo ejemplar: si ya está abierta, la trae al frente.
 |---|---|
 | `tarjeta.py` | La ventana (pywebview: plegada o desplegada, siempre encima, Ctrl+Alt+L). Contiene la API de la página (copiar, MathStudio, estado, asistente) y el servidor local `127.0.0.1:4748`. Ese servidor da un solo ejemplar, recibe órdenes de fuera y sirve la página y los estáticos de `tarjeta-svg/` y `tutor-pantalla/`. `--probar`. |
 | `abrir_tarjeta.py` | La abre o la trae al frente, y con `--figura '<json>'` le carga una figura. Lo usan «Mis clases» y los paneles. |
-| `tarjeta.html` | La cáscara **provisional**: pestañas, plegada, barra de copiar, tamaño y fondo, arrastrar, recordar lo escrito. |
+| `tarjeta.html` | La ventana con el diseño de Claude Design: pestañas, plegada, figura central con su cabecera (arrastrar, medidas, fondo, S/M/L, MathStudio), copiar, recordar lo escrito. |
 | `pestana_escribir.js` · `atajos.js` | Escribir: MathLive con los atajos de MathStudio y la ecuación con MathJax, con la misma holgura del viewBox que MathStudio. |
 | `pestana_grafica.js` · `pestana_geometria.js` | Gráfica y Geometría, sobre `tutor-pantalla/motor_figuras.js`. |
 | `asistente_tarjeta.py` · `pestana_asistente.js` | El asistente (`claude -p`, solo WebSearch y WebFetch): responde con bloques que la tarjeta dibuja exactos. `--probar`, `--vivo "pedido"`. |

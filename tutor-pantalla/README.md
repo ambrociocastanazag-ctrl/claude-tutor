@@ -283,6 +283,7 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
 | `marcas_ui.js` | El botón 🎯 Reajustar y el texto enlazado (la palabra de la respuesta hace latir su marca). |
 | `senalar.py` + `senalar_ui.js` | ✏️ Señalar: ventana que recoge el trazo con el ratón sobre la app, y el botón y el flujo hasta la vista previa. `python senalar.py --probar`. |
 | `ilustraciones_ui.js` | Fórmulas, figuras SVG y gráficas exactas dentro del chat, con sus botones. `node probar_ilustraciones.js` prueba el intérprete de expresiones. |
+| `barra_ventana.js` | La barra de la ventana de los cuatro paneles: van sin el marco de Windows (sin el logo de Python) y aquí se ponen minimizar y ✕, como en la Tarjeta SVG. Arrastrar desde la barra de arriba (pestañas o la fila del asistente); los botones y pestañas no arrastran. Python: `OjosApi.ventana_minimizar/ventana_cerrar`. |
 | `CONTRATO-MARCAS.md` | El contrato entre las piezas de lo anterior (quién hace qué y con qué forma). |
 | `para-claude-design/` | El encargo del kit de anotaciones a Claude Design, con capturas de cómo se veía antes; lo que entregue va a `recibido/`. |
 | `vendor/` | MathJax 3.2.2 (`tex-svg.js`) y rough.js 4.6.6, con sus licencias (Apache 2.0 y MIT). No se editan. |

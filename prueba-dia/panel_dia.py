@@ -989,7 +989,7 @@ def abrir_ventana(api):
     if ojos_panel: pagina = ojos_panel.inyectar_ui(pagina)      # «Mirar ventana»: la lista y la vista previa
     api._ventana = webview.create_window(api._curso.titulo or "Clase en vivo", html=pagina, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
-                                         on_top=True, text_select=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
+                                         on_top=True, text_select=True, min_size=(360, 300), frameless=bool(ojos_panel), easy_drag=False, background_color="#232631" if tema == "oscuro" else "#F8F6F1")
     if ojos_panel and getattr(api, "_ojos", None) is not None and hasattr(api._ojos, "poner_js"):   # las marcas se dibujan en la página (marcador.py)
         api._ojos.poner_js(lambda c: api._ventana.evaluate_js(c) if api._ventana else None)
 

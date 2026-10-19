@@ -448,7 +448,7 @@ def abrir_ventana(api):
     pagina = ojos_panel.inyectar_ui(pagina)
     api._ventana = webview.create_window(api._curso.titulo or "Curso", html=pagina, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
-                                         on_top=True, text_select=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
+                                         on_top=True, text_select=True, min_size=(360, 300), frameless=True, easy_drag=False, background_color="#232631" if tema == "oscuro" else "#F8F6F1")
     if hasattr(api._ojos, "poner_js"):                                      # las marcas se dibujan en la página (marcador.py, CONTRATO-MARCAS §3)
         api._ojos.poner_js(lambda c: api._ventana.evaluate_js(c) if api._ventana else None)
 

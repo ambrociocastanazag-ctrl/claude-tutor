@@ -4,76 +4,136 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tarjeta SVG</title>
-<!-- Cáscara PROVISIONAL (CONTRATO.md §2): el diseño de Claude Design la reemplazará; las pestañas viven en pestana_*.js -->
+<!-- La cáscara con el diseño de Claude Design (CONTRATO.md §2): pestañas, plegada, figura central, copiar. Las pestañas viven en pestana_*.js.
+     Sin fuentes de internet: «Atkinson Hyperlegible Next» solo se usa si ya está instalada; si no, Segoe UI. -->
 <style>
 :root{color-scheme:light;
-  --bg:oklch(0.975 0.006 85); --surface:oklch(0.995 0.003 85); --sunk:oklch(0.942 0.008 85); --line:oklch(0.875 0.01 85);
-  --ink:oklch(0.25 0.01 265); --muted:oklch(0.5 0.01 265); --acc:oklch(0.5 0.17 268); --acc-soft:oklch(0.945 0.03 268); --on-acc:#fff;
-  --ok:oklch(0.5 0.13 150); --bad:oklch(0.53 0.18 25);
-  --sans:'Atkinson Hyperlegible Next','Segoe UI',system-ui,sans-serif; --mono:'Atkinson Hyperlegible Mono','Cascadia Mono',Consolas,monospace}
+  --acento:oklch(0.5 0.17 268); --acento-2:oklch(0.44 0.17 268); --sobre-acento:#fff; --acento-suave:oklch(0.93 0.035 268); --acento-texto:oklch(0.45 0.17 268);
+  --fondo:oklch(0.975 0.006 85); --hundido:oklch(0.935 0.007 85); --sup:oklch(0.995 0.003 85); --sup-2:oklch(0.95 0.006 85); --borde:oklch(0.885 0.008 85);
+  --tinta:oklch(0.24 0.01 265); --tenue:oklch(0.47 0.01 265);
+  --error:oklch(0.52 0.19 25); --sobre-error:#fff; --error-suave:oklch(0.955 0.03 25); --ok:oklch(0.46 0.12 150); --cuadro:oklch(0.945 0.004 85);
+  --f:'Atkinson Hyperlegible Next','Segoe UI',system-ui,sans-serif; --mono:'Atkinson Hyperlegible Mono','Cascadia Mono',Consolas,monospace}
 :root[data-theme="dark"]{color-scheme:dark;
-  --bg:oklch(0.205 0.008 265); --surface:oklch(0.245 0.01 265); --sunk:oklch(0.17 0.008 265); --line:oklch(0.35 0.012 265);
-  --ink:oklch(0.93 0.01 265); --muted:oklch(0.7 0.01 265); --acc:oklch(0.74 0.12 268); --acc-soft:oklch(0.3 0.05 268); --on-acc:oklch(0.18 0.03 268);
-  --ok:oklch(0.76 0.14 150); --bad:oklch(0.74 0.15 25)}
-*{box-sizing:border-box} html,body{margin:0;height:100%;overflow:hidden}
-body{background:var(--bg);color:var(--ink);font:13px/1.4 var(--sans);-webkit-font-smoothing:antialiased;user-select:none}
-button{font:inherit;color:inherit;cursor:pointer}
-svg.ic{width:16px;height:16px;flex:none}
-/* plegada: la pestaña del borde */
-#plegada{display:none;height:100%;flex-direction:column;align-items:center;gap:6px;padding:8px 4px;border:1px solid var(--line);border-right:0;border-radius:12px 0 0 12px;background:var(--surface);cursor:pointer}
-body.plegada #plegada{display:flex} body.plegada #desplegada{display:none}
-#mini{width:36px;height:72px;border-radius:8px;background:var(--sunk);display:grid;place-items:center;overflow:hidden}
-#mini img{max-width:34px;max-height:70px}
-.boton-mini{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
-.boton-mini.prim{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
-/* desplegada */
-#desplegada{display:flex;flex-direction:column;height:100%;border:1px solid var(--line);border-right:0;border-radius:12px 0 0 12px;background:var(--bg)}
-header{display:flex;align-items:center;gap:2px;padding:6px 6px 0;-webkit-app-region:drag}
-#pestanas{display:flex;gap:1px;min-width:0}
-header button{-webkit-app-region:no-drag}
-.pest{display:flex;align-items:center;gap:5px;padding:6px 9px;border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);font-weight:600}
-.pest[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 -1px 0 var(--line) inset}
-header .hueco{flex:1}
-.icono{width:28px;height:28px;border:0;border-radius:7px;background:transparent;display:grid;place-items:center;color:var(--muted)}
-.icono:hover{background:var(--sunk);color:var(--ink)}
-main{flex:1;min-height:0;background:var(--surface);border-top:1px solid var(--line);overflow:auto;padding:10px}
-#contenido > [hidden]{display:none !important}
-footer{display:flex;align-items:center;gap:6px;padding:7px 8px;border-top:1px solid var(--line);background:var(--bg)}
-#arrastre{width:40px;height:32px;border-radius:7px;border:1px dashed var(--line);display:grid;place-items:center;cursor:grab;overflow:hidden;background:var(--surface)}
-#arrastre img{max-width:38px;max-height:30px;pointer-events:none}
-.btn{height:32px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;display:flex;align-items:center;gap:6px}
-.btn.prim{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+  --acento:oklch(0.74 0.12 268); --acento-2:oklch(0.8 0.1 268); --sobre-acento:oklch(0.18 0.03 268); --acento-suave:oklch(0.31 0.05 268); --acento-texto:oklch(0.82 0.09 268);
+  --fondo:oklch(0.205 0.008 265); --hundido:oklch(0.17 0.007 265); --sup:oklch(0.245 0.009 265); --sup-2:oklch(0.29 0.01 265); --borde:oklch(0.33 0.01 265);
+  --tinta:oklch(0.94 0.005 85); --tenue:oklch(0.74 0.01 265);
+  --error:oklch(0.76 0.14 25); --sobre-error:oklch(0.2 0.04 25); --error-suave:oklch(0.29 0.06 25); --ok:oklch(0.8 0.14 150); --cuadro:oklch(0.275 0.008 265)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--fondo);color:var(--tinta);font:500 13px/1.35 var(--f);-webkit-font-smoothing:antialiased;user-select:none}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+input,textarea{user-select:text}
+[data-ic]{display:inline-flex;flex:none} [data-ic] svg,.ic svg{display:block}
+:focus-visible{outline:2px solid var(--acento);outline-offset:1px}
+[hidden]{display:none !important}
+
+/* plegada · 44 × 150, pegada al borde derecho */
+#plegada{display:none}
+body.plegada #desplegada{display:none}
+body.plegada #plegada{display:flex;position:fixed;top:0;right:0;width:44px;height:150px;flex-direction:column;align-items:center;justify-content:space-between;padding:5px 0 5px 1px;background:var(--fondo);border:1px solid var(--borde);border-right:0;border-radius:12px 0 0 12px;cursor:pointer}
+.pl-abrir{width:34px;height:24px;border:0;border-radius:6px;background:none;color:var(--tenue);display:grid;place-items:center;padding:0}
+.pl-abrir:hover{background:var(--sup-2);color:var(--tinta)}
+.pl-mini{width:34px;height:62px;border:1px solid var(--borde);border-radius:7px;overflow:hidden;cursor:grab;display:grid;place-items:center;padding:3px;background:var(--sup)}
+.pl-mini:hover{border-color:var(--acento)}
+.pl-mini svg{width:100%;height:100%;display:block;pointer-events:none}
+.pl-mini.blanco{background:#fff} .pl-mini.vacio{cursor:default;opacity:.6}
+.pl-copiar{width:34px;height:34px;border-radius:8px;border:0;background:var(--acento);color:var(--sobre-acento);display:grid;place-items:center;padding:0}
+.pl-copiar:hover:not(:disabled){background:var(--acento-2)}
+.pl-copiar:disabled{opacity:.45;cursor:default}
+.pl-copiar.hecho{background:var(--ok)}
+
+/* desplegada · 420 × 560 */
+#desplegada{height:100%}
+#tarjeta{display:flex;flex-direction:column;height:100%}
+.pestanas{display:flex;align-items:flex-end;gap:2px;height:36px;padding:4px 4px 0;background:var(--hundido);border-bottom:1px solid var(--borde);flex:none}
+#pestanas{display:contents}
+.pestana{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;height:31px;margin-bottom:-1px;padding:0 2px;border:1px solid transparent;border-bottom:0;border-radius:8px 8px 0 0;background:none;font-weight:700;font-size:12px;color:var(--tenue);white-space:nowrap}
+.pestana:hover{color:var(--tinta)}
+.pestana[aria-selected="true"]{background:var(--fondo);border-color:var(--borde);color:var(--tinta)}
+.glifo{display:inline-block;width:15px;text-align:center;font:400 15px/1 'Segoe UI Symbol','Segoe UI',sans-serif;flex:none}
+.plegar,.cerrar{flex:none;width:28px;height:28px;margin:0 0 3px 0;border:0;border-radius:6px;background:none;color:var(--tenue);display:grid;place-items:center;padding:0}
+.plegar:hover,.cerrar:hover{background:var(--sup-2);color:var(--tinta)}
+.cerrar:hover{background:var(--error);color:var(--sobre-error)}
+#contenido{display:flex;flex-direction:column;flex:none}
+#tarjeta[data-p="asistente"] #contenido{flex:1;min-height:0}
+.panel{flex:none;padding:8px 8px 0;min-width:0}
+.panel[data-pestana="asistente"]{flex:1;min-height:0;padding:0}
+
+/* la figura (la misma para Escribir, Gráfica y Geometría) */
+.figura{flex:1;min-height:0;display:flex;flex-direction:column;margin:8px 8px 0;border:1px solid var(--borde);border-radius:10px;background:var(--sup);overflow:hidden}
+.fig-cab{display:flex;align-items:center;gap:4px;height:30px;padding:0 4px 0 6px;border-bottom:1px solid var(--borde);flex:none;font-size:12px;color:var(--tenue);white-space:nowrap}
+.agarre{display:flex;align-items:center;gap:4px;height:22px;padding:0 4px;border-radius:5px;cursor:grab;font-weight:600}
+.agarre:hover{color:var(--tinta);background:var(--sup-2)}
+.medidas{font:500 11.5px var(--mono);margin-left:2px}
+.listo{display:none;align-items:center;gap:5px;font-weight:700;color:var(--ok);padding-left:4px}
+#tarjeta[data-copiado] .fig-cab .agarre,#tarjeta[data-copiado] .fig-cab .medidas{display:none}
+#tarjeta[data-copiado] .fig-cab .listo{display:flex}
+.fig-cab .esp{flex:1}
+.mini-btn{height:22px;padding:0 6px;border:0;border-radius:5px;background:none;font-size:12px;font-weight:600;color:var(--tenue);display:inline-flex;align-items:center;gap:4px}
+.mini-btn:hover{background:var(--sup-2);color:var(--tinta)}
+.tamanos{display:flex;height:22px;border:1px solid var(--borde);border-radius:6px;overflow:hidden}
+.tamanos button{width:22px;border:0;background:none;font:700 11.5px var(--f);color:var(--tenue);padding:0}
+.tamanos button+button{border-left:1px solid var(--borde)}
+.tamanos button[aria-pressed="true"]{background:var(--acento-suave);color:var(--acento-texto)}
+.lienzo{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:10px;cursor:grab;position:relative}
+.lienzo.transparente{background:repeating-conic-gradient(var(--cuadro) 0 25%,transparent 0 50%) 0 0/14px 14px}
+.lienzo.blanco{background:#fff}
+.lienzo:hover{box-shadow:inset 0 0 0 1.5px var(--acento)}
+.lienzo:active{cursor:grabbing}
+.lamina{width:100%;height:100%;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0}
+.lamina svg{display:block;max-width:100%;max-height:100%;width:100%;height:100%;pointer-events:none}
+.lamina.ecuacion svg{width:auto;height:auto}
+.lamina .vacio{color:var(--tenue);font-size:12.5px;text-align:center;padding:14px;max-width:300px;background:var(--sup);border-radius:8px}
+.lienzo.blanco .lamina .vacio{background:#fff}
+
+.acciones{display:flex;gap:6px;padding:8px;flex:none}
+#tarjeta[data-p="asistente"] .figura,#tarjeta[data-p="asistente"] .acciones{display:none}
+.btn{height:36px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 14px;border-radius:8px;border:1px solid var(--borde);background:var(--sup);font-weight:700;font-size:13.5px;white-space:nowrap}
+.btn:hover:not(:disabled){background:var(--sup-2)}
 .btn:disabled{opacity:.45;cursor:default}
-.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seg button{border:0;background:var(--surface);padding:0 7px;height:30px;font-weight:600;color:var(--muted)}
-.seg button[aria-pressed="true"]{background:var(--acc-soft);color:var(--acc)}
-footer .hueco{flex:1}
-#aviso{position:fixed;left:50%;bottom:52px;transform:translateX(-50%);padding:6px 12px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
-#aviso.ver{opacity:.92}
-textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px}
+.btn.principal{flex:1;background:var(--acento);border-color:var(--acento);color:var(--sobre-acento)}
+.btn.principal:hover:not(:disabled){background:var(--acento-2);border-color:var(--acento-2)}
+.btn .atajo{font:500 11.5px var(--mono);opacity:.72}
+.btn.hecho,.btn.principal.hecho{background:var(--ok);border-color:var(--ok);color:var(--sobre-acento)}
+.btn.hecho-2{color:var(--ok);border-color:var(--ok)}
+#aviso{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);max-width:92%;padding:6px 12px;border-radius:999px;background:var(--tinta);color:var(--fondo);font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;text-align:center}
+#aviso.ver{opacity:.94}
 </style>
 </head>
 <body class="plegada">
 <div id="plegada" title="Abrir la tarjeta (Ctrl+Alt+L)">
-  <div id="mini"></div>
-  <button class="boton-mini prim" id="miniCopiar" title="Copiar SVG"></button>
-  <button class="boton-mini" id="miniAbrir" title="Abrir (Ctrl+Alt+L)"></button>
+  <button class="pl-abrir" id="miniAbrir" title="Desplegar · Ctrl+Alt+L" aria-label="Desplegar"></button>
+  <div class="pl-mini vacio" id="mini" draggable="true" data-arrastra title="Arrastra la figura"></div>
+  <button class="pl-copiar" id="miniCopiar" title="Copiar SVG · Ctrl+C" aria-label="Copiar SVG"></button>
 </div>
 <div id="desplegada">
-  <header>
-    <nav id="pestanas" role="tablist"></nav><span class="hueco"></span>
-    <button class="icono" id="mathstudio" title="Abrir en MathStudio (para lo complejo)"></button>
-    <button class="icono" id="plegar" title="Plegar (Ctrl+Alt+L o Esc)"></button>
-  </header>
+ <div id="tarjeta" data-p="">
+  <nav class="pestanas pywebview-drag-region" role="tablist">
+    <span id="pestanas"></span>
+    <button class="plegar" id="plegar" title="Plegar · Ctrl+Alt+L o Esc" aria-label="Plegar"></button>
+    <button class="cerrar" id="cerrar" title="Cerrar la tarjeta (se vuelve a abrir desde «Mis clases» o con el botón «Tarjeta»)" aria-label="Cerrar"></button>
+  </nav>
   <main id="contenido"></main>
-  <footer>
-    <div id="arrastre" draggable="true" title="Arrastra la figura a otra app o a una carpeta"></div>
-    <button class="btn prim" id="copiarSvg"><span id="icCopiar"></span>Copiar SVG</button>
-    <button class="btn" id="copiarPng" title="Copiar como imagen PNG">PNG</button>
-    <span class="hueco"></span>
-    <div class="seg" id="tam" title="Tamaño"><button data-v="S">S</button><button data-v="M">M</button><button data-v="L">L</button></div>
-    <div class="seg" id="fondo" title="Fondo"><button data-v="transparente" title="Transparente">◌</button><button data-v="blanco" title="Blanco">■</button></div>
-  </footer>
+  <div class="figura" id="figura">
+    <div class="fig-cab">
+      <div class="agarre" draggable="true" data-arrastra title="Arrastra la figura a otra app o a una carpeta"><span data-ic="arrastrar" data-t="14"></span>Arrastra la figura</div>
+      <span class="medidas" id="medidas"></span>
+      <span class="listo" role="status"><span data-ic="hecho" data-t="14"></span><span id="listoTxt">SVG copiado</span></span>
+      <span class="esp"></span>
+      <button class="mini-btn" id="fondo" title="Fondo de la figura"><span data-ic="fondo" data-t="14"></span><span id="fondoTxt">Sin fondo</span></button>
+      <div class="tamanos" id="tam" role="group" aria-label="Tamaño">
+        <button data-v="S" title="Pequeña">S</button><button data-v="M" title="Mediana">M</button><button data-v="L" title="Grande">L</button>
+      </div>
+      <button class="mini-btn" id="mathstudio" title="Abrir en MathStudio (para lo complejo)" aria-label="Abrir en MathStudio"><span data-ic="abrirFuera" data-t="14"></span></button>
+    </div>
+    <div class="lienzo transparente" id="lienzo" draggable="true" data-arrastra title="Arrastra la figura a otra app o a una carpeta"><div class="lamina" id="lamina"></div></div>
+  </div>
+  <div class="acciones">
+    <button class="btn principal" id="copiarSvg"><span data-ic="copiar" data-t="16" id="icCopiar"></span><span class="lbl">Copiar SVG</span><span class="atajo">Ctrl+C</span></button>
+    <button class="btn" id="copiarPng" title="Copiar como imagen PNG"><span class="lbl">Copiar PNG</span></button>
+  </div>
+ </div>
 </div>
 <div id="aviso" role="status"></div>
 
@@ -82,19 +142,40 @@ textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px sol
 <script src="/tutor-pantalla/marcas.js"></script>
 <script src="/tutor-pantalla/motor_figuras.js"></script>
 <script>
-/* La cáscara: pestañas, plegar/desplegar, copiar, arrastrar, tamaño y fondo, y recordar lo escrito (CONTRATO.md §2). */
+/* La cáscara: pestañas, plegar/desplegar, la figura central, copiar, arrastrar, tamaño y fondo, y recordar lo escrito (CONTRATO.md §2). */
 (function(){
   var api = function(){ return window.pywebview && window.pywebview.api; };
   var $ = function(id){ return document.getElementById(id); };
   var PESTANAS = {}, ORDEN = ['escribir', 'grafica', 'geometria', 'asistente'], activa = null, anterior = null;
   var opc = {tam: 'M', fondo: 'transparente'}, ANCHOS = {S: 320, M: 480, L: 720};
-  var ICONOS = {escribir: 'Σ', grafica: '∿', geometria: '△', asistente: '✦'};
+  var ICONOS = {escribir: 'Σ', grafica: '∿', geometria: '△', asistente: '✦'};       // los glifos de las pestañas (no los del diseño)
+  var VACIO = {escribir: 'Escribe una ecuación arriba.', grafica: 'Escribe una función, por ejemplo sqrt(x).', geometria: 'Escribe el guion: un objeto por línea.'};
 
-  function ic(nombre, tam){ return window.Marcas && Marcas.iconos && Marcas.iconos[nombre] ? Marcas.iconos[nombre](tam || 16) : ''; }
-  function svgIcono(d){ return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; }
-  var I = {copiar: svgIcono('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>'),
-           abrir: svgIcono('<path d="M15 6l-6 6 6 6"/>'), plegar: svgIcono('<path d="M9 6l6 6-6 6"/>'),
-           fuera: svgIcono('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>')};
+  // ---- íconos del diseño (línea de 1.5 px a cualquier tamaño) ----
+  var TRAZOS = {
+    copiar: '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/>',
+    arrastrar: '<circle cx="9" cy="6" r=".6"/><circle cx="15" cy="6" r=".6"/><circle cx="9" cy="12" r=".6"/><circle cx="15" cy="12" r=".6"/><circle cx="9" cy="18" r=".6"/><circle cx="15" cy="18" r=".6"/>',
+    plegar: '<path d="M20 4v16"/><path d="M4 12h11"/><path d="M11 8l4 4-4 4"/>',
+    desplegar: '<path d="M20 4v16"/><path d="M16 12H5"/><path d="M9 8l-4 4 4 4"/>',
+    asistente: '<path d="M12 3.5c.7 4.6 3.4 7.3 8 8-4.6.7-7.3 3.4-8 8-.7-4.6-3.4-7.3-8-8 4.6-.7 7.3-3.4 8-8z"/>',
+    abrirFuera: '<path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M17.5 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2h4"/>',
+    fondo: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/><path d="M12 4v16"/><path d="M4.5 4.5l7 7"/><path d="M12.5 12.5l7 7"/>',
+    ojo: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+    ojoCerrado: '<path d="M4 9.5C6 12.5 8.8 14 12 14s6-1.5 8-4.5"/><path d="M6.5 12.6L5 15"/><path d="M12 14v2.8"/><path d="M17.5 12.6L19 15"/>',
+    llevar: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9h17"/><path d="M8 14h7"/><path d="M12.5 11.5L15 14l-2.5 2.5"/>',
+    enviar: '<path d="M12 19V5.5"/><path d="M6.5 11L12 5.5l5.5 5.5"/>',
+    hecho: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    cerrar: '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>'
+  };
+  function icono(nombre, tam){
+    tam = tam || 16;
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + tam + '" height="' + tam + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + +(1.5 * 24 / tam).toFixed(2) +
+           '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (TRAZOS[nombre] || '') + '</svg>';
+  }
+  function pintarIconos(raiz){
+    [].forEach.call((raiz || document).querySelectorAll('[data-ic]'), function(el){ el.innerHTML = icono(el.getAttribute('data-ic'), +el.getAttribute('data-t') || 16); });
+  }
+  function poner(el, nombre, tam){ el.setAttribute('data-ic', nombre); el.innerHTML = icono(nombre, tam || +el.getAttribute('data-t') || 16); }
 
   // ---- la figura que sale: tamaño y fondo los pone la cáscara, para todas las pestañas igual ----
   function preparar(svg){
@@ -116,8 +197,15 @@ textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px sol
     }
     return new XMLSerializer().serializeToString(s);
   }
+  // lo que se COPIA o arrastra: siempre en estilo claro (el que pide la pestaña por defecto)
   function figura(){
     var p = PESTANAS[activa], f = p && p.figura ? p.figura() : null;
+    return f && f.svg ? {svg: preparar(f.svg), nombre: f.nombre || activa} : null;
+  }
+  // lo que se VE en la tarjeta: con los colores de la ventana (con fondo blanco, los claros: así saldría pegado)
+  function vista(){
+    var p = PESTANAS[activa], t = opc.fondo === 'blanco' ? 'claro' : window.Tarjeta.tema, f = null;
+    try { f = p && p.figura ? p.figura(t) : null; } catch (e) {}
     return f && f.svg ? {svg: preparar(f.svg), nombre: f.nombre || activa} : null;
   }
   function dataUrl(svg){ return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg))); }
@@ -135,13 +223,26 @@ textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px sol
     });
   }
 
-  // ---- avisos, miniatura y botones ----
+  // ---- avisos, figura central, miniatura y botones ----
   var tAviso;
-  function aviso(t){ var a = $('aviso'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); tAviso = setTimeout(function(){ a.classList.remove('ver'); }, 1600); }
+  function aviso(t){ var a = $('aviso'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); tAviso = setTimeout(function(){ a.classList.remove('ver'); }, 1800); }
+  function medidas(svg){ var m = /width="([\d.]+)[^"]*"\s+height="([\d.]+)/.exec(svg || ''); return m ? Math.round(m[1]) + ' × ' + Math.round(m[2]) : ''; }
+  function ajustarEcuacion(){            // una ecuación se enseña a su tamaño, sin pasar de la lámina
+    var l = $('lamina'), s = l.querySelector('svg'); if (!s || !l.classList.contains('ecuacion')) return;
+    var w = parseFloat(s.getAttribute('width')), h = parseFloat(s.getAttribute('height')), k = Math.min(1, l.clientWidth / w, l.clientHeight / h) || 1;
+    s.style.width = Math.round(w * k) + 'px'; s.style.height = Math.round(h * k) + 'px';
+  }
   function refrescar(){
-    var f = figura(), hay = !!f;
+    var f = figura(), v = vista(), hay = !!f;
     $('copiarSvg').disabled = $('copiarPng').disabled = $('miniCopiar').disabled = !hay;
-    $('arrastre').innerHTML = $('mini').innerHTML = hay ? '<img alt="" src="' + dataUrl(f.svg) + '">' : '';
+    var lam = $('lamina'), blanco = opc.fondo === 'blanco';
+    lam.classList.toggle('ecuacion', activa === 'escribir');
+    lam.innerHTML = v ? v.svg : '<span class="vacio">' + (VACIO[activa] || '') + '</span>';
+    $('medidas').textContent = v ? medidas(v.svg) : '';
+    $('lienzo').classList.toggle('blanco', blanco); $('lienzo').classList.toggle('transparente', !blanco);
+    $('lienzo').draggable = $('mini').draggable = hay;
+    var mini = $('mini'); mini.innerHTML = v ? v.svg : ''; mini.classList.toggle('blanco', blanco); mini.classList.toggle('vacio', !v);
+    if (!document.body.classList.contains('plegada')) ajustarEcuacion();
     guardar();
   }
   var tGuardar;
@@ -153,24 +254,39 @@ textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px sol
     }, 600);
   }
 
-  function copiarSvg(){
-    var f = figura(); if (!f) return;
-    aPng(f.svg, 2).then(function(png){ return api().copiar_svg(f.svg, f.nombre, png); }, function(){ return api().copiar_svg(f.svg, f.nombre, null); })
-      .then(function(r){ aviso(r && r.ok ? 'SVG copiado' : (r && r.error) || 'No se pudo copiar'); });
+  // ---- copiar: el botón se pone verde con ✓ un momento ----
+  var copiado = null, tCopiado;
+  function marcarCopiado(tipo, ok){
+    copiado = ok ? tipo : null;
+    pintarCopiado();
+    clearTimeout(tCopiado); if (ok) tCopiado = setTimeout(function(){ copiado = null; pintarCopiado(); }, 1800);
   }
-  function copiarPng(){
-    var f = figura(); if (!f) return;
-    aPng(f.svg, 2).then(function(png){ return api().copiar_png(png, f.nombre); }).then(function(r){ aviso(r && r.ok ? 'PNG copiado' : (r && r.error) || 'No se pudo copiar'); });
+  function pintarCopiado(){
+    var T = $('tarjeta'), svg = copiado === 'svg', png = copiado === 'png';
+    if (copiado) T.setAttribute('data-copiado', copiado); else T.removeAttribute('data-copiado');
+    $('listoTxt').textContent = svg ? 'SVG copiado' : png ? 'PNG copiado' : '';
+    var bs = $('copiarSvg'), bp = $('copiarPng'), mc = $('miniCopiar');
+    bs.classList.toggle('hecho', svg); bs.querySelector('.lbl').textContent = svg ? 'SVG copiado' : 'Copiar SVG'; poner(bs.querySelector('[data-ic]'), svg ? 'hecho' : 'copiar', 16);
+    bp.classList.toggle('hecho-2', png); bp.querySelector('.lbl').textContent = png ? 'PNG copiado' : 'Copiar PNG';
+    mc.classList.toggle('hecho', svg); poner(mc, svg ? 'hecho' : 'copiar', 18); mc.title = svg ? 'SVG copiado' : 'Copiar SVG · Ctrl+C';
   }
+  // copiar(tipo, svg, nombre): lo usan los botones de la cáscara y los de cada figura del asistente → Promise<boolean>
+  function copiar(tipo, svg, nombre){
+    if (!svg || !api()) return Promise.resolve(false);
+    var hecho = function(r){ var ok = !!(r && r.ok); if (!ok) aviso((r && r.error) || 'No se pudo copiar'); return ok; };
+    if (tipo === 'png') return aPng(svg, 2).then(function(png){ return api().copiar_png(png, nombre); }).then(hecho, function(e){ aviso(e.message); return false; });
+    return aPng(svg, 2).then(function(png){ return api().copiar_svg(svg, nombre, png); }, function(){ return api().copiar_svg(svg, nombre, null); }).then(hecho);
+  }
+  function copiarSvg(){ var f = figura(); if (f) copiar('svg', f.svg, f.nombre).then(function(ok){ marcarCopiado('svg', ok); }); }
+  function copiarPng(){ var f = figura(); if (f) copiar('png', f.svg, f.nombre).then(function(ok){ marcarCopiado('png', ok); }); }
 
   // ---- pestañas ----
   function pintarPestanas(){
     var nav = $('pestanas'); nav.innerHTML = '';
     ORDEN.concat(Object.keys(PESTANAS).filter(function(k){ return ORDEN.indexOf(k) < 0; })).forEach(function(id){
       var p = PESTANAS[id]; if (!p) return;
-      var b = document.createElement('button'); b.className = 'pest'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === activa));
-      var icono = p.icono && /</.test(p.icono) ? p.icono : (ic(p.icono || id) || '<span aria-hidden="true">' + (ICONOS[id] || '•') + '</span>');   // HTML, o el nombre de un ícono del kit
-      b.innerHTML = icono + '<span>' + (p.titulo || id) + '</span>';
+      var b = document.createElement('button'); b.className = 'pestana'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === activa));
+      b.innerHTML = '<span class="glifo" aria-hidden="true">' + (ICONOS[id] || '•') + '</span><span>' + (p.titulo || id) + '</span>';
       b.onclick = function(){ ir(id); }; nav.appendChild(b);
     });
   }
@@ -178,14 +294,15 @@ textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px sol
     if (!id && contenido) id = {grafica: 'grafica', geometria: 'geometria', latex: 'escribir', svg: 'asistente'}[contenido.tipo] || activa;
     if (!PESTANAS[id]) return;
     if (activa && activa !== 'asistente') anterior = activa;
-    activa = id;
+    activa = id; copiado = null; pintarCopiado();
+    $('tarjeta').setAttribute('data-p', id);
     Object.keys(PESTANAS).forEach(function(k){ PESTANAS[k]._caja.hidden = k !== id; });      // hidden: las pestañas pueden cambiar su clase
     pintarPestanas();
     if (contenido && PESTANAS[id].cargar) PESTANAS[id].cargar(contenido);
     refrescar();
   }
   function registrar(id, p){
-    var caja = document.createElement('section'); caja.className = 'panel-pest'; caja.dataset.pestana = id; caja.hidden = true;
+    var caja = document.createElement('section'); caja.className = 'panel panel-pest'; caja.dataset.pestana = id; caja.hidden = true;
     $('contenido').appendChild(caja); p._caja = caja; PESTANAS[id] = p;
     try { p.montar(caja); } catch (e) { caja.textContent = 'Esta pestaña falló al abrir: ' + e.message; }
     if (estadoGuardado && estadoGuardado.estados && estadoGuardado.estados[id] && p.restaurar){ try { p.restaurar(estadoGuardado.estados[id]); } catch (e) {} }
@@ -196,7 +313,7 @@ textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px sol
   function plegada(si){ document.body.classList.toggle('plegada', !!si); if (!si) refrescar(); }
 
   var estadoGuardado = null;
-  // temaFigura: el estilo de lo que se COPIA (siempre claro: Miro es blanco); tema: el de la ventana
+  // temaFigura: el estilo de lo que se COPIA (siempre claro: va a un fondo blanco); tema: el de la ventana
   // contexto(): la pestaña de la que viene al asistente y lo que tiene (para «retócalo», «ponle el área»)
   function contexto(){
     var id = anterior && PESTANAS[anterior] ? anterior : null, p = id && PESTANAS[id];
@@ -204,32 +321,45 @@ textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px sol
     return id ? {pestana: id, contenido: est} : {pestana: null, contenido: null};
   }
   window.Tarjeta = {registrar: registrar, cambio: refrescar, ir: ir, aviso: aviso, tema: 'claro', temaFigura: 'claro',
-                    figura: figura, contexto: contexto, _plegada: plegada, opciones: opc};     // Tarjeta.trozo lo pone pestana_asistente.js
+                    figura: figura, contexto: contexto, _plegada: plegada, opciones: opc,
+                    icono: icono, copiar: copiar, aPng: aPng};     // Tarjeta.trozo lo pone pestana_asistente.js
 
   // botones
-  $('icCopiar').innerHTML = I.copiar; $('miniCopiar').innerHTML = I.copiar; $('miniAbrir').innerHTML = I.abrir;
-  $('plegar').innerHTML = I.plegar; $('mathstudio').innerHTML = I.fuera;
+  pintarIconos();
+  poner($('miniAbrir'), 'desplegar', 16); poner($('miniCopiar'), 'copiar', 18); poner($('plegar'), 'plegar', 16); poner($('cerrar'), 'cerrar', 16);
   $('plegada').onclick = function(e){ if (!e.target.closest('#miniCopiar')) api().desplegar(); };
   $('miniCopiar').onclick = function(e){ e.stopPropagation(); copiarSvg(); };
   $('plegar').onclick = function(){ api().plegar(); };
+  $('cerrar').onclick = function(){ guardar(); setTimeout(function(){ api().cerrar(); }, 650); };   // primero se guarda lo escrito
   $('copiarSvg').onclick = copiarSvg; $('copiarPng').onclick = copiarPng;
   $('mathstudio').onclick = function(){
     var g = activa === 'geometria' && PESTANAS.geometria && PESTANAS.geometria.estado ? (PESTANAS.geometria.estado() || {}).guion : null;
     api().abrir_mathstudio(g || null).then(function(r){ aviso(r && r.ok ? (r.copiado ? 'MathStudio abierto: pega el guion (Ctrl+V)' : 'Abriendo MathStudio…') : (r && r.error) || 'No se pudo abrir'); });
   };
-  [['tam', 'tam'], ['fondo', 'fondo']].forEach(function(par){
-    $(par[0]).addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; opc[par[1]] = b.dataset.v; marcarOpc(); refrescar(); });
+  $('tam').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; opc.tam = b.dataset.v; marcarOpc(); refrescar(); });
+  $('fondo').addEventListener('click', function(){ opc.fondo = opc.fondo === 'blanco' ? 'transparente' : 'blanco'; marcarOpc(); refrescar(); });
+  function marcarOpc(){
+    [].forEach.call($('tam').children, function(b){ b.setAttribute('aria-pressed', String(b.dataset.v === opc.tam)); });
+    $('fondoTxt').textContent = opc.fondo === 'blanco' ? 'Blanco' : 'Sin fondo';
+    $('fondo').title = opc.fondo === 'blanco' ? 'Fondo blanco. Clic: sin fondo' : 'Sin fondo. Clic: fondo blanco';
+  }
+  // arrastrar: el archivo .svg (a otra app, al escritorio o a una carpeta)
+  [].forEach.call(document.querySelectorAll('[data-arrastra]'), function(el){
+    el.addEventListener('dragstart', function(e){
+      var f = figura(); if (!f){ e.preventDefault(); return; }
+      var nombre = (f.nombre || 'figura').replace(/[^\w\- ]+/g, '') + '.svg';
+      e.dataTransfer.setData('DownloadURL', 'image/svg+xml:' + nombre + ':' + dataUrl(f.svg));
+      e.dataTransfer.setData('text/uri-list', dataUrl(f.svg));
+      e.dataTransfer.effectAllowed = 'copy';
+      var sv = el.querySelector('svg'); if (sv) try { e.dataTransfer.setDragImage(sv, 20, 20); } catch (x) {}
+    });
   });
-  function marcarOpc(){ ['tam', 'fondo'].forEach(function(k){ [].forEach.call($(k).children, function(b){ b.setAttribute('aria-pressed', String(b.dataset.v === opc[k])); }); }); }
-  // arrastrar: el archivo .svg (a Miro, al escritorio o a una carpeta)
-  $('arrastre').addEventListener('dragstart', function(e){
-    var f = figura(); if (!f){ e.preventDefault(); return; }
-    var nombre = (f.nombre || 'figura').replace(/[^\w\- ]+/g, '') + '.svg';
-    e.dataTransfer.setData('DownloadURL', 'image/svg+xml:' + nombre + ':' + dataUrl(f.svg));
-    e.dataTransfer.setData('text/uri-list', dataUrl(f.svg));
-    e.dataTransfer.effectAllowed = 'copy';
+  document.addEventListener('keydown', function(e){
+    var plg = document.body.classList.contains('plegada');
+    if (e.key === 'Escape' && !plg && api()) api().plegar();
+    var enCampo = /INPUT|TEXTAREA|MATH-FIELD/.test(document.activeElement && document.activeElement.tagName);
+    if (e.ctrlKey && !e.altKey && (e.key === 'c' || e.key === 'C') && !enCampo && !String(getSelection())){ e.preventDefault(); e.shiftKey ? copiarPng() : copiarSvg(); }
   });
-  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !document.body.classList.contains('plegada') && api()) api().plegar(); });
 
   // arranque: tema y lo que tenía escrito, antes de que se registren las pestañas
   function listo(){

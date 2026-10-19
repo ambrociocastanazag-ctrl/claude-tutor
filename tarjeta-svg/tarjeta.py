@@ -1,6 +1,6 @@
 """La Tarjeta SVG: una ventanita pegada al borde derecho para sacar figuras en SVG y pegarlas en Miro (README.md).
 
-Dos estados: plegada (una pestaña de 46 px, siempre encima) y desplegada (420 × 560). Ctrl+Alt+L o un clic la abren y
+Dos estados: plegada (una pestaña de 44 px, siempre encima) y desplegada (420 × 560). Ctrl+Alt+L o un clic la abren y
 la pliegan. Un solo ejemplar: escucha en 127.0.0.1:4748, que también sirve la página y sus estáticos (CONTRATO.md §4):
   GET  /hola                  → {"ok": true}
   POST /mostrar               → la despliega al frente
@@ -25,7 +25,7 @@ CONFIG = AQUI / "config.json"                                   # {"mathstudio":
 PREFERENCIAS = RAIZ / "panel-excel" / "preferencias.json"
 SERVIDAS = ("tarjeta-svg", "tutor-pantalla")                    # las únicas carpetas que sirve el servidor
 TEMP = Path(tempfile.gettempdir()) / "tarjeta-svg"
-PLEGADA, DESPLEGADA = (46, 168), (420, 560)
+PLEGADA, DESPLEGADA = (44, 150), (420, 560)                    # los del diseño de Claude Design
 
 
 def area_visible():
@@ -115,6 +115,13 @@ class Api:
         self._plegada = False; self._colocar(False)
         self._js("window.Tarjeta && Tarjeta._plegada && Tarjeta._plegada(false)")
         self._al_frente()
+        return {"ok": True}
+
+    def cerrar(self):
+        """La ✕: cierra la tarjeta del todo (y con ella su servidor y Ctrl+Alt+L). Se vuelve a abrir desde «Mis clases»
+        o con el botón «Tarjeta» de los paneles."""
+        v = self._ventana
+        if v: threading.Timer(0.05, v.destroy).start()          # fuera de la llamada de la página, para que pueda responder
         return {"ok": True}
 
     def alternar(self):
@@ -272,7 +279,7 @@ def abrir():
     api._ventana = webview.create_window("Tarjeta SVG", url=f"http://127.0.0.1:{PUERTO}/tarjeta-svg/tarjeta.html", js_api=api,
                                          width=w, height=h, x=int(x0 + ancho - w), y=int(y0 + alto * 0.3),
                                          frameless=True, easy_drag=False, on_top=True, resizable=False, min_size=(40, 100),   # sin esto, pywebview no baja de 200 px
-                                         background_color="#232631" if tema() == "oscuro" else "#F8F6F1")
+                                         background_color="#15171B" if tema() == "oscuro" else "#F9F6F2")
     api._ventana.events.closed += lambda: setattr(api, "_ventana", None)
     atajo(api)
     try: webview.start(gui="edgechromium")

@@ -75,22 +75,17 @@
     });
   }
 
-  // ---- CSS provisional (el diseño lo reemplaza) ----
+  // ---- CSS (diseño de Claude Design; los colores salen de los tokens de la cáscara) ----
   var CSS = [
-    '.te-raiz{--te-fondo:#fff;--te-tinta:#1b1f24;--te-suave:#5f6b7a;--te-borde:#c9d1da;--te-acento:#2563eb;display:flex;flex-direction:column;gap:8px;padding:10px;box-sizing:border-box;width:100%;min-width:0;color:var(--te-tinta);font:14px "Segoe UI",system-ui,sans-serif}',
-    '.te-raiz[data-tema=oscuro]{--te-fondo:#1c2128;--te-tinta:#e8eaed;--te-suave:#9aa6b4;--te-borde:#3b444f;--te-acento:#6ea0ff}',
-    '.te-barra{display:flex;align-items:center;justify-content:space-between}',
-    '.te-titulo{font-weight:600;color:var(--te-suave)}',
-    '.te-boton{font:inherit;padding:3px 10px;border:1px solid var(--te-borde);border-radius:6px;background:transparent;color:var(--te-tinta);cursor:pointer}',
-    '.te-boton:hover{border-color:var(--te-acento);color:var(--te-acento)}',
-    '.te-campo{display:block;width:100%;box-sizing:border-box;font-size:22px;padding:6px 8px;border:1px solid var(--te-borde);border-radius:8px;background:var(--te-fondo);color:var(--te-tinta);--hue:215}',
-    '.te-campo:focus-within{border-color:var(--te-acento);outline:none}',
+    '.te-raiz{display:flex;flex-direction:column;gap:6px;min-width:0}',
+    '.te-campo{display:block;width:100%;min-height:60px;padding:8px 10px;font-size:22px;border:1px solid var(--borde);border-radius:8px;background:var(--sup);color:var(--tinta);outline:none;--caret-color:var(--acento);--selection-background-color:var(--acento-suave);--primary:var(--acento)}',
+    '.te-campo:focus-within{border-color:var(--acento);box-shadow:0 0 0 2px var(--acento-suave)}',
     '.te-campo::part(virtual-keyboard-toggle),.te-campo::part(menu-toggle){display:none}',   // sin teclado ni menú: pocos botones
-    '.te-campo::part(container){min-height:34px}',
-    '.te-aviso{min-height:1.2em;font-size:12px;color:#c0392b;overflow-wrap:anywhere}',
-    '.te-vista{display:flex;align-items:center;justify-content:center;min-height:90px;padding:8px;border:1px dashed var(--te-borde);border-radius:8px;overflow:hidden;box-sizing:border-box}',
-    '.te-vista svg{display:block;max-width:100%;height:auto}',
-    '.te-vacio{color:var(--te-suave);font-size:13px}'
+    '.te-campo:not(:defined){font:500 14px var(--mono);color:var(--tenue);display:flex;align-items:center}',
+    '.te-pie{display:flex;align-items:center;gap:6px;min-height:22px}',
+    '.te-aviso{flex:1;min-width:0;font-size:12px;color:var(--error);overflow-wrap:anywhere}',
+    '.te-boton{flex:none;height:22px;padding:0 8px;border:0;border-radius:5px;background:none;font-size:12px;font-weight:600;color:var(--tenue)}',
+    '.te-boton:hover{background:var(--sup-2);color:var(--tinta)}'
   ].join('');
   function ponerCss() {
     if (document.getElementById('te-estilo')) return;
@@ -98,7 +93,7 @@
   }
 
   // ---- la pestaña ----
-  var cont, mf, vista, aviso;
+  var cont, mf, aviso;
   var listo = false, temporizador = 0, valorPendiente = null;
 
   function tema() { return (window.Tarjeta && window.Tarjeta.tema) === 'oscuro' ? 'oscuro' : 'claro'; }
@@ -108,8 +103,8 @@
     return (e && (e.tinta || e.texto)) || TINTA[t];
   }
 
-  // LaTeX → {svg} | {error} | null (vacío). Síncrono una vez cargado MathJax. paraCopiar: siempre con la tinta del
-  // tema claro (Tarjeta.temaFigura): en el blanco de Miro una tinta clara no se vería.
+  // LaTeX → {svg} | {error} | null (vacío). Síncrono una vez cargado MathJax. paraCopiar: con la tinta del tema claro
+  // (Tarjeta.temaFigura: sobre un fondo blanco una tinta clara no se vería) o, si es 'claro'|'oscuro', con la de ese tema.
   function dibujar(latex, paraCopiar) {
     var tex = limpiar(latex);
     if (!tex) return null;
@@ -123,24 +118,15 @@
     s.removeAttribute('role'); s.removeAttribute('focusable');
     s.removeAttribute('style');                                 // vertical-align solo sirve en línea dentro de HTML
     conHolgura(s);
-    var t = paraCopiar ? ((window.Tarjeta && window.Tarjeta.temaFigura) || 'claro') : tema();
+    var t = paraCopiar === 'claro' || paraCopiar === 'oscuro' ? paraCopiar : paraCopiar ? ((window.Tarjeta && window.Tarjeta.temaFigura) || 'claro') : tema();
     return { svg: new XMLSerializer().serializeToString(s).replace(/currentColor/g, tinta(t)) };
   }
 
+  // la ecuación dibujada la enseña la cáscara en su figura central; aquí solo se avisa si no vale
   function actualizar() {
     if (!listo) return;
     var r = dibujar(mf.getValue('latex-without-placeholders'));
-    if (r && r.svg) {
-      vista.innerHTML = r.svg;
-      var s = vista.querySelector('svg');                       // grande, pero sin salirse del ancho
-      s.style.width = (parseFloat(s.getAttribute('width')) * 1.6) + 'px';
-      aviso.textContent = '';
-    } else if (r && r.error) {
-      aviso.textContent = 'La ecuación no es válida todavía: ' + r.error;
-    } else {
-      vista.innerHTML = '<span class="te-vacio">Escribe una ecuación arriba</span>';
-      aviso.textContent = '';
-    }
+    aviso.textContent = r && r.error ? 'La ecuación no es válida todavía: ' + r.error : '';
     if (window.Tarjeta && window.Tarjeta.cambio) window.Tarjeta.cambio();
   }
 
@@ -163,12 +149,10 @@
     cont.classList.add('te-raiz');
     cont.setAttribute('data-tema', tema());
     cont.innerHTML =
-      '<div class="te-barra"><span class="te-titulo">Ecuación</span>' +
-      '<button type="button" class="te-boton te-latex" title="Copiar el código LaTeX ($$…$$)">LaTeX</button></div>' +
       '<math-field class="te-campo" aria-label="Campo de ecuación"></math-field>' +
-      '<div class="te-aviso" role="status"></div>' +
-      '<div class="te-vista" aria-label="Ecuación dibujada"><span class="te-vacio">Cargando…</span></div>';
-    mf = cont.querySelector('math-field'); vista = cont.querySelector('.te-vista'); aviso = cont.querySelector('.te-aviso');
+      '<div class="te-pie"><div class="te-aviso" role="status"></div>' +
+      '<button type="button" class="te-boton te-latex" title="Copiar el código LaTeX ($$…$$)">Copiar LaTeX</button></div>';
+    mf = cont.querySelector('math-field'); aviso = cont.querySelector('.te-aviso');
     cont.querySelector('.te-latex').onclick = function () {
       var t = listo ? limpiar(mf.getValue('latex-without-placeholders')) : '';
       var T = window.Tarjeta;
@@ -187,7 +171,6 @@
       if (valorPendiente != null) { mf.setValue(valorPendiente, { silenceNotifications: true }); valorPendiente = null; }
       actualizar();
     }).catch(function (e) {
-      vista.innerHTML = '<span class="te-vacio">No se pudo cargar el editor.</span>';
       aviso.textContent = String((e && e.message) || e);
     });
 
@@ -205,9 +188,9 @@
     titulo: 'Escribir',
     icono: 'ecuacion',
     montar: montar,
-    figura: function () {
+    figura: function (tema) {                                   // tema ('claro'|'oscuro'): para enseñarla en la ventana; sin él, la que se copia
       if (!listo) return null;
-      var r = dibujar(mf.getValue('latex-without-placeholders'), true);
+      var r = dibujar(mf.getValue('latex-without-placeholders'), tema || true);
       return r && r.svg ? { svg: r.svg, nombre: 'ecuacion' } : null;
     },
     cargar: function (c) { if (c && c.tipo === 'latex') poner(String(c.latex || '')); },

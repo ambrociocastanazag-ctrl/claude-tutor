@@ -16,22 +16,22 @@ const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
 // ---------- 2. gráficas ----------
 const numeros = d => (d.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
 function trazosDe(svg, color) {                                   // los «d» de los <path> con ese stroke, como listas de puntos por tramo
-  const out = [], re = new RegExp('<path d="([^"]+)" fill="none" stroke="' + color + '" stroke-width="2.4"', 'g'); let m;
+  const out = [], re = new RegExp('<path d="([^"]+)" fill="none" stroke="' + color + '" stroke-width="[\\d.]+" stroke-linejoin', 'g'); let m;
   while ((m = re.exec(svg))) out.push(m[1]);
   return out;
 }
 {
   const g = F.grafica({x: [0, 4], funciones: [{f: 'sqrt(x)', color: 'azul'}], area: {f: 'sqrt(x)', x: [0, 4]}, puntos: [[4, 2, '(4,2)']]}, {tema: 'claro'});
   bien(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" width="480" height="\d+" viewBox="0 0 480 \d+"/.test(g.svg) && g.w === 480, 'cabecera de la gráfica √x');
-  const circ = /<circle cx="([\d.]+)" cy="([\d.]+)" r="4.4"/.exec(g.svg), ds = trazosDe(g.svg, '#2a5fd0');
+  const circ = /<circle cx="([\d.]+)" cy="([\d.]+)" r="[\d.]+"/.exec(g.svg), ds = trazosDe(g.svg, F.estilo.claro.azul);
   bien(!!circ && ds.length === 1, '√x: hay curva y punto');
   if (circ && ds.length) { const n = numeros(ds[0]), fin = [n[n.length - 2], n[n.length - 1]]; bien(casi(fin[0], +circ[1], 1e-3) && casi(fin[1], +circ[2], 1e-3), `√x llega a (4,2): curva ${fin} punto ${circ[1]},${circ[2]}`); }
-  bien(/fill-opacity="0.24"/.test(g.svg), '√x: área sombreada');
+  bien(g.svg.includes('fill-opacity="' + F.estilo.claro.area.opacidad + '"') && g.svg.includes('stroke-dasharray'), '√x: área sombreada con su borde punteado');
   bien(!/<script|href=|onload|clip-path/.test(g.svg), 'sin scripts, enlaces ni clipPath');
 }
 {
   const g = F.grafica({x: ['-2*pi', '2*pi'], funciones: [{f: 'tan(x)', color: 'rojo'}]}, {tema: 'claro'});
-  const ds = trazosDe(g.svg, '#d23a3a'), ph = Math.round(480 * 0.48);
+  const ds = trazosDe(g.svg, F.estilo.claro.rojo), ph = Math.round(480 * 0.48);
   bien(ds.length === 1, 'tan: una curva');
   let saltos = 0, tramos = 0;
   (ds[0] || '').split('M').filter(Boolean).forEach(t => { tramos++; const n = numeros(t); for (let i = 3; i < n.length; i += 2) if (Math.abs(n[i] - n[i - 2]) > ph * 0.6) saltos++; });
@@ -160,16 +160,18 @@ const pts = 'A=(0,0)\nB=(4,0)\nC=(0,3)\nD=(4,3)';
 {
   const r = sinErrores('A=(0,0)\nB=(4,0)\nC=(0,3)\nt=triangulo(A,B,C)\nangulorecto(B,A,C)\nmarcaigual(AB,2)\nmarcaangulo(A,B,C,1)\nmarcaparalela(AC,1)\netiqueta(BC,"5 cm")', 'notaciones');
   const v = r.vista, px = p => ({x: v.ox + p.x * v.escala, y: v.oy - p.y * v.escala});
-  // el cuadradito del ángulo recto empieza a 15 px del vértice A, hacia B, y acaba a 15 px hacia C
-  const m = /<path d="M([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)" fill="none" stroke="#24344a" stroke-width="2.1"/.exec(r.svg);
+  // el cuadradito del ángulo recto empieza a «lado» px del vértice A (11 del diseño × la escala del tamaño M, 1.25), hacia B, y acaba a lado px hacia C
+  const LADO = F.estilo.claro.anguloRecto.lado * F.tamanos.M.escala;
+  const m = new RegExp('<path d="M([\\d.-]+) ([\\d.-]+)L([\\d.-]+) ([\\d.-]+)L([\\d.-]+) ([\\d.-]+)" fill="none" stroke="' + F.estilo.claro.anguloRecto.color + '"').exec(r.svg);
   bien(!!m, 'hay un cuadradito de ángulo recto');
   if (m) {
     const A = px(por(r, 'A')), B = px(por(r, 'B')), C = px(por(r, 'C')), q1 = {x: +m[1], y: +m[2]}, q2 = {x: +m[3], y: +m[4]}, q3 = {x: +m[5], y: +m[6]};
-    bien(casi(Math.hypot(q1.x - A.x, q1.y - A.y), 15, 2e-2) && casi(Math.hypot(q3.x - A.x, q3.y - A.y), 15, 2e-2), 'el cuadradito está en el vértice A');
-    bien(Math.abs((q1.x - A.x) * (B.x - A.x) + (q1.y - A.y) * (B.y - A.y)) / (15 * Math.hypot(B.x - A.x, B.y - A.y)) > 0.999 && Math.abs((q3.x - A.x) * (C.x - A.x) + (q3.y - A.y) * (C.y - A.y)) / (15 * Math.hypot(C.x - A.x, C.y - A.y)) > 0.999, 'sus lados van hacia B y hacia C');
+    bien(casi(Math.hypot(q1.x - A.x, q1.y - A.y), LADO, 2e-2) && casi(Math.hypot(q3.x - A.x, q3.y - A.y), LADO, 2e-2), 'el cuadradito está en el vértice A');
+    bien(Math.abs((q1.x - A.x) * (B.x - A.x) + (q1.y - A.y) * (B.y - A.y)) / (LADO * Math.hypot(B.x - A.x, B.y - A.y)) > 0.999 && Math.abs((q3.x - A.x) * (C.x - A.x) + (q3.y - A.y) * (C.y - A.y)) / (LADO * Math.hypot(C.x - A.x, C.y - A.y)) > 0.999, 'sus lados van hacia B y hacia C');
     bien(casi(q2.x, q1.x + q3.x - A.x, 3e-2) && casi(q2.y, q1.y + q3.y - A.y, 3e-2), 'cierra el cuadrado');
   }
-  bien((r.svg.match(/stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"\/>/g) || []).length >= 6, 'rayitas, arco, flecha y cuadradito dibujados');
+  const E = F.estilo.claro, cuenta = (col, gr) => (r.svg.match(new RegExp('stroke="' + col + '" stroke-width="' + (Math.round(gr * 1.25 * 100) / 100) + '" stroke-linecap="round" stroke-linejoin="round"/>', 'g')) || []).length;
+  bien(cuenta(E.segmento.color, E.segmento.grosor * 0.85) >= 3 && cuenta(E.angulo.color, E.angulo.grosor) >= 2, 'rayitas, flecha, arco y cuadradito dibujados con los tokens');
   bien(r.svg.includes('>5 cm</text>'), 'etiqueta del lado');
   conError('A=(0,0)\nB=(4,0)\nC=(1,1)\nangulorecto(A,B,C)', /no es recto/, 'angulorecto en un ángulo que no lo es', 4);
   conError('A=(0,0)\nB=(4,0)\ns=segmento(A,B)\nc=circunferencia(A,B)\netiqueta(c,"x")', /segmento/, 'etiqueta sobre una circunferencia', 5);
@@ -237,7 +239,7 @@ const pts = 'A=(0,0)\nB=(4,0)\nC=(0,3)\nD=(4,3)';
   while ((m = re.exec(r.svg))) if (+m[1] < vx + 6 || +m[1] > vx + vw - 6 || +m[2] < vy + 6 || +m[2] > vy + vh - 2) fuera++;
   bien(fuera === 0, 'ningún texto pegado al borde (' + fuera + ')');
   const claro = G('A=(0,0)\nB=(1,1)', {tema: 'claro'}).svg, osc = G('A=(0,0)\nB=(1,1)', {tema: 'oscuro'}).svg;
-  bien(claro.includes(F.estilo.claro.punto) && osc.includes(F.estilo.oscuro.punto) && claro !== osc, 'claro y oscuro');
+  bien(claro.includes(F.estilo.claro.punto.color) && osc.includes(F.estilo.oscuro.punto.color) && claro !== osc, 'claro y oscuro');
   const man = G('A=(0,0)\nB=(10,10)\ns=segmento(A,B)', {x: [-2, 4], y: [-2, 4], ejes: true, rejilla: true});
   bien(/clip-path="url\(#rec/.test(man.svg) && man.svg.includes('>2</text>'), 'vista manual con ejes y recorte');
   const lins = G('A=(0,0)\nB=(1,1)\nr=recta(A,B)'); bien(lins.w >= 480 - 1 && lins.h >= 480 * 0.34 - 1, 'una recta sola tiene tamaño razonable');

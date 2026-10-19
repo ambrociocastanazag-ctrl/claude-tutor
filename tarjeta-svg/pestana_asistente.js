@@ -8,52 +8,60 @@
                y MathJax (tutor-pantalla/vendor/tex-svg.js) para las ecuaciones. Si faltan, la figura sale como texto.
    De la cáscara: Tarjeta.registrar / ir / aviso / cambio / tema, y (opcional) Tarjeta.contexto() → {pestana, contenido}
                con lo que hay en la pestaña desde la que llegó (para «retócalo»). Sin eso, el contexto es la última figura del chat.
-   Clases CSS: prefijo ta-. Todo lo visual está en los tokens --ta-* de .ta-raiz (el diseño de Claude Design los cambia). */
+   Clases CSS: prefijo ta-. Los colores salen de los tokens de la cáscara (diseño de Claude Design: --sup, --borde, --acento…). */
 (function () {
   'use strict';
 
   var CSS = '\
-.ta-raiz{--ta-fondo:#ffffff;--ta-panel:#f4f5f8;--ta-tinta:#1b1d24;--ta-suave:#5d6272;--ta-linea:#d9dce4;--ta-acento:#2f6fed;--ta-acento-t:#fff;--ta-error:#c0392b;--ta-user:#e6eeff;\
-  display:flex;flex-direction:column;height:100%;min-height:0;background:var(--ta-fondo);color:var(--ta-tinta);font:13.5px/1.45 "Segoe UI",system-ui,sans-serif}\
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ta-raiz{--ta-fondo:#171a21;--ta-panel:#222733;--ta-tinta:#e8eaf0;--ta-suave:#9aa1b3;--ta-linea:#343b4a;--ta-acento:#6b9bff;--ta-acento-t:#0e1424;--ta-error:#ff7a6b;--ta-user:#26345a}}\
-:root[data-theme="dark"] .ta-raiz{--ta-fondo:#171a21;--ta-panel:#222733;--ta-tinta:#e8eaf0;--ta-suave:#9aa1b3;--ta-linea:#343b4a;--ta-acento:#6b9bff;--ta-acento-t:#0e1424;--ta-error:#ff7a6b;--ta-user:#26345a}\
+.ta-raiz{display:flex;flex-direction:column;height:100%;min-height:0;color:var(--tinta)}\
 .ta-raiz *{box-sizing:border-box}\
-.ta-msgs{flex:1;min-height:0;overflow-y:auto;padding:10px 10px 4px;display:flex;flex-direction:column;gap:10px}\
-.ta-vacio{margin:auto 6px;color:var(--ta-suave);text-align:center;font-size:12.5px}\
-.ta-vacio b{display:block;color:var(--ta-tinta);font-size:14px;margin-bottom:4px}\
-.ta-vacio button{margin:8px 3px 0}\
+.ta-msgs{flex:1;min-height:0;overflow-y:auto;padding:10px 8px 6px;display:flex;flex-direction:column;gap:12px;user-select:text}\
+.ta-msgs>*{flex:none}\
+.ta-vacio{margin:auto 6px;color:var(--tenue);text-align:center;font-size:13px}\
+.ta-vacio b{display:block;color:var(--tinta);font-size:14px;margin-bottom:4px}\
+.ta-chip{margin:8px 3px 0;height:28px;padding:0 11px;border:1px solid var(--borde);border-radius:999px;background:var(--sup);font:600 12px var(--f);color:var(--tinta)}\
+.ta-chip:hover{border-color:var(--acento);background:var(--sup-2)}\
 .ta-m{max-width:100%;min-width:0;overflow-wrap:anywhere}\
-.ta-m.ta-yo{align-self:flex-end;max-width:88%;background:var(--ta-user);border-radius:12px 12px 3px 12px;padding:6px 10px;white-space:pre-wrap}\
+.ta-m.ta-yo{align-self:flex-end;max-width:86%;padding:7px 11px;border-radius:12px 12px 4px 12px;background:var(--acento-suave);font-size:13.5px;white-space:pre-wrap}\
 .ta-m.ta-ia{align-self:stretch}\
-.ta-m.ta-error{color:var(--ta-error)}\
-.ta-txt{margin:0 0 2px}\
-.ta-txt code{background:var(--ta-panel);border-radius:4px;padding:0 4px;font:12px Consolas,monospace}\
-.ta-pensando{color:var(--ta-suave);font-style:italic}\
+.ta-m.ta-error{align-self:stretch;color:var(--error);font-size:13px}\
+.ta-quien{display:flex;align-items:center;gap:6px;font-weight:700;font-size:12.5px}\
+.ta-avatar{width:20px;height:20px;border-radius:6px;background:var(--acento);color:var(--sobre-acento);display:grid;place-items:center}\
+.ta-txt{margin:4px 0 0;font-size:13.5px;text-wrap:pretty}\
+.ta-txt code{background:var(--hundido);border-radius:4px;padding:0 4px;font:12px var(--mono)}\
+.ta-pensando{margin-top:4px;color:var(--tenue);font-style:italic;font-size:13px}\
 .ta-pensando::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:ta-puntos 1.2s steps(4) infinite}\
 @keyframes ta-puntos{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}\
-.ta-fig{margin:6px 0 2px;border:1px solid var(--ta-linea);border-radius:10px;background:var(--ta-panel);overflow:hidden;min-width:0}\
-.ta-lienzo{padding:8px;display:flex;justify-content:center;background:var(--ta-fondo);overflow:auto;max-height:260px}\
-.ta-lienzo svg{display:block;max-width:100%;height:auto;max-height:240px}\
+.ta-fig{margin-top:8px;border:1px solid var(--borde);border-radius:10px;overflow:hidden;background:var(--sup);display:flex;flex-direction:column;min-width:0}\
+.ta-lienzo{height:218px;flex:none;padding:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:repeating-conic-gradient(var(--cuadro) 0 25%,transparent 0 50%) 0 0/14px 14px}\
+.ta-lienzo svg{display:block;max-width:100%;max-height:100%}\
 .ta-lienzo.ta-tex svg{max-width:100%}\
-.ta-lienzo pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px Consolas,monospace;color:var(--ta-suave)}\
-.ta-fig-pie{display:flex;align-items:center;gap:6px;padding:5px 7px;border-top:1px solid var(--ta-linea);flex-wrap:wrap}\
-.ta-fig-tipo{font-size:11.5px;color:var(--ta-suave);margin-right:auto;min-width:0;overflow-wrap:anywhere}\
-.ta-errs{padding:4px 8px;border-top:1px solid var(--ta-linea);color:var(--ta-error);font-size:11.5px;overflow-wrap:anywhere}\
-.ta-btn{font:inherit;font-size:12.5px;border:1px solid var(--ta-linea);background:var(--ta-fondo);color:var(--ta-tinta);border-radius:7px;padding:3px 9px;cursor:pointer}\
-.ta-btn:hover{border-color:var(--ta-acento)}\
-.ta-btn.ta-prim{background:var(--ta-acento);border-color:var(--ta-acento);color:var(--ta-acento-t)}\
-.ta-btn:focus-visible,.ta-caja textarea:focus-visible{outline:2px solid var(--ta-acento);outline-offset:1px}\
-.ta-barra{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid var(--ta-linea);align-items:flex-end}\
+.ta-lienzo pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px var(--mono);color:var(--tenue);align-self:flex-start;max-height:100%;overflow:auto}\
+.ta-fig-pie{display:flex;align-items:center;gap:5px;padding:6px;border-top:1px solid var(--borde)}\
+.ta-esp{flex:1}\
+.ta-errs{padding:5px 8px;border-top:1px solid var(--borde);color:var(--error);font-size:11.5px;overflow-wrap:anywhere}\
+.ta-btn{height:30px;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:0 10px;border-radius:8px;border:1px solid var(--borde);background:var(--sup);font:700 12.5px var(--f);color:var(--tinta);white-space:nowrap}\
+.ta-btn:hover{background:var(--sup-2)}\
+.ta-btn.ta-prim{background:var(--acento);border-color:var(--acento);color:var(--sobre-acento)}\
+.ta-btn.ta-prim:hover{background:var(--acento-2);border-color:var(--acento-2)}\
+.ta-btn.ta-hecho{background:var(--ok);border-color:var(--ok);color:var(--sobre-acento)}\
+.ta-btn.ta-hecho-2{color:var(--ok);border-color:var(--ok)}\
+.ta-barra{display:flex;gap:6px;align-items:center;margin:0 8px 8px;padding:4px 4px 4px 10px;border:1px solid var(--acento);border-radius:10px;background:var(--sup)}\
 .ta-caja{flex:1;min-width:0;display:flex}\
-.ta-caja textarea{flex:1;min-width:0;resize:none;font:inherit;color:var(--ta-tinta);background:var(--ta-panel);border:1px solid var(--ta-linea);border-radius:9px;padding:6px 9px;max-height:96px}\
-.ta-enviar{height:32px;width:36px;padding:0}\
-.ta-nuevo{height:32px;width:32px;padding:0}';
+.ta-caja textarea{flex:1;min-width:0;resize:none;border:0;background:none;outline:none;font:500 13.5px/20px var(--f);color:var(--tinta);padding:5px 0;max-height:96px}\
+.ta-caja textarea::placeholder{color:var(--tenue)}\
+.ta-enviar,.ta-nuevo{flex:none;width:30px;height:30px;border-radius:7px;border:0;background:var(--hundido);color:var(--tenue);display:grid;place-items:center;padding:0;font:600 15px/1 var(--f)}\
+.ta-enviar:hover:not(:disabled){background:var(--acento);color:var(--sobre-acento)}\
+.ta-enviar:disabled{opacity:.5;cursor:default}\
+.ta-nuevo{background:none}\
+.ta-nuevo:hover{background:var(--sup-2);color:var(--tinta)}';
 
   var estado = { mensajes: [] };          // [{rol: 'yo'|'ia'|'error', texto, contenidos: [...]}]
   var raiz, lista, caja, btnEnviar, actual = null, esperando = false;
   var figuras = [];                       // [{contenido, lienzo, svg}] las del chat, en orden (la última manda en figura())
 
   /* ---------- texto ---------- */
+  function ic(n, t) { return window.Tarjeta && Tarjeta.icono ? Tarjeta.icono(n, t) : ''; }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
   function tex(latex, display) {
@@ -142,11 +150,12 @@
     return o;
   }
 
-  /* Lo que se copia o arrastra a Miro se dibuja SIEMPRE con Tarjeta.temaFigura ('claro'), aunque la ventana esté en oscuro.
+  /* Lo que se copia o se arrastra se dibuja SIEMPRE con Tarjeta.temaFigura ('claro'), aunque la ventana esté en oscuro.
      currentColor (MathJax) no existe fuera de la página: tinta fija. */
-  function svgParaCopiar(f) {
-    var d = dibujar(f.contenido, (window.Tarjeta && Tarjeta.temaFigura) || 'claro');
-    return d.svg ? d.svg.replace(/currentColor/g, '#1b1d24') : null;
+  function svgParaCopiar(f, t) {                    // t: el tema de la ventana, solo para enseñarla en la tarjeta plegada
+    var th = t || (window.Tarjeta && Tarjeta.temaFigura) || 'claro';
+    var d = dibujar(f.contenido, th);
+    return d.svg ? d.svg.replace(/currentColor/g, th === 'oscuro' ? '#e8eaed' : '#1b1d24') : null;
   }
 
   function nombreDe(c) {
@@ -163,32 +172,47 @@
     f.errs.innerHTML = d.errores.map(function (e) { return 'Línea ' + esc(e.linea) + ': ' + esc(e.mensaje); }).join('<br>');
   }
 
+  var DESTINO = { grafica: 'Gráfica', geometria: 'Geometría', latex: 'Escribir' };
+
+  // un botón que, al copiar, se pone verde un momento
+  function copiaDe(f, c, tipo, b) {
+    var s = svgParaCopiar(f);
+    if (!s) return aviso('No hay figura que copiar');
+    var T = window.Tarjeta, api = window.pywebview && pywebview.api;
+    var listo = function (ok) {
+      if (!ok) return;
+      var l = b.querySelector('.lbl'), antes = b.dataset.lbl || l.textContent; b.dataset.lbl = antes;
+      l.textContent = tipo === 'svg' ? 'SVG copiado' : 'Copiado'; b.classList.add(tipo === 'svg' ? 'ta-hecho' : 'ta-hecho-2');
+      var i = b.querySelector('.ta-ic'); if (i) i.innerHTML = ic('hecho', 15);
+      clearTimeout(b._t); b._t = setTimeout(function () { l.textContent = antes; b.classList.remove('ta-hecho', 'ta-hecho-2'); if (i) i.innerHTML = ic('copiar', 15); }, 1800);
+    };
+    if (T && T.copiar) return T.copiar(tipo, s, nombreDe(c)).then(listo);
+    if (tipo !== 'svg' || !api || !api.copiar_svg) return aviso('No puedo copiar desde aquí');
+    Promise.resolve(api.copiar_svg(s, nombreDe(c))).then(function () { listo(true); }, function () { aviso('No se pudo copiar'); });
+  }
+
   function nuevaFigura(c) {
     var caja_ = document.createElement('div'); caja_.className = 'ta-fig';
     var f = { contenido: c, svg: null, lienzo: document.createElement('div'), errs: document.createElement('div') };
     f.errs.className = 'ta-errs';
     var pie = document.createElement('div'); pie.className = 'ta-fig-pie';
-    var tipo = document.createElement('span'); tipo.className = 'ta-fig-tipo'; tipo.textContent = NOMBRE[c.tipo] || c.tipo;
-    var copiar = boton('Copiar', 'Copiar el SVG', function () {
-      var s = svgParaCopiar(f);
-      if (!s) return aviso('No hay figura que copiar');
-      var api = window.pywebview && pywebview.api;
-      if (!api || !api.copiar_svg) return aviso('No puedo copiar desde aquí');
-      Promise.resolve(api.copiar_svg(s, nombreDe(c))).then(function () { aviso('Copiado'); }, function () { aviso('No se pudo copiar'); });
-    });
-    pie.appendChild(tipo); pie.appendChild(copiar);
-    if (PESTANA[c.tipo]) pie.appendChild(boton('Llevar a su pestaña', 'Abrirla en la pestaña ' + NOMBRE[c.tipo] + ' para retocarla', function () {
+    var svg = boton('<span class="ta-ic">' + ic('copiar', 15) + '</span><span class="lbl">Copiar SVG</span>', 'Copiar el SVG', function (e) { copiaDe(f, c, 'svg', e.currentTarget); }, true, true);
+    var png = boton('<span class="lbl">PNG</span>', 'Copiar como imagen PNG', function (e) { copiaDe(f, c, 'png', e.currentTarget); }, false, true);
+    var esp = document.createElement('span'); esp.className = 'ta-esp';
+    pie.appendChild(svg); pie.appendChild(png); pie.appendChild(esp);
+    if (PESTANA[c.tipo]) pie.appendChild(boton(ic('llevar', 15) + DESTINO[c.tipo], 'Abrirla en la pestaña ' + DESTINO[c.tipo] + ' para retocarla', function () {
       if (window.Tarjeta && Tarjeta.ir) Tarjeta.ir(PESTANA[c.tipo], c);
-    }, true));
+    }, false, true));
     caja_.appendChild(f.lienzo); caja_.appendChild(f.errs); caja_.appendChild(pie);
     pintarFigura(f); figuras.push(f);
     f.caja = caja_;
     return caja_;
   }
 
-  function boton(txt, titulo, fn, prim) {
+  function boton(txt, titulo, fn, prim, html) {
     var b = document.createElement('button'); b.type = 'button'; b.className = 'ta-btn' + (prim ? ' ta-prim' : '');
-    b.textContent = txt; b.title = titulo || ''; b.onclick = fn; return b;
+    if (html) b.innerHTML = txt; else b.textContent = txt;
+    b.title = titulo || ''; b.onclick = fn; return b;
   }
   function aviso(t) { if (window.Tarjeta && Tarjeta.aviso) Tarjeta.aviso(t); }
 
@@ -205,8 +229,12 @@
     return el;
   }
 
+  function quien() {
+    var q = document.createElement('div'); q.className = 'ta-quien';
+    q.innerHTML = '<span class="ta-avatar">' + ic('asistente', 13) + '</span>Asistente'; return q;
+  }
   function rellenarIA(el, texto, contenidos) {
-    el.innerHTML = '';
+    el.innerHTML = ''; el.appendChild(quien());
     if (texto) { var p = document.createElement('p'); p.className = 'ta-txt'; p.innerHTML = ligero(texto); el.appendChild(p); }
     contenidos.forEach(function (c) { el.appendChild(nuevaFigura(c)); });
   }
@@ -217,7 +245,7 @@
     var v = document.createElement('div'); v.className = 'ta-vacio';
     v.innerHTML = '<b>Pídeme una figura</b>Una gráfica, un triángulo con su altura, una ecuación…';
     ['grafica sen y cos de 0 a 2π', 'triángulo rectángulo con su altura', 'la fórmula general'].forEach(function (t) {
-      v.appendChild(boton(t, 'Probar este pedido', function () { caja.value = t; enviar(); }));
+      var b = boton(t, 'Probar este pedido', function () { caja.value = t; enviar(); }); b.className = 'ta-chip'; v.appendChild(b);
     });
     lista.appendChild(v);
   }
@@ -241,7 +269,7 @@
     actual.crudo += t;
     var visible = sinBloques(actual.crudo);
     var hayBloque = /```|\$\$/.test(actual.crudo);
-    actual.el.innerHTML = '';
+    actual.el.innerHTML = ''; actual.el.appendChild(quien());
     if (visible) { var p = document.createElement('p'); p.className = 'ta-txt'; p.textContent = visible; actual.el.appendChild(p); }
     if (hayBloque) { var d = document.createElement('div'); d.className = 'ta-pensando'; d.textContent = 'Dibujando la figura'; actual.el.appendChild(d); }
     else if (!visible) { var q = document.createElement('div'); q.className = 'ta-pensando'; q.textContent = 'Pensando'; actual.el.appendChild(q); }
@@ -311,14 +339,14 @@
       raiz = document.createElement('div'); raiz.className = 'ta-raiz';
       lista = document.createElement('div'); lista.className = 'ta-msgs'; lista.setAttribute('aria-live', 'polite');
       var barra = document.createElement('div'); barra.className = 'ta-barra';
-      var nuevo = boton('↺', 'Empezar de nuevo', reiniciar); nuevo.classList.add('ta-nuevo'); nuevo.setAttribute('aria-label', 'Empezar de nuevo');
+      var nuevo = boton('↺', 'Empezar de nuevo', reiniciar); nuevo.className = 'ta-nuevo'; nuevo.setAttribute('aria-label', 'Empezar de nuevo');
       var cj = document.createElement('div'); cj.className = 'ta-caja';
-      caja = document.createElement('textarea'); caja.rows = 1; caja.placeholder = 'Pide una figura…'; caja.setAttribute('aria-label', 'Pide una figura');
+      caja = document.createElement('textarea'); caja.rows = 1; caja.placeholder = 'Pídele una figura…'; caja.setAttribute('aria-label', 'Pide una figura');
       caja.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } });
       caja.addEventListener('input', ajustarCaja);
       cj.appendChild(caja);
-      btnEnviar = boton('➤', 'Enviar (Enter)', enviar, true); btnEnviar.classList.add('ta-enviar'); btnEnviar.setAttribute('aria-label', 'Enviar');
-      barra.appendChild(nuevo); barra.appendChild(cj); barra.appendChild(btnEnviar);
+      btnEnviar = boton(ic('enviar', 16), 'Enviar (Enter)', enviar, false, true); btnEnviar.className = 'ta-enviar'; btnEnviar.setAttribute('aria-label', 'Enviar');
+      barra.appendChild(cj); barra.appendChild(nuevo); barra.appendChild(btnEnviar);
       raiz.appendChild(lista); raiz.appendChild(barra); cont.appendChild(raiz);
       repintarTodo();
       // las figuras se redibujan al cambiar el tema (claro ↔ oscuro)
@@ -328,10 +356,10 @@
       } catch (e) { /* sin observador: se redibujan al volver a abrir */ }
     },
 
-    figura: function () {
+    figura: function (t) {                        // t ('claro'|'oscuro'): para enseñarla en la ventana; sin él, la que se copia
       var f = ultimaFigura();
       if (!f || !f.svg) return null;
-      return { svg: svgParaCopiar(f), nombre: nombreDe(f.contenido) };
+      return { svg: svgParaCopiar(f, t), nombre: nombreDe(f.contenido) };
     },
 
     cargar: function (contenido) {                // algo que llega de fuera: se enseña como figura del chat
