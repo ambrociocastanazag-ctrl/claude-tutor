@@ -445,6 +445,24 @@
     } finally { caja.remove(); }
   }
 
+  // El mismo filtro, para quien necesite un SVG limpio sin encajarlo en un objetivo (ilustraciones del chat,
+  // ilustraciones_ui.js): texto SVG → texto SVG filtrado (mismos elementos y atributos que la forma «svg»), o null si no
+  // es un SVG válido, es demasiado grande (30 KB / 500 elementos) o no queda nada que dibujar. El motivo, en limpiarSvg.error.
+  D.U.limpiarSvg = function(texto){
+    D.U.limpiarSvg.error = '';
+    try {
+      texto = String(texto || '');
+      if (!texto.trim()) throw new Error('vacío');
+      if (texto.length > 30000) throw new Error('demasiado grande (máximo 30 KB)');
+      var doc = new DOMParser().parseFromString(texto, 'image/svg+xml');
+      if (doc.getElementsByTagName('parsererror').length || !doc.documentElement || doc.documentElement.localName.toLowerCase() !== 'svg') throw new Error('no es un SVG válido');
+      var limpio = limpiar(doc.documentElement, {n: 0});
+      if (!limpio || !cuentaDibujo(limpio)) throw new Error('no queda nada que dibujar después de filtrarlo');
+      limpio.setAttribute('xmlns', NS);
+      return new XMLSerializer().serializeToString(limpio);
+    } catch (e) { D.U.limpiarSvg.error = (e && e.message) || String(e); return null; }
+  };
+
   D.registrar('svg', async function(d, U){
     if (!d.r) throw new Error('svg necesita un objetivo donde encajarse');
     var texto = String(d.svg || '');

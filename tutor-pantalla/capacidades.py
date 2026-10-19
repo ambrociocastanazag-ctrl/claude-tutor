@@ -50,7 +50,8 @@ una frase. NUNCA digas que no ves la línea exacta: usa "linea". Si te piden se�
 def reglas(app, codigo=False):
     """El bloque completo de capacidades para el prompt de cualquier tutor: capacidades + ojos + dibujos + preguntas
     (+ archivo abierto y líneas si es un curso de código)."""
-    t = CAPACIDADES.format(app=app) + archivos.REGLAS + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS + ojos_panel.REGLAS_PREGUNTAS
+    t = (CAPACIDADES.format(app=app) + archivos.REGLAS + ojos_panel.REGLAS_OJOS + ojos_panel.REGLAS_DIBUJOS + ojos_panel.REGLAS_PREGUNTAS
+         + ojos_panel.REGLAS_ILUSTRACIONES)
     if codigo: t += REGLAS_CODIGO.format(app=app)
     return t
 

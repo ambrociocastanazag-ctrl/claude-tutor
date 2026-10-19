@@ -219,6 +219,31 @@ Un curso puede revisar **más de un proyecto** (p. ej. una práctica y el proyec
 - **`--probar`:** valida estos turnos (tipos, nombre de proyecto, comodines) y **no** los prueba contra `solucion/`; en cambio **informa con ℹ** (nunca ✘) cómo saldrían hoy contra el proyecto real, en una copia temporal, punto por punto. Los `http` no se corren.
 - **Tutor:** en los turnos de código recibe una línea «Este Tu turno revisa «carrito» (ruta; Maven en api/)», para no confundir el proyecto de ese paso con el de otros.
 
+## Marcas en SVG, 🎯 Reajustar, ✏️ Señalar e ilustraciones en el chat
+
+Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato entre las piezas está en `CONTRATO-MARCAS.md`.
+
+- **Marcas en SVG:** las flechas ya no las dibuja `overlay_dia.py` con Pillow.
+  - **Cómo se dibujan:** `marcador.py` (con la misma forma de uso) las convierte en la forma `"marca"` (`formas_marcas.js`), la página las dibuja y `capa.py` las proyecta en el grupo `marcas` (Dia: `marcas_dia`, para que no se borren con las del tutor).
+  - **Cómo se ven:** entran dibujándose (350 ms), llevan el número en un círculo y tienen versión oscura si el fondo de la app es oscuro (lo mide `tema_detras` en la captura).
+  - **Respaldo:** si la página no puede dibujarlas, vuelve `overlay_dia.py`.
+  - **Diseño:** las piezas de dibujo (`Marcas.piezas.*`) están separadas de la colocación; el diseño de Claude Design entra cambiando solo esas funciones (encargo en `para-claude-design/`).
+- **🎯 Reajustar** (`reajustar.py`, botón de `marcas_ui.js`): tras un zoom, un scroll o cambiar el tamaño, cada marca y cada dibujo vuelve a donde está ahora lo que señalaba, y **se desliza** hasta allí (250 ms).
+  - **Un control con nombre:** se vuelve a leer la lista de controles, sin imagen.
+  - **Una celda, un paso del curso, la interfaz de Dia o una línea:** lo vuelve a ubicar el panel (`registrar_rehacer`).
+  - **Lo que solo está en la imagen:** se busca el trozo de la captura vieja en la ventana con 12 escalas (correlación con FFT en numpy, unos 0.8 s por marca). La ventana se lee solo en la PC y solo al pulsar el botón, como la lupa (lo aprobó él).
+  - **Lo que quedó fuera de la vista:** una pastilla al borde («↓ Negrita, más abajo»).
+  - **Lo que no aparece** (liso, repetido o cortado): no se adivina; se esconde y sale la tarjeta «¿Vuelvo a mirar?».
+  - **Solo con el botón:** no hay modo automático, porque para lo que está solo en la imagen haría falta leer la pantalla todo el tiempo.
+- **Texto enlazado** (`marcas_ui.js`): la palabra de la respuesta que corresponde a una marca sale subrayada. Al pasar el ratón por encima, la marca late sobre la app (`capa.py`, orden `latir`).
+- **✏️ Señalar** (`senalar.py` + `senalar_ui.js`): encierras algo de la app con el ratón y sale la vista previa de siempre con tu trazo pintado. El tutor recibe la zona y los controles que encerraste. Nada sale sin «Adjuntar» y sin enviar.
+- **Ilustraciones en el chat** (`ilustraciones_ui.js`, reglas `REGLAS_ILUSTRACIONES` de `ojos_panel.py`):
+  - `$…$` y `$$…$$` con MathJax (📋 LaTeX; copiar devuelve el LaTeX; «$5» y «$B$2» no son fórmulas).
+  - Bloques ` ```svg Pie ` con colores por nombre que siguen el tema.
+  - Bloques ` ```grafica {json} `: una gráfica exacta, con un intérprete de expresiones propio (sin `eval`).
+  - Cada figura trae Ampliar, Copiar SVG, Guardar PNG (a Descargas) y «Ponlo en la app».
+  - Pruebas: `node tutor-pantalla/probar_ilustraciones.js`.
+
 ## Archivos
 
 | Archivo | Qué es |
@@ -250,7 +275,15 @@ Un curso puede revisar **más de un proyecto** (p. ej. una práctica y el proyec
 | `voz_natural.py` | El audio de cada frase con edge-tts (voz de `preferencias.json`, Dalia por defecto), en caché. `python voz_natural.py "texto" muestra.mp3 [voz]` para oír una. |
 | `capa.py` | El proyector: ventanas transparentes que pegan las capas encima de la app, las animan y leen la zona de la lupa. `capa.fotograma()` compone un instante igual que en vivo. |
 | `probar_dibujos.py` | Banco de pruebas sin panel: dibuja un lote de muestras en el Chrome instalado y guarda tiras de 6 momentos y el cuadro final. |
-| `muestras/*.json` | Lotes de ejemplo de cada forma, para `probar_dibujos.py` (`svg_animado.json`: SMIL, CSS y un SVG trampa que debe quedar filtrado). |
+| `muestras/*.json` | Lotes de ejemplo de cada forma, para `probar_dibujos.py` (`svg_animado.json`: SMIL, CSS y un SVG trampa que debe quedar filtrado; `marcas.json`: la forma «marca» en claro, oscuro y «fuera»). |
+| `formas_marcas.js` | La forma «marca» (las flechas de siempre, en SVG): marco, nota con número, flecha, entrada animada, versión oscura y pastilla «fuera». Las piezas de dibujo, en `Marcas.piezas`. |
+| `marcador.py` | El sustituto de `overlay_dia.py` (misma forma de uso): pasa las marcas a la forma «marca» y las manda a la página; sin página, usa el overlay viejo. `python marcador.py --probar`. |
+| `reajustar.py` | 🎯: vuelve a encontrar lo señalado (controles por nombre; o el trozo de imagen con varias escalas, correlación con FFT). `python reajustar.py --probar`. |
+| `marcas_ui.js` | El botón 🎯 Reajustar y el texto enlazado (la palabra de la respuesta hace latir su marca). |
+| `senalar.py` + `senalar_ui.js` | ✏️ Señalar: ventana que recoge el trazo con el ratón sobre la app, y el botón y el flujo hasta la vista previa. `python senalar.py --probar`. |
+| `ilustraciones_ui.js` | Fórmulas, figuras SVG y gráficas exactas dentro del chat, con sus botones. `node probar_ilustraciones.js` prueba el intérprete de expresiones. |
+| `CONTRATO-MARCAS.md` | El contrato entre las piezas de lo anterior (quién hace qué y con qué forma). |
+| `para-claude-design/` | El encargo del kit de anotaciones a Claude Design, con capturas de cómo se veía antes; lo que entregue va a `recibido/`. |
 | `vendor/` | MathJax 3.2.2 (`tex-svg.js`) y rough.js 4.6.6, con sus licencias (Apache 2.0 y MIT). No se editan. |
 | `../panel-excel/rayos_x.py` | Lo que se lee de Excel para los dibujos (solo lectura): caja de una celda en pantalla, celdas que usa una fórmula, la fórmula en LaTeX y los datos de la mini gráfica. |
 

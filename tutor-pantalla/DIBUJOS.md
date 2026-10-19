@@ -141,3 +141,16 @@ sus duraciones, tope 6 s) desde que ya empezaron todas, para que el bucle no sal
 `python probar_dibujos.py <muestras.json> <carpeta> [--fondo captura.png]` abre las formas en el Chrome instalado,
 compone los fotogramas igual que capa.py (`capa.fotograma`) y guarda por cada muestra `<id>_tira.png` (6 momentos)
 y `<id>_final.png`. Las muestras son un lote (sección 2) con `"cliente"` del tamaño del fondo.
+
+## 6. Grupos, marcas y movimiento (2026-10-18)
+
+- **Grupos de capas:** `capa_poner({capas, grupo, deslizar})` y `{"cmd": "poner", "grupo": ...}`.
+  - `"dibujos"` son los de este contrato (y el que se usa sin grupo); `"marcas"` son las flechas del tutor; `"marcas_dia"`, las de «En Dia: dónde se hace».
+  - Cada `poner` reemplaza solo su grupo; `borrar` sin grupo quita todo.
+- **`deslizar`:** la capa con el mismo `id` que otra del grupo sale de donde estaba y llega a su sitio en ~250 ms (lo usa 🎯 Reajustar).
+- **`latir`:** `{"cmd": "latir", "id"}`, dos pulsos de opacidad en 1.2 s (el texto enlazado del chat).
+- **Forma `"marca"`** (`formas_marcas.js`): la flecha de siempre en SVG.
+  - Lleva `r`, `texto`, `n`, `color`, `tema` (`"oscuro"` para fondos oscuros), `fuera` (`arriba|abajo|izquierda|derecha`: pastilla al borde) y `entrada`.
+  - Se ponen con `Dibujante.ponerMarcas(lote, {deslizar, grupo})`; en Python, con `marcador.Marcador`.
+  - Muestras: `muestras/marcas.json`.
+- `Dibujante.marcasPuestas()` → `[{id, texto}]` de todo lo puesto con texto. `Dibujante.U.limpiarSvg(texto)` es el filtro de SVG, que también usan las ilustraciones del chat.

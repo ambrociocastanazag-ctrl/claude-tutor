@@ -4,8 +4,11 @@
 
    Dibujante.registrar(forma, fn)   fn(d, U) → capa | [capas] | Promise (lo usan formas_*.js)
    Dibujante.renderizar(lote)       → Promise<{capas, narracion, errores}> (sin tocar nada: banco de pruebas)
-   Dibujante.mostrar(lote, texto)   renderiza, pone las capas encima de la app y, con la voz encendida, narra
-   Dibujante.borrar()               quita las capas */
+   Dibujante.mostrar(lote, texto, opc)  renderiza, pone las capas (grupo «dibujos») y, con la voz encendida, narra
+                                    opc: {deslizar, sinVoz}
+   Dibujante.ponerMarcas(lote, opc) renderiza un lote de formas «marca» y lo pone como grupo «marcas» (CONTRATO-MARCAS.md)
+   Dibujante.marcasPuestas()        [{id, texto}] de las marcas y dibujos con texto que hay ahora
+   Dibujante.borrar([grupo])        quita las capas (todas, o solo las de ese grupo) */
 (function(){
   if (window.Dibujante) return;
   var FORMAS = {};
@@ -78,6 +81,7 @@
     var r = opc.cerca || d.r;
     var cw = (d.cliente || [1600, 900])[0], ch = (d.cliente || [1600, 900])[1];
     var w = medir(texto, px) + 2 * pad, h = px * 1.3 + 1.3 * pad;
+    if (opc.tam){ w = opc.tam[0]; h = opc.tam[1]; }          // tam: el tamaño ya lo decidió quien dibuja la nota (formas_marcas.js)
     var occ = ocupado[d.hwnd] = ocupado[d.hwnd] || [];
     var caja = null;
     if (r){
@@ -95,19 +99,20 @@
       if (!caja) caja = [Math.min(Math.max(2, x1 + 46 * s), cw - w - 2), Math.min(Math.max(2, cy - h / 2), ch - h - 2), w, h];
     } else caja = [(cw - w) / 2, 24 * s, w, h];
     occ.push(caja);
-    var out = '';
+    var out = '', pf = null;
     if (r && opc.flecha !== false){      // flecha: del borde de la nota más cercano al objetivo hasta el objetivo
       var g = 4 * s, tx0 = r[0] - g, ty0 = r[1] - g, tx1 = r[0] + r[2] + g, ty1 = r[1] + r[3] + g, ocx = (tx0 + tx1) / 2, ocy = (ty0 + ty1) / 2;
       var pxn = Math.min(Math.max(ocx, caja[0]), caja[0] + w), pyn = Math.min(Math.max(ocy, caja[1]), caja[1] + h);
       var tx = Math.min(Math.max(pxn, tx0), tx1), ty = Math.min(Math.max(pyn, ty0), ty1);
-      if (Math.hypot(tx - pxn, ty - pyn) > 8 * s) out += flecha(pxn, pyn, tx, ty, {color: col, grosor: 3.2 * s});
+      if (Math.hypot(tx - pxn, ty - pyn) > 8 * s){ pf = [pxn, pyn, tx, ty]; if (!opc.solo) out += flecha(pxn, pyn, tx, ty, {color: col, grosor: 3.2 * s}); }
     }
+    if (opc.solo) return {svg: '', caja: caja, flecha: pf};      // solo la colocación: caja de la nota y los extremos de la flecha
     var fondo = mezclar(col, 0.10);
     out += '<rect x="' + caja[0] + '" y="' + caja[1] + '" width="' + w + '" height="' + h + '" rx="' + 7 * s + '" fill="' + fondo +
       '" fill-opacity="0.965" stroke="' + col + '" stroke-width="' + 2.4 * s + '"/>' +
       '<text x="' + (caja[0] + pad) + '" y="' + (caja[1] + h / 2) + '" dominant-baseline="central" font-size="' + px +
       '" font-weight="600" fill="' + col + '">' + esc(texto) + '</text>';
-    return {svg: out, caja: caja};
+    return {svg: out, caja: caja, flecha: pf};
   }
   function ocupar(d, caja){ (ocupado[d.hwnd] = ocupado[d.hwnd] || []).push(caja); }
   function mezclar(hex, k){                 // el color, aclarado hacia blanco (k = cuánto color queda)
@@ -181,7 +186,13 @@
   var U = {color: color, esc: esc, medir: medir, svg: svg, png: png, capa: capa, fotos: fotos, pieza: pieza, nota: nota,
            flecha: flecha, mezclar: mezclar, choca: choca, ocupar: ocupar, recorte: recorte, cargar: cargar, tex: tex, FUENTE: FUENTE};
 
+  var colaRender = Promise.resolve();         // `ocupado` es común: dos renderizados no pueden mezclarse
   function renderizar(lote){
+    var p = colaRender.then(function(){ return renderizar1(lote); });
+    colaRender = p.then(function(){}, function(){});
+    return p;
+  }
+  function renderizar1(lote){
     var dibujos = (lote && lote.dibujos) || lote || [];
     ocupado = {};
     dibujos.forEach(function(d){                 // las notas no tapan ningún objetivo del lote
@@ -224,16 +235,26 @@
   }
 
   var turno = 0;                               // cada mostrar() nuevo corta la narración del anterior
-  function mostrar(lote, texto){
-    var mio = ++turno, a = api(), voz = window.Voz && window.Voz.activa && window.Voz.activa();
+  var puestas = {marcas: [], dibujos: []};     // grupo → [{id, texto}] de lo que hay puesto ahora (para el texto enlazado)
+  function anotar(grupo, lote, r){
+    var dibujos = (lote && lote.dibujos) || lote || [], ids = {};
+    r.capas.forEach(function(c){ ids[c.id] = true; });
+    puestas[grupo] = dibujos.filter(function(d){ return d.texto && (ids[d.id] || r.capas.some(function(c){ return String(c.id).indexOf(d.id + '_') === 0; })); })
+                            .map(function(d){ return {id: d.id, texto: d.texto}; });
+  }
+  // opc: {deslizar: las capas con el mismo id se deslizan a su sitio nuevo, sinVoz: no narrar aunque la voz esté encendida}
+  function mostrar(lote, texto, opc){
+    opc = opc || {};
+    var mio = ++turno, a = api(), voz = !opc.sinVoz && window.Voz && window.Voz.activa && window.Voz.activa();
     if (voz) window.Voz.callar();
     return renderizar(lote || []).then(function(r){
       if (r.errores.length) console.warn('Dibujante:', r.errores.join(' | '));
+      anotar('dibujos', lote || [], r);
       var narrar = voz ? r.narracion.filter(function(t){ return t.texto; }) : [];
       var pausadas = {};
       narrar.forEach(function(t){ t.ids.forEach(function(id){ pausadas[id] = true; }); });
       r.capas.forEach(function(c){ if (pausadas[c.id]) c.auto = false; });
-      var puesto = r.capas.length && a && a.capa_poner ? a.capa_poner({capas: r.capas}) : Promise.resolve();
+      var puesto = r.capas.length && a && a.capa_poner ? a.capa_poner({capas: r.capas, grupo: 'dibujos', deslizar: !!opc.deslizar}) : Promise.resolve();
       return Promise.resolve(puesto).then(function(){
         if (!voz) return r;
         if (!narrar.length) return texto ? window.Voz.decir(limpiar(texto)).then(function(){ return r; }) : r;
@@ -251,17 +272,41 @@
     });
   }
   function limpiar(t){                         // el texto de la respuesta, sin enlaces ni marcas de formato, para la voz
-    return String(t).replace(/```[\s\S]*?```/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/[*_`#>|]/g, '').replace(/\s+/g, ' ').trim();
+    return String(t).replace(/```[\s\S]*?(```|$)/g, ' ')                                  // bloques de código, svg y gráficas (también los sin cerrar)
+      .replace(/\$\$[\s\S]+?\$\$/g, ' (fórmula) ')                                         // $$…$$
+      .replace(/(^|[^\w\\$])\$(?=[^\s$])((?:\\.|[^$\\\n])+?)(?<![\s\\])\$(?!\d)/g, '$1 (fórmula) ')   // $…$ (no un precio como «$5»)
+      .replace(/https?:\/\/\S+/g, ' ').replace(/[*_`#>|]/g, '').replace(/\s+/g, ' ').trim();
   }
-  function borrar(){
+  // borrar() quita todo; borrar('marcas') o borrar('dibujos') solo ese grupo (y, si es 'marcas', sin cortar la voz).
+  function borrar(grupo){
+    var a = api();
+    if (/^marcas/.test(grupo || '')){ puestas[grupo] = []; return a && a.capa_borrar ? a.capa_borrar(grupo) : undefined; }
     turno++;
     if (window.Voz && window.Voz.callar) window.Voz.callar();
-    var a = api(); if (a && a.capa_borrar) return a.capa_borrar();
+    if (grupo) puestas[grupo] = []; else puestas = {marcas: [], dibujos: []};
+    if (a && a.capa_borrar) return grupo ? a.capa_borrar(grupo) : a.capa_borrar();
   }
+  // Las marcas (formas «marca», formas_marcas.js): un lote nuevo reemplaza solo el grupo «marcas». Lote vacío → las quita.
+  // opc: {deslizar, grupo}: grupo «marcas» (las del tutor) u otro que empiece por «marcas» (p. ej. «marcas_dia», las de la
+  // lección de Dia), para que no se reemplacen entre sí. Devuelve Promise<{capas, errores}>.
+  function ponerMarcas(lote, opc){
+    opc = opc || {};
+    var g = /^marcas/.test(opc.grupo || '') ? opc.grupo : 'marcas';
+    var a = api(), dibujos = (lote && lote.dibujos) || lote || [];
+    if (!dibujos.length){ puestas[g] = []; if (a && a.capa_borrar) a.capa_borrar(g); return Promise.resolve({capas: [], errores: []}); }
+    dibujos = dibujos.map(function(d){ if (d.forma) return d; var c = {}; for (var k in d) c[k] = d[k]; c.forma = 'marca'; return c; });
+    return renderizar(dibujos).then(function(r){
+      if (r.errores.length) console.warn('Dibujante (marcas):', r.errores.join(' | '));
+      anotar(g, dibujos, r);
+      var puesto = r.capas.length && a && a.capa_poner ? a.capa_poner({capas: r.capas, grupo: g, deslizar: !!opc.deslizar}) : (a && a.capa_borrar && !r.capas.length ? a.capa_borrar(g) : undefined);
+      return Promise.resolve(puesto).then(function(){ return {capas: r.capas, errores: r.errores}; });
+    });
+  }
+  function marcasPuestas(){ return Object.keys(puestas).reduce(function(t, g){ return t.concat(puestas[g]); }, []); }
 
   window.Dibujante = {
     registrar: function(forma, fn){ FORMAS[forma] = fn; },
     formas: function(){ return Object.keys(FORMAS); },
-    renderizar: renderizar, probar: renderizar, mostrar: mostrar, borrar: borrar, U: U
+    renderizar: renderizar, probar: renderizar, mostrar: mostrar, borrar: borrar, ponerMarcas: ponerMarcas, marcasPuestas: marcasPuestas, U: U
   };
 })();

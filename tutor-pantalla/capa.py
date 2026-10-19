@@ -9,12 +9,16 @@ La lupa lee de la pantalla SOLO su zona y la pinta aumentada. No se guarda ni sa
 zona, se queda con la última imagen buena. En Windows 10/11 leer la pantalla también trae estas capas: mientras haya una
 lupa, todas se marcan WDA_EXCLUDEFROMCAPTURE (no salen en las lecturas de pantalla) y al quitarla vuelven a la normalidad.
 
-Órdenes por stdin, una línea JSON (responde una línea JSON), formato en DIBUJOS.md:
-  {"cmd": "poner", "pids": [...], "panel": hwnd, "capas": [...]}   {"cmd": "reproducir", "id", "desde", "hasta"}
-  {"cmd": "borrar"}   {"cmd": "estado"}   {"cmd": "volcar", "carpeta"}   {"cmd": "salir"}
+Órdenes por stdin, una línea JSON (responde una línea JSON), formato en DIBUJOS.md y CONTRATO-MARCAS.md:
+  {"cmd": "poner", "pids": [...], "panel": hwnd, "capas": [...], "grupo": "marcas" | "dibujos", "deslizar": bool}
+  {"cmd": "reproducir", "id", "desde", "hasta"}   {"cmd": "borrar", "grupo"?}   {"cmd": "latir", "id"}
+  {"cmd": "estado"}   {"cmd": "volcar", "carpeta"}   {"cmd": "salir"}
+Las capas van en grupos («marcas» y «dibujos», el de siempre): «poner» reemplaza solo las de su grupo y «borrar» sin grupo
+quita todo. Con «deslizar», una capa con el mismo id que otra del grupo sale de donde estaba y llega a su sitio en ~250 ms.
+«latir» hace que esa capa lata ~1,2 s (solo cambia su opacidad, sin recomponer la imagen).
 
 fotograma(capa, t) compone una capa en el instante t (ms) igual que en vivo: lo usa probar_dibujos.py."""
-import base64, ctypes, io, json, os, queue, sys, threading, time
+import base64, ctypes, io, json, math, os, queue, sys, threading, time
 from ctypes import wintypes as W
 
 try:
@@ -23,6 +27,9 @@ except ImportError:
     Image = None
 
 FPS = 30
+GRUPO_BASE = "dibujos"                  # sin «grupo» en la orden
+DESLIZAR_MS = 250
+LATIR_MS = 1200
 
 
 # ---------- componer un fotograma (sin ventanas: sirve también para las pruebas) ----------
@@ -222,8 +229,14 @@ def leer_pantalla(x, y, w, h):
         g32.SelectObject(mem, viejo); g32.DeleteObject(bmp); g32.DeleteDC(mem); u32.ReleaseDC(None, pantalla)
 
 
-def a_ventana(hwnd, img, x, y):
-    """Pone la imagen RGBA en la ventana en capas, en (x, y) de la pantalla."""
+def solo_alfa(hwnd, alfa):
+    """Cambia solo la opacidad global de la ventana (sin tocar su imagen). False si Windows no lo acepta."""
+    bl = BLENDFUNCTION(AC_SRC_OVER, 0, max(0, min(255, int(alfa))), AC_SRC_ALPHA)
+    return bool(u32.UpdateLayeredWindow(hwnd, None, None, None, None, None, 0, ctypes.byref(bl), ULW_ALPHA))
+
+
+def a_ventana(hwnd, img, x, y, alfa=255):
+    """Pone la imagen RGBA en la ventana en capas, en (x, y) de la pantalla (alfa: opacidad global 0–255)."""
     w, h = img.size
     datos = img.tobytes("raw", "BGRa")                  # BGRA premultiplicado, lo que pide UpdateLayeredWindow
     bi = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
@@ -232,7 +245,7 @@ def a_ventana(hwnd, img, x, y):
     bmp = g32.CreateDIBSection(mem, ctypes.byref(bi), 0, ctypes.byref(bits), None, 0)
     ctypes.memmove(bits, datos, len(datos))
     viejo = g32.SelectObject(mem, bmp)
-    bl = BLENDFUNCTION(AC_SRC_OVER, 0, 255, AC_SRC_ALPHA)
+    bl = BLENDFUNCTION(AC_SRC_OVER, 0, int(alfa), AC_SRC_ALPHA)
     u32.UpdateLayeredWindow(hwnd, pantalla, ctypes.byref(W.POINT(x, y)), ctypes.byref(W.SIZE(w, h)), mem, ctypes.byref(W.POINT(0, 0)), 0, ctypes.byref(bl), ULW_ALPHA)
     g32.SelectObject(mem, viejo); g32.DeleteObject(bmp); g32.DeleteDC(mem); u32.ReleaseDC(None, pantalla)
 
@@ -240,8 +253,12 @@ def a_ventana(hwnd, img, x, y):
 class Lamina:
     """Una capa encima de su ventana."""
 
-    def __init__(self, c):
-        self.c, self.objetivo = c, int(c["hwnd"])
+    def __init__(self, c, grupo=GRUPO_BASE, desde=None):
+        """desde: (x, y) de cliente de donde viene deslizándose (la capa que tenía este id), o None."""
+        self.c, self.objetivo, self.grupo = c, int(c["hwnd"]), grupo
+        mover = desde and (int(desde[0]), int(desde[1])) != (int(c["x"]), int(c["y"]))
+        self.slide = (desde, time.monotonic()) if mover else None
+        self.latido, self.alfa, self.alfa_ok = None, 255, True
         self.imgs = Imagenes(c)
         self.hwnd = u32.CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                                         _wc.lpszClassName, "Tutor (dibujo)", WS_POPUP, 0, 0, 1, 1, None, None, _wc.hInstance, None)
@@ -252,8 +269,34 @@ class Lamina:
         self.ultimo_t, self.lupa_img, self.lupa_t = None, None, 0
         self.pintar(force=True)
 
+    def pos(self):
+        """(x, y) de cliente de la capa ahora: la de destino, o la del camino si se está deslizando."""
+        x, y = int(self.c["x"]), int(self.c["y"])
+        if self.slide:
+            (ox, oy), t0 = self.slide
+            k = (time.monotonic() - t0) * 1000 / DESLIZAR_MS
+            if k >= 1: self.slide = None
+            else:
+                e = 1 - (1 - k) ** 3                            # arranca rápido y frena al llegar
+                return round(ox + (x - ox) * e), round(oy + (y - oy) * e)
+        return x, y
+
     def anima(self):
         return (self.c.get("duracion") or 0) > 0 or bool(self.c.get("lupa"))
+
+    def latir(self):
+        self.latido = time.monotonic()
+
+    def paso_latido(self):
+        """Un tic del latido: solo cambia la opacidad (dos pulsos en ~1,2 s) y vuelve a 255."""
+        if self.latido is None: return
+        u = (time.monotonic() - self.latido) * 1000 / LATIR_MS
+        a = 255 if u >= 1 else round(255 * (0.35 + 0.65 * (0.5 + 0.5 * math.cos(4 * math.pi * u))))
+        if u >= 1: self.latido = None
+        if a == self.alfa: return
+        self.alfa = a
+        if self.alfa_ok and not solo_alfa(self.hwnd, a): self.alfa_ok = False
+        if not self.alfa_ok: self.pintar(force=True)             # respaldo: recompone con ese alfa
 
     def t(self):
         ahora = time.monotonic()
@@ -294,8 +337,9 @@ class Lamina:
         if not force and t == self.ultimo_t and self.lupa_img is antes: return
         self.ultimo_t = t
         img = fotograma(self.c, t, self.imgs, self.lupa_img)
-        self.donde = (c[0] + int(self.c["x"]), c[1] + int(self.c["y"]))
-        a_ventana(self.hwnd, img, *self.donde)
+        px, py = self.pos()
+        self.donde = (c[0] + px, c[1] + py)
+        a_ventana(self.hwnd, img, *self.donde, alfa=self.alfa)
         self.img = img
 
     def seguir(self, mostrar, debajo_de=None):
@@ -303,7 +347,8 @@ class Lamina:
         c = cliente(self.objetivo)
         if not c: return False
         ver = bool(mostrar and u32.IsWindowVisible(self.objetivo) and not u32.IsIconic(self.objetivo))
-        x, y = c[0] + int(self.c["x"]), c[1] + int(self.c["y"])
+        px, py = self.pos()
+        x, y = c[0] + px, c[1] + py
         if self.donde != (x, y):
             u32.SetWindowPos(self.hwnd, z, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE); self.donde = (x, y)
         if ver and not self.visible:
@@ -312,6 +357,7 @@ class Lamina:
         elif not ver and self.visible:
             u32.ShowWindow(self.hwnd, SW_HIDE); self.visible = False
         if self.visible and self.anima(): self.pintar()
+        if self.visible and self.latido is not None: self.paso_latido()
         return True
 
     def cerrar(self):
@@ -320,50 +366,70 @@ class Lamina:
 
 class Proyector:
     def __init__(self):
-        self.laminas, self.pids, self.panel = {}, set(), None
+        self.laminas, self.pids, self.panel = {}, {}, None      # laminas: «grupo/id» → Lamina; pids: grupo → {pid}
 
-    def poner(self, capas, pids=(), panel=None):
-        self.pids = {int(p) for p in pids if p} or self.pids
+    def poner(self, capas, pids=(), panel=None, grupo=GRUPO_BASE, deslizar=False):
+        """Reemplaza las capas de ese grupo (las de los demás grupos no se tocan)."""
+        grupo = grupo or GRUPO_BASE
+        self.pids[grupo] = {int(p) for p in pids if p} or self.pids.get(grupo, set())
         if panel: self.panel = int(panel)
-        self.borrar()
-        errores = []
+        viejas = {k: l for k, l in self.laminas.items() if l.grupo == grupo}
+        nuevas, errores = {}, []
         for c in capas or []:
             try:
                 if not u32.IsWindow(int(c["hwnd"])): errores.append(f"{c.get('id')}: la ventana ya no existe"); continue
-                self.laminas[str(c["id"])] = Lamina(c)
+                v = viejas.get(f"{grupo}/{c['id']}")
+                desde = v.pos() if deslizar and v and v.objetivo == int(c["hwnd"]) else None     # desde donde estaba (o iba)
+                nuevas[f"{grupo}/{c['id']}"] = Lamina(c, grupo, desde)
             except Exception as e:
                 errores.append(f"{c.get('id')}: {e}")
+        for k, l in viejas.items(): l.cerrar(); self.laminas.pop(k, None)     # primero las nuevas y luego se van las viejas: sin parpadeo
+        self.laminas.update(nuevas)
         if any(l.c.get("lupa") for l in self.laminas.values()):     # que la lupa no se vea a sí misma ni a las demás
             for l in self.laminas.values(): u32.SetWindowDisplayAffinity(l.hwnd, WDA_EXCLUDEFROMCAPTURE)
             for l in self.laminas.values(): l.lupa_t = 0; l.pintar(force=True)
         self.tic()
-        return {"ok": True, "capas": len(self.laminas), "errores": errores}
+        return {"ok": True, "capas": len([1 for l in self.laminas.values() if l.grupo == grupo]), "errores": errores}
+
+    def buscar(self, cid):
+        for l in self.laminas.values():
+            if str(l.c["id"]) == str(cid): return l
+        return None
 
     def reproducir(self, cid, desde, hasta):
-        l = self.laminas.get(str(cid))
+        l = self.buscar(cid)
         if not l: return {"ok": False, "error": f"no hay capa {cid}"}
         l.reproducir(desde, hasta); return {"ok": True}
 
-    def borrar(self):
-        for l in self.laminas.values(): l.cerrar()
-        self.laminas = {}
+    def latir(self, cid):
+        l = self.buscar(cid)
+        if not l: return {"ok": False, "error": f"no hay capa {cid}"}
+        l.latir(); return {"ok": True}
+
+    def borrar(self, grupo=None):
+        for k in [k for k, l in self.laminas.items() if not grupo or l.grupo == grupo]: self.laminas.pop(k).cerrar()
         return {"ok": True}
 
     def tic(self):
         fg = u32.GetForegroundWindow()
-        mostrar = not self.pids or (fg and pid_de(fg) in self.pids)
+        pid_fg = pid_de(fg) if fg else None
         debajo = self.panel if self.panel and u32.IsWindow(self.panel) else None
-        for k in [k for k, l in self.laminas.items() if not l.seguir(mostrar, debajo)]: self.laminas.pop(k).cerrar()
+        for k, l in list(self.laminas.items()):
+            pids = self.pids.get(l.grupo)
+            if not l.seguir(not pids or pid_fg in pids, debajo): self.laminas.pop(k).cerrar()
 
     def estado(self):
-        return {"ok": True, "capas": [{"id": k, "objetivo": l.objetivo, "visible": l.visible, "en": l.donde, "t": l.ultimo_t,
-                                       "anima": l.anima()} for k, l in self.laminas.items()]}
+        return {"ok": True, "capas": [{"id": l.c["id"], "grupo": l.grupo, "objetivo": l.objetivo, "visible": l.visible, "en": l.donde,
+                                       "t": l.ultimo_t, "anima": l.anima(), "desliza": l.slide is not None, "late": l.latido is not None,
+                                       "alfa": l.alfa} for l in self.laminas.values()]}
 
     def volcar(self, carpeta):
         out = []
-        for k, l in self.laminas.items():
-            ruta = os.path.join(carpeta, f"capa_{k}.png"); getattr(l, "img", fotograma(l.c, l.t(), l.imgs)).save(ruta)
-            out.append({"id": k, "png": ruta, "en": l.donde, "visible": l.visible})
+        for l in self.laminas.values():
+            k = l.c["id"] if l.grupo == GRUPO_BASE else f"{l.grupo}_{l.c['id']}"
+            ruta = os.path.join(carpeta, f"capa_{k}.png")
+            (getattr(l, "img", None) or fotograma(l.c, l.t(), l.imgs)).save(ruta)
+            out.append({"id": l.c["id"], "grupo": l.grupo, "png": ruta, "en": l.donde, "visible": l.visible})
         return {"ok": True, "capas": out}
 
 
@@ -391,9 +457,10 @@ def main():
             try:
                 o = json.loads(linea); cmd = o.get("cmd")
                 if cmd == "salir": pr.borrar(); print(json.dumps({"ok": True, "adios": True}), flush=True); return
-                elif cmd == "poner": r = pr.poner(o.get("capas") or [], o.get("pids") or [], o.get("panel"))
+                elif cmd == "poner": r = pr.poner(o.get("capas") or [], o.get("pids") or [], o.get("panel"), o.get("grupo"), bool(o.get("deslizar")))
                 elif cmd == "reproducir": r = pr.reproducir(o.get("id"), o.get("desde"), o.get("hasta"))
-                elif cmd == "borrar": r = pr.borrar()
+                elif cmd == "borrar": r = pr.borrar(o.get("grupo"))
+                elif cmd == "latir": r = pr.latir(o.get("id"))
                 elif cmd == "estado": r = pr.estado()
                 elif cmd == "volcar": r = pr.volcar(o["carpeta"])
                 else: r = {"ok": False, "error": f"orden desconocida {cmd!r}"}

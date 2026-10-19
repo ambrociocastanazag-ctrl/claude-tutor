@@ -10,7 +10,7 @@ import json, re, shutil, subprocess, tempfile, threading
 
 REGLAS = """Eres el asistente personal de una persona en su PC con Windows. No tienes una tarea fija: ayudas con lo que
 pida (un programa, un error, un formulario, una duda cualquiera). Responde en español, cercano y corto (unas pocas
-líneas; listas numeradas si son pasos). Fórmulas en texto plano, sin LaTeX.
+líneas; listas numeradas si son pasos). Fórmulas en LaTeX con $...$ y $$...$$ (el panel las dibuja).
 
 A veces te manda, con su permiso, la captura de UNA ventana y la lista de sus controles (id | tipo | nombre | caja
 x,y,w,h en píxeles de la captura). Solo puedes mirar y señalar: nunca digas que hiciste clic, escribiste o cambiaste

@@ -115,6 +115,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
 
     def _salir_del_paso(self):
         self._vista = None; self._senalando = []; self._marcas = []
+        self._registrar_rehacer(False)
         self._ojos.borrar()
 
     def ir(self, n):
@@ -173,6 +174,8 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
             marcas.append({"c": c, "texto": o.get("texto", ""), "n": o.get("n") or (k + 1 if len(objetivos) > 1 else None),
                            "color": o.get("color", color)})
         self._pintar(marcas)
+        self._objetivos_senal = (list(objetivos), color)           # para 🎯 Reajustar: volver a buscar los mismos controles
+        self._registrar_rehacer(bool(marcas))
         extra = " " + " ".join(getattr(self, "_lin_avisos", []) or []) if getattr(self, "_lin_avisos", None) else ""
         self._lin_avisos = []
         if not marcas:
@@ -182,7 +185,32 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         falta = f" (no veo: {faltan[0]})" if faltan else ""
         return {"ok": True, "aviso": f"Mira {self._curso.app_nombre}: te señalé {len(marcas)} cosa{'s' if len(marcas) != 1 else ''}{falta}.{extra}"}
 
-    def _pintar(self, marcas):
+    def _registrar_rehacer(self, si):
+        """🎯 Reajustar: «Señálamelo» se rehace volviendo a buscar sus controles por nombre (ojos_panel.registrar_rehacer)."""
+        f = getattr(self._ojos, "registrar_rehacer" if si else "quitar_rehacer", None)
+        if f: f("senalar", self._rehacer_senalar) if si else f("senalar")
+
+    def _rehacer_senalar(self):
+        """Vuelve a ubicar los controles de «Señálamelo» (sin imagen: la lista de UI Automation) y los pone con deslizar.
+        Devuelve {"movidas", "fuera", "perdidas"}."""
+        objetivos, color = getattr(self, "_objetivos_senal", ([], "azul"))
+        est = cp.estado(self._curso.app["exe"])
+        marcas, perdidas = [], []
+        for k, o in enumerate(objetivos):
+            if o.get("linea") is not None:
+                ms, _ = capacidades.marcas_linea([dict(o, tipo="app")], self._raices, (self._app() or {}).get("hwnd"))
+                for m in ms: m["n"] = o.get("n") or (k + 1 if len(objetivos) > 1 else None); m["color"] = o.get("color", color)
+                marcas += ms
+                if not ms: perdidas.append(f"la línea {o['linea']}")
+                continue
+            c = cp.buscar(est, {k: v for k, v in o.items() if k != "tipo"}) if est else None     # «tipo» de la marca no es el del control
+            if not c: perdidas.append(o.get("texto") or cp.lista(o.get("nombre") or o.get("empieza"))[0]); continue
+            marcas.append({"c": c, "texto": o.get("texto", ""), "n": o.get("n") or (k + 1 if len(objetivos) > 1 else None),
+                           "color": o.get("color", color)})
+        if marcas: self._pintar(marcas, deslizar=True)
+        return {"movidas": len(marcas), "fuera": 0, "perdidas": perdidas}
+
+    def _pintar(self, marcas, deslizar=False):
         """marcas: [{"c": control de cp.estado (caja en pantalla), "texto", "n", "color"}] → overlay encima de su ventana."""
         if not marcas: self._ojos.borrar(); return 0
         v = self._app()
@@ -196,7 +224,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         r = self._ojos.ov.orden({"cmd": "mostrar", "pids": [v["pid"], os.getpid()], "panel": self._hwnd_panel(), "marcas": [
             {"hwnd": hwnd, "ventana": list(cli), "rect": [m["c"]["caja"][0], m["c"]["caja"][1], m["c"]["caja"][2] - m["c"]["caja"][0],
                                                           m["c"]["caja"][3] - m["c"]["caja"][1]],
-             "texto": m["texto"], "color": m["color"], "n": m.get("n"), "evitar": evitar} for m in marcas]})
+             "texto": m["texto"], "color": m["color"], "n": m.get("n"), "evitar": evitar} for m in marcas]} | ({"deslizar": True} if deslizar else {}))
         return r.get("dibujadas", 0)
 
     # ----- Comprobar -----
@@ -310,7 +338,11 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
                 c = cp.buscar(est, {"nombre": m["nombre"]}) if est else None
                 if c: ms.append({"c": c, "texto": str(m.get("texto") or "")[:40], "n": m.get("n"), "color": m.get("color") or "azul"})
                 else: self._notas.append(f"Tu marca en «{m['nombre']}» no se dibujó: ese control no está a la vista.")
-        if ms and not en_ventana: hechas = self._pintar(ms) and len(ms)
+        if ms and not en_ventana:
+            hechas = self._pintar(ms) and len(ms)
+            if hechas:                                              # 🎯 Reajustar vuelve a buscar estas marcas del tutor
+                self._objetivos_senal = ([dict(m) for m in por_linea[:4]] + [dict(m) for m in por_nombre[:4]], "azul")
+                self._registrar_rehacer(True)
         for a in capacidades.avisos_linea(self._ojos):             # «Sube/Baja hasta la línea N»: se lo dice el panel
             texto = (texto + "\n\n" if texto else "") + "↕ " + a + "."
         if error_ej and not texto: texto = "No pude crear ese ejercicio; pídeselo otra vez al tutor."
@@ -387,6 +419,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         self._ej.quitar(); return {"tutor_ej": None}
 
     def borrar_marcas(self):
+        self._registrar_rehacer(False)
         self._ojos.borrar(); self._senalando = []
         return {"ok": True}
 
@@ -416,6 +449,8 @@ def abrir_ventana(api):
     api._ventana = webview.create_window(api._curso.titulo or "Curso", html=pagina, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
                                          on_top=True, text_select=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
+    if hasattr(api._ojos, "poner_js"):                                      # las marcas se dibujan en la página (marcador.py, CONTRATO-MARCAS §3)
+        api._ojos.poner_js(lambda c: api._ventana.evaluate_js(c) if api._ventana else None)
 
 
 def probar_codigo(curso, mod, kmod, i, t, pide_ui, ver):

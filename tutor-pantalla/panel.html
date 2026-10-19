@@ -57,7 +57,7 @@ code{font-family:var(--mono);font-size:.92em;padding:1px 5px;border-radius:5px;b
 .btn{height:32px;padding:0 11px;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;font-weight:650;white-space:nowrap}
 .btn:disabled{opacity:.45;cursor:default}
 .btn.prim{border:none;background:var(--acc);color:var(--on-acc);box-shadow:0 1px 0 oklch(0 0 0 / .08)}
-.acciones{display:flex;gap:6px} .acciones .btn.prim{flex:1;justify-content:center;height:36px;font-size:14px}
+.acciones{display:flex;flex-wrap:wrap;gap:6px} .acciones .btn.prim{flex:1 1 100%;justify-content:center;height:36px;font-size:14px}   /* «Que mire» ocupa su fila; debajo, Señalar, Borrar marcas y Reajustar */
 
 /* Chat (como el del tutor de Excel) */
 .chat{flex:1;min-height:0;overflow-y:auto;padding:14px 14px 10px;display:flex;flex-direction:column;gap:18px}
@@ -129,6 +129,7 @@ textarea:focus-visible{outline:none}
     <div class="acciones">
       <button class="btn prim" id="mirar" type="button" disabled><span data-ic="camera"></span>Que mire</button>
       <button class="btn" id="borrar" type="button" title="Quita las flechas y los dibujos de encima de la ventana"><span data-ic="erase"></span>Borrar marcas</button>
+      <span data-reajustar></span>
     </div>
   </header>
 
@@ -209,6 +210,7 @@ textarea:focus-visible{outline:none}
     return s.replace(/\u0001(\d+)\u0001/g, function(_, k){ return codigos[+k]; });
   }
   function bloques(t, cursor){
+    if (window.Ilustraciones) t = Ilustraciones.antes(t);      // fórmulas, ```svg y ```grafica (ilustraciones_ui.js)
     var out = [];
     esc(t).split(/```/).forEach(function(p, i){
       if (i % 2){ out.push('<pre>' + p.replace(/^[a-zA-Z]*\n/, '').replace(/\n$/, '') + '</pre>'); return; }
@@ -274,6 +276,7 @@ textarea:focus-visible{outline:none}
       var nd = r.dibujos && r.dibujos.dibujos ? r.dibujos.dibujos.length : 0;
       if (r.marcas || nd) agregar('<i></i>Te lo ' + (nd ? 'dibujé' : 'señalé') + ' encima de la ventana (' + (r.marcas + nd) + ((r.marcas + nd) === 1 ? ' marca' : ' marcas') + ')', 'senal');
       if (window.Dibujante && (nd || (window.Voz && Voz.activa()))) Dibujante.mostrar(r.dibujos || [], r.texto);
+      if (window.MarcasUI) MarcasUI.enlazar(burbuja.querySelector('.bloques'));          // marcas_ui.js: el texto de cada marca, enlazado
       if (r.preguntas && r.preguntas.length && window.Preguntas)             // encuesta o preguntas: la respuesta vuelve al asistente
         burbuja.appendChild(Preguntas.tarjeta(r.preguntas, function(t){ enviar(t, []); }));
       if (r.pedir){
@@ -328,6 +331,15 @@ textarea:focus-visible{outline:none}
       .then(alResponder, function(e){ terminar({ok: false, error: String(e)}); });
   }
   function aviso(t){ agregar(esc(t), 'aviso'); }
+  // marcas_ui.js (botón 🎯 Reajustar): cómo ponerse una nota corta y la tarjeta «¿Vuelvo a mirar?» en este chat
+  window.MARCAS_PAGINA = {
+    nota: function(t){ agregar('<i></i>' + esc(t), 'senal'); },
+    tarjeta: function(q){
+      var d = agregar('<div class="bloques"></div>', 'tutor-m');
+      d.querySelector('.bloques').appendChild(Preguntas.tarjeta([q], function(t){ enviar(t, []); }));
+      $('chat').scrollTop = $('chat').scrollHeight;
+    }
+  };
 
   // ---- Adjuntos: las capturas que aprobó en la vista previa (ojos_ui.js) y archivos (clip, Ctrl+V o arrastrar:
   //      imágenes, PDF y texto, como en los paneles de Excel y Dia). Salen solo al enviar ----

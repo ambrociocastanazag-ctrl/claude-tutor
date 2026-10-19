@@ -305,6 +305,19 @@ class DiaEnVivo:
         return n
 
 
+def _crear_overlay(ojos=None):
+    """El que dibuja «En Dia: dónde se hace»: el marcador del contrato (flechas en SVG dentro de la página del panel, con
+    animación) si ya existe y la página puede dibujar; si no, el OverlayDia de siempre (overlay_dia.py). Misma forma de uso:
+    mostrar(marcas, pids, panel) / borrar() / cerrar()."""
+    if ojos is None: return OverlayDia()
+    try:
+        sys.path.insert(0, str(AQUI.parent / "tutor-pantalla")); import marcador
+        # grupo propio: las flechas del tutor (grupo «marcas») y las de la lección no se borran entre sí
+        return marcador.Marcador(js=lambda c: ojos.js(c) if getattr(ojos, "js", None) else None, grupo="marcas_dia")
+    except Exception:
+        return OverlayDia()
+
+
 class OverlayDia:
     """El proceso overlay_dia.py (flechas encima de la ventana real de Dia). Se arranca la primera vez que hace falta."""
 
@@ -326,7 +339,7 @@ class OverlayDia:
             try: self.respuestas.append(json.loads(linea)); self.respuestas = self.respuestas[-20:]
             except ValueError: pass
 
-    def mostrar(self, marcas, pids, panel=None):
+    def mostrar(self, marcas, pids, panel=None, deslizar=False):          # deslizar: solo lo usa el marcador (aquí no se anima)
         clave = json.dumps(marcas, sort_keys=True)
         if clave == self.ultima: return False
         self.ultima = clave
@@ -398,7 +411,7 @@ class Api(*((practica.PracticaApi,) if practica else ()), *((ojos_panel.OjosApi,
         self._cerrojo_cambios = threading.Lock()
         self._notas = []            # lo que se le cuenta al tutor en la próxima pregunta («[Del panel]»)
         self._dibujo = DibujoDia(dia)
-        self._overlay, self._gen, self._faltan, self._hazlo_pedido, self._senalar_extra = OverlayDia(), 0, [], 0.0, None
+        self._overlay, self._gen, self._faltan, self._hazlo_pedido, self._senalar_extra = _crear_overlay(self._ojos), 0, [], 0.0, None
         self._preparado = set()     # módulos ya armados con el plugin en esta sesión
         threading.Thread(target=self._vigilar, daemon=True).start()
         threading.Thread(target=self._vigilar_interfaz, daemon=True).start()
@@ -572,9 +585,26 @@ class Api(*((practica.PracticaApi,) if practica else ()), *((ojos_panel.OjosApi,
     def _pintar_interfaz(self):
         marcas, faltan = self._marcas_interfaz()
         self._faltan = faltan
-        if not marcas: self._overlay.borrar(); return marcas
+        if not marcas: self._borrar_interfaz(); return marcas
         self._overlay.mostrar(marcas, [p for p in (self._pid_dia(), os.getpid()) if p], self._hwnd_panel())
+        self._rehacer_interfaz(True)
         return marcas
+
+    def _borrar_interfaz(self):
+        """Quita las flechas de «dónde se hace» y su rehacer de 🎯 Reajustar."""
+        self._overlay.borrar(); self._rehacer_interfaz(False)
+
+    def _rehacer_interfaz(self, si):
+        f = getattr(self._ojos, "registrar_rehacer" if si else "quitar_rehacer", None) if self._ojos else None
+        if f: f("senalar", self._reajustar_interfaz) if si else f("senalar")
+
+    def _reajustar_interfaz(self):
+        """🎯 Reajustar: «En Dia: dónde se hace» se vuelve a resolver (ui.resolver, con los widgets de ahora) y se repone
+        deslizando. Devuelve {"movidas", "fuera", "perdidas"}."""
+        marcas, faltan = self._marcas_interfaz()
+        self._faltan = faltan
+        if marcas: self._overlay.mostrar(marcas, [p for p in (self._pid_dia(), os.getpid()) if p], self._hwnd_panel(), deslizar=True)
+        return {"movidas": len(marcas), "fuera": 0, "perdidas": [str(f) for f in faltan]}
 
     def _con_dia_al_frente(self):
         try:
@@ -605,8 +635,8 @@ class Api(*((practica.PracticaApi,) if practica else ()), *((ojos_panel.OjosApi,
                     gen = self._gen; marcas, faltan = self._marcas_interfaz()
                     if gen == self._gen:
                         self._faltan = faltan
-                        if marcas: self._overlay.mostrar(marcas, [p for p in (self._pid_dia(), os.getpid()) if p], self._hwnd_panel())
-                        else: self._overlay.borrar()
+                        if marcas: self._overlay.mostrar(marcas, [p for p in (self._pid_dia(), os.getpid()) if p], self._hwnd_panel()); self._rehacer_interfaz(True)
+                        else: self._borrar_interfaz()
             except Exception: pass
 
     # ----- navegación y Dia -----
@@ -678,7 +708,7 @@ class Api(*((practica.PracticaApi,) if practica else ()), *((ojos_panel.OjosApi,
 
     def _salir_del_paso(self):
         self._gen += 1; self._senalar_extra = None; self._faltan = []
-        self._overlay.borrar()
+        self._borrar_interfaz()
         self._marcas = []; self._vista = None
 
     def ir(self, n):
@@ -960,6 +990,8 @@ def abrir_ventana(api):
     api._ventana = webview.create_window(api._curso.titulo or "Clase en vivo", html=pagina, js_api=api,
                                          width=ancho_v, height=int(alto), x=int(x0 + ancho - ancho_v), y=int(y0),
                                          on_top=True, text_select=True, min_size=(360, 300), background_color="#232631" if tema == "oscuro" else "#F8F6F1")
+    if ojos_panel and getattr(api, "_ojos", None) is not None and hasattr(api._ojos, "poner_js"):   # las marcas se dibujan en la página (marcador.py)
+        api._ojos.poner_js(lambda c: api._ventana.evaluate_js(c) if api._ventana else None)
 
 
 def probar_marcas(leccion):

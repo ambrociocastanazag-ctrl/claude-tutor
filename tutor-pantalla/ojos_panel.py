@@ -12,6 +12,9 @@ Cómo se usa en un panel:
   5. Reglas del tutor: + REGLAS_OJOS (+ REGLAS_DIBUJOS). Al cerrar: ojos.cerrar().
   6. Dibujos ricos (DIBUJOS.md): resto, lote, avisos = ojos.dibujos(marcas, resolver) saca las "tipo": "dibujo"; la
      respuesta lleva "dibujos": lote y la página llama Dibujante.mostrar(lote, texto) → api.capa_poner() → capa.py.
+  7. Marcas en SVG y Reajustar 🎯 (CONTRATO-MARCAS.md): ojos.poner_js(lambda c: ventana.evaluate_js(c)) para que las
+     flechas las dibuje la página (marcador.py); lo que el panel señala por su cuenta (Dia, «Señálamelo» del curso) lo
+     registra con ojos.registrar_rehacer(clave, fn) para que el botón 🎯 (OjosApi.reajustar) también lo vuelva a ubicar.
 
 Permiso: ojos_capturar() solo guarda la captura en memoria y la enseña en la vista previa; ojos_adjuntar() la pasa a
 la lista de adjuntos del mensaje (lo pulsa la persona) y solo sale cuando envía ese mensaje con ella dentro."""
@@ -20,11 +23,12 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
-import ojos, archivos                                                           # noqa: E402
+import ojos, archivos, marcador                                                 # noqa: E402
 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
-SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "voz.js"]
+SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js",
+              "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "ilustraciones_ui.js"]
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
 FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
@@ -93,6 +97,29 @@ tarjeta con botones:
 Úsalo para comprobar que entendió (una pregunta corta después de explicar), para un diagnóstico o para que elija entre
 caminos; no en cada respuesta. Sus respuestas te llegan en un mensaje que empieza por «Mi respuesta» o «Mis respuestas»:
 corrige o sigue desde ahí."""
+
+REGLAS_ILUSTRACIONES = r"""
+ILUSTRACIONES EN EL CHAT (se ven dentro de tu respuesta, no encima de la app):
+- Fórmulas: $...$ dentro del texto y $$...$$ en su propia línea, en LaTeX. El panel las dibuja bien escritas y él puede
+  copiarlas. Fuera de las fórmulas, el texto normal.
+- Figura propia: un bloque de código "svg"; lo que sigue a svg en la primera línea es el pie de la figura:
+  ```svg Discos apilados bajo y = √x
+  <svg viewBox="0 0 320 180">...</svg>
+  ```
+  Solo formas y texto (sin scripts, imágenes ni enlaces). Colores con NOMBRES para que se vea en claro y en oscuro:
+  tinta (texto y ejes), suave (rejilla, guías), fondo, acento, azul, verde, rojo, naranja, morado, amarillo
+  (fill="acento", stroke="tinta"). Puede ir animado (<animate>, <animateTransform>, <animateMotion>, @keyframes).
+  viewBox de hasta unos 640×400; letra de 12 a 16.
+- Gráfica de funciones (exacta, la dibuja el panel; mejor que trazar la curva tú en SVG):
+  ```grafica
+  {"titulo": "Área bajo √x", "x": [0, 4], "y": [0, 2.5],
+   "funciones": [{"f": "sqrt(x)", "nombre": "y = √x", "color": "azul"}],
+   "area": {"f": "sqrt(x)", "g": "0", "x": [0, 4], "color": "azul"}, "puntos": [[4, 2, "(4, 2)"]]}
+  ```
+  f usa x, + - * / ^, sqrt, sin, cos, tan, asin, acos, atan, exp, ln, log, abs, pi, e. "y", "area" y "puntos" son
+  opcionales; "g" es la otra curva del área (por defecto el eje x).
+Úsalas cuando una figura aclare más que el texto (una forma, una función, un proceso): máximo 1 o 2 por respuesta y
+con poco texto alrededor. Para señalar algo de la app sigue usando las marcas y los dibujos encima de ella."""
 
 PREGUNTAS_RE = re.compile(r"\s*<preguntas>\s*(.*?)\s*(?:</preguntas>|$)", re.S | re.I)
 MAX_ADJUNTOS, MAX_MB, MAX_TEXTO = 5, 15, 60000
@@ -247,16 +274,29 @@ class Overlay:
             except Exception: self.p.kill()
 
 
+def tema_detras(cap, caja):
+    """"oscuro" si lo que hay alrededor de la caja (en la captura, que ya está en la PC) es oscuro; si no, None."""
+    try:
+        x, y, w, h = caja; m = 90
+        zona = cap.img.crop((max(0, int(x - m)), max(0, int(y - m)), min(cap.img.width, int(x + w + m)), min(cap.img.height, int(y + h + m))))
+        if zona.width < 4 or zona.height < 4: return None
+        luz = sum(zona.convert("L").resize((24, 24)).getdata()) / 576
+        return "oscuro" if luz < 95 else None
+    except Exception:
+        return None
+
+
 class Ojos:
     """Capturas con permiso y flechas encima de la ventana capturada.
     apps: nombres de ejecutable (sin .exe) que van primero en la lista: las ventanas del curso."""
 
-    def __init__(self, apps=(), panel_hwnd=lambda: None, raices=()):
+    def __init__(self, apps=(), panel_hwnd=lambda: None, raices=(), js=None):
         self.apps = {a.lower() for a in apps}
         self.raices = list(raices)                   # carpetas del curso: con ellas, los objetivos «linea» ubican líneas del editor
         self.avisos_linea = []                       # «Sube/Baja hasta la línea N» de los objetivos «linea» (capacidades.avisos_linea)
         self.panel_hwnd = panel_hwnd                 # función: la ventana del panel (las flechas van justo debajo)
-        self.ov = Overlay()
+        self.js = js                                 # corre código en la página del panel (poner_js): las flechas en SVG
+        self.ov = marcador.Marcador(js=lambda c: self.js(c) if self.js else None)
         self.capa = Overlay(CAPA)                    # los dibujos ricos
         self.aprobadas = set()                       # ventanas que la persona ya enseñó (la lupa solo va en ellas)
         self.capturas = {}                           # id → Captura (en vista previa o adjunta)
@@ -266,6 +306,9 @@ class Ojos:
         self.n = 0
         self.titulos = {}                            # hwnd → (título, app) de las ventanas aprobadas en esta sesión (la más reciente al final)
         self.volver_tokens = {}                      # token de una tarjeta «¿Vuelvo a mirar…?» → hwnd
+        self.rehacer = {}                            # clave → fn() que vuelve a ubicar lo que el panel señaló por su cuenta (🎯)
+        self.ult_dibujos = None                      # (marcas, resolver, ventana) de los últimos dibujos: 🎯 los rehace
+        self._buscador = None                        # durante un reajuste: ubica las "id"/"caja" de la captura en la ventana de ahora
         self.n_volver = 0
         global _ACTIVO
         _ACTIVO = self
@@ -382,15 +425,17 @@ class Ojos:
         self.marcas = ms
         return self._poner()
 
-    def _poner(self):
+    def _poner(self, deslizar=False):
         cap = self.ultima
-        if not self.marcas or not cap or not ojos.u32.IsWindow(cap.hwnd):
+        vivas = [(i, m) for i, m in enumerate(self.marcas) if not m.get("perdida")]
+        if not vivas or not cap or not ojos.u32.IsWindow(cap.hwnd):
             self.ov.orden({"cmd": "borrar"}); return 0
         c = ojos.cliente(cap.hwnd)
         evitar = [cap.a_pantalla(k["caja"]) for k in cap.controles]
-        r = self.ov.orden({"cmd": "mostrar", "pids": [cap.pid, os.getpid()], "panel": self.panel_hwnd(), "marcas": [
-            {"hwnd": cap.hwnd, "ventana": list(c), "rect": cap.a_pantalla(m["caja"]), "texto": m["texto"],
-             "color": m["color"], "n": m.get("n"), "evitar": evitar} for m in self.marcas]})
+        r = self.ov.orden({"cmd": "mostrar", "pids": [cap.pid, os.getpid()], "panel": self.panel_hwnd(), "deslizar": deslizar, "marcas": [
+            {"id": f"m{i + 1}", "hwnd": cap.hwnd, "ventana": list(c), "rect": m.get("pantalla") or cap.a_pantalla(m["caja"]),
+             "texto": m["texto"], "color": m["color"], "n": m.get("n"), "evitar": evitar, "fuera": m.get("fuera"),
+             "tema": tema_detras(cap, m["caja"]), "entrada": not deslizar} for i, m in vivas]})
         return r.get("dibujadas", 0)
 
     # --- dibujos ricos (DIBUJOS.md) ---
@@ -401,10 +446,11 @@ class Ojos:
         tiene objetivo (si no, la de la última captura). Devuelve (las demás marcas, lote o None, avisos)."""
         mias = [m for m in marcas or [] if isinstance(m, dict) and m.get("tipo") == "dibujo"]
         resto = [m for m in marcas or [] if not (isinstance(m, dict) and m.get("tipo") == "dibujo")]
+        if mias and self._buscador is None: self.ult_dibujos = (json.loads(json.dumps(mias)), resolver, ventana)
         lote, avisos = [], []
         for m in mias[:MAX_DIBUJOS]:
             try: d = self._dibujo(m, resolver, ventana)
-            except ValueError as e: avisos.append(f"«{m.get('forma')}»: {e}"); continue
+            except ValueError as e: avisos.append(f"«{m.get('texto') or m.get('forma')}»: {e}"); continue
             except Exception as e: avisos.append(f"«{m.get('forma')}»: {type(e).__name__}: {e}"); continue
             d["id"] = f"d{len(lote) + 1}"; lote.append(d)
         return resto, ({"dibujos": lote} if lote else None), avisos
@@ -431,6 +477,10 @@ class Ojos:
                 try: caja = [float(v) for v in m["caja"]]
                 except (TypeError, ValueError): caja = None
             if caja is None or caja[2] <= 0 or caja[3] <= 0: raise ValueError("ese control no está en la última captura")
+            if self._buscador is not None:                  # 🎯: dónde está AHORA (zoom, scroll, otro tamaño)
+                u = self._buscador.ubicar(caja)
+                if u["estado"] != "ok": raise ValueError("ya no lo veo" + (f" (quedó más {u['fuera']})" if u.get("fuera") else ""))
+                return cap.hwnd, u["pantalla"], {}
             return cap.hwnd, cap.a_pantalla(caja), {}
         if m.get("celda") or m.get("nombre"): raise ValueError(f"no sé ubicar «{m.get('celda') or m.get('nombre')}» aquí")
         h = ventana or (cap.hwnd if cap else None)
@@ -477,26 +527,91 @@ class Ojos:
         if cap and cap.hwnd == hwnd: d["evitar"] += [a_cli(cap.a_pantalla(c["caja"])) for c in cap.controles[:300]]
         return d
 
-    def poner_capas(self, capas):
-        """Las capas que dibujó la página → capa.py (quita las de antes)."""
+    def poner_capas(self, capas, grupo=None, deslizar=False):
+        """Las capas que dibujó la página → capa.py (quita las de antes de ese grupo: "marcas" o "dibujos")."""
+        grupo = grupo if grupo == "dibujos" or re.fullmatch(r"marcas[\w-]{0,20}", str(grupo or "")) else "dibujos"
         capas = [c for c in capas or [] if isinstance(c, dict) and c.get("hwnd")]
-        if not capas: return self.borrar_capas()
+        if not capas: return self.borrar_capas(grupo)
         pids = sorted({ojos.pid_de(int(c["hwnd"])) for c in capas} | {os.getpid()})
-        return self.capa.orden({"cmd": "poner", "pids": pids, "panel": self.panel_hwnd(), "capas": capas})
+        return self.capa.orden({"cmd": "poner", "grupo": grupo, "deslizar": bool(deslizar), "pids": pids,
+                                "panel": self.panel_hwnd(), "capas": capas})
 
-    def borrar_capas(self):
-        return self.capa.orden({"cmd": "borrar"}) if self.capa.vivo() else {"ok": True}
+    def borrar_capas(self, grupo=None):
+        if not self.capa.vivo(): return {"ok": True}
+        return self.capa.orden({"cmd": "borrar", "grupo": grupo} if grupo else {"cmd": "borrar"})
 
     def borrar(self):
-        self.marcas = []
+        self.marcas = []; self.rehacer = {}; self.ult_dibujos = None
         self.ov.orden({"cmd": "borrar"})
         self.borrar_capas()
+
+    # --- Reajustar 🎯 (reajustar.py) ---
+    def poner_js(self, fn):
+        """fn(código) corre código en la página del panel (pywebview: ventana.evaluate_js): las flechas pasan a SVG."""
+        self.js = fn
+
+    def registrar_rehacer(self, clave, fn):
+        """fn() → {"movidas", "fuera", "perdidas": [textos]}: vuelve a ubicar lo que el panel señaló por su cuenta."""
+        self.rehacer[clave] = fn
+
+    def quitar_rehacer(self, clave):
+        self.rehacer.pop(clave, None)
+
+    def hay_que_reajustar(self):
+        return bool(self.marcas or self.ult_dibujos or self.rehacer)
+
+    def reajustar(self):
+        """Vuelve a poner cada marca y cada dibujo donde está ahora lo que señalaba (CONTRATO-MARCAS.md §4)."""
+        import reajustar
+        movidas, fuera, perdidas = 0, 0, []
+        cap = self.ultima
+        vivo = cap is not None and bool(ojos.u32.IsWindow(cap.hwnd))
+        buscador = reajustar.Buscador(cap) if vivo else None
+        if self.marcas and buscador:
+            for m in self.marcas:
+                u = buscador.ubicar(m["caja"])
+                m["perdida"] = u["estado"] == "perdida"; m["fuera"] = u.get("fuera"); m["pantalla"] = u.get("pantalla")
+                if u["estado"] == "ok": movidas += 1
+                elif u["estado"] == "fuera": fuera += 1
+                else: perdidas.append(m["texto"] or "una marca")
+            self._poner(deslizar=True)
+        elif self.marcas:                                   # la ventana se cerró
+            perdidas += [m["texto"] or "una marca" for m in self.marcas]; self.marcas = []; self._poner()
+        lote = None
+        if self.ult_dibujos:
+            mias, resolver, ventana = self.ult_dibujos
+            self._buscador = buscador
+            try: _, lote, avisos = self.dibujos(json.loads(json.dumps(mias)), resolver, ventana)
+            finally: self._buscador = None
+            hechos = len((lote or {}).get("dibujos") or [])
+            movidas += hechos
+            perdidas += [re.sub(r"^«([^»]*)».*", r"\1", a) for a in avisos]          # «el método»: ya no lo veo → el método
+            if not lote: self.borrar_capas("dibujos")
+        for clave, fn in list(self.rehacer.items()):
+            try: r = fn() or {}
+            except Exception as e: r = {"perdidas": [f"{clave} ({e})"]}
+            movidas += r.get("movidas", 0); fuera += r.get("fuera", 0); perdidas += r.get("perdidas") or []
+        partes = []
+        if movidas: partes.append(f"reajusté {movidas} marca{'s' if movidas != 1 else ''}")
+        if fuera: partes.append("1 quedó fuera de la vista (te dejé una flecha en el borde)" if fuera == 1
+                                else f"{fuera} quedaron fuera de la vista (te dejé flechas en el borde)")
+        if perdidas: partes.append("no encontré " + ", ".join(f"«{t}»" for t in perdidas[:4]))
+        texto = ", ".join(partes) or "no había nada que reajustar"
+        tarjeta = self.tarjeta_volver(cap.titulo) if perdidas and vivo and cap.hwnd in self.aprobadas else None
+        return {"ok": True, "movidas": movidas, "fuera": fuera, "perdidas": perdidas, "dibujos": lote, "tarjeta": tarjeta,
+                "mensaje": texto[0].upper() + texto[1:] + "."}
 
     def cerrar(self):
         self.ov.cerrar(); self.capa.cerrar()
 
 
-class OjosApi:
+try:
+    from senalar import SenalarApi                  # ✏️ «Señalar»: encerrar algo con el ratón y preguntar (senalar.py)
+except Exception:
+    class SenalarApi: pass
+
+
+class OjosApi(SenalarApi):
     """Lo que la página (ojos_ui.js) llama. La API del panel hereda de esta clase y pone self._ojos."""
 
     def ojos_ventanas(self, actual=None):
@@ -534,14 +649,55 @@ class OjosApi:
 
     # --- dibujos (dibujante.js) ---
     def capa_poner(self, datos):
-        return self._ojos.poner_capas((datos or {}).get("capas"))
+        d = datos or {}
+        return self._ojos.poner_capas(d.get("capas"), d.get("grupo"), d.get("deslizar", False))
+
+    def capa_latir(self, cid):
+        """El texto enlazado: al pasar el ratón por «Negrita» en la respuesta, su marca late encima de la app."""
+        if not self._ojos.capa.vivo(): return {"ok": False}
+        return self._ojos.capa.orden({"cmd": "latir", "id": cid})
+
+    def reajustar(self):
+        """El botón 🎯: cada marca y dibujo vuelve a donde está ahora lo que señalaba."""
+        try: return self._ojos.reajustar()
+        except Exception as e: return {"ok": False, "mensaje": f"No pude reajustar: {e}"}
+
+    def hay_que_reajustar(self):
+        return self._ojos.hay_que_reajustar()
+
+    def ilustracion_en_app(self, svg):
+        """«Ponlo en la app» de una figura del chat (ilustraciones_ui.js): el lote de un dibujo "svg" centrado en la última
+        ventana que vio el tutor (la página lo muestra con Dibujante.mostrar)."""
+        cap = self._ojos.ultima
+        if cap is None or not ojos.u32.IsWindow(cap.hwnd):
+            return {"ok": False, "error": "Primero enséñame la ventana con la cámara (📷) para saber dónde ponerla."}
+        m = re.search(r'viewBox\s*=\s*["\']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)', svg or "")
+        vw, vh = (float(m.group(1)), float(m.group(2))) if m else (320.0, 180.0)
+        W, H = cap.img.size
+        w = min(W * 0.6, 640 * cap.k, H * 0.6 * vw / max(vh, 1)); h = w * vh / max(vw, 1)
+        _, lote, avisos = self._ojos.dibujos([{"tipo": "dibujo", "forma": "svg", "svg": svg, "caja": [(W - w) / 2, (H - h) / 2, w, h]}])
+        return {"ok": True, "dibujos": lote} if lote else {"ok": False, "error": "; ".join(avisos) or "No pude ponerla en la app."}
+
+    def guardar_imagen(self, b64, nombre="figura"):
+        """«Guardar PNG» de una figura del chat: en pywebview no hay descargas, así que va a su carpeta Descargas."""
+        try:
+            datos = base64.b64decode(str(b64).split(",", 1)[-1])
+            if not datos.startswith(b"\x89PNG"): return {"ok": False, "error": "No es una imagen PNG."}
+            carpeta = Path.home() / "Downloads"; carpeta.mkdir(exist_ok=True)
+            base = re.sub(r"[^\w\- ]+", "", str(nombre))[:60].strip() or "figura"
+            ruta = carpeta / f"{base}.png"; n = 2
+            while ruta.exists(): ruta = carpeta / f"{base} ({n}).png"; n += 1
+            ruta.write_bytes(datos)
+            return {"ok": True, "ruta": str(ruta)}
+        except Exception as e:
+            return {"ok": False, "error": f"No pude guardarla: {e}"}
 
     def capa_reproducir(self, cid, desde=None, hasta=None):
         if not self._ojos.capa.vivo(): return {"ok": False}
         return self._ojos.capa.orden({"cmd": "reproducir", "id": cid, "desde": desde, "hasta": hasta})
 
-    def capa_borrar(self):
-        return self._ojos.borrar_capas()
+    def capa_borrar(self, grupo=None):
+        return self._ojos.borrar_capas(grupo)
 
     def voz_audio(self, texto):
         """Una frase con la voz natural (voz_natural.py, edge-tts) como data URL; ok False → voz.js usa la de Windows."""

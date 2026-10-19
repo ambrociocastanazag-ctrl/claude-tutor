@@ -21,6 +21,7 @@ import ojos, asistente, ojos_panel, archivos                            # noqa: 
 PREFERENCIAS = AQUI.parent / "panel-excel" / "preferencias.json"         # el tema de los paneles del tutor
 REGLAS = (asistente.REGLAS + ojos_panel.REGLAS_DIBUJOS.replace("(junto a tus otras marcas)", "(en la misma línea MARCAS: [...])")
           + ojos_panel.REGLAS_PREGUNTAS + "\nEl bloque <preguntas> va antes de la línea MARCAS.\n" + ojos_panel.REGLAS_VOLVER
+          + ojos_panel.REGLAS_ILUSTRACIONES
           + archivos.REGLAS + "\n" + archivos.lista(()))
 
 
@@ -183,6 +184,8 @@ def abrir(api, al_abrir=None):
                                          on_top=True, text_select=True, min_size=(360, 300),
                                          background_color="#232631" if t == "oscuro" else "#F8F6F1")
     api._ventana.events.closed += lambda: setattr(api, "_ventana", None)
+    if hasattr(api._ojos, "poner_js"):                                      # las marcas se dibujan en la página (marcador.py, CONTRATO-MARCAS §3)
+        api._ojos.poner_js(lambda c: api._ventana.evaluate_js(c) if api._ventana else None)
     ojos_panel.atajo(lambda: api._ventana, api._panel_hwnd)                # Ctrl+Alt+M: «Que mire» desde cualquier programa
     webview.start(al_abrir, gui="edgechromium")
 

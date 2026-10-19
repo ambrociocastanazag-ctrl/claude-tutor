@@ -356,6 +356,7 @@ textarea:focus-visible{outline:none}
         <button class="chip" type="button" data-q="Dame una pista para seguir, sin darme la respuesta"><span data-ic="hint"></span>Dame una pista</button>
         <button class="chip" type="button" data-q="Explícame este paso de otra forma"><span data-ic="swap"></span>Explícalo de otra forma</button>
         <button class="chip suave" type="button" id="borrar"><span data-ic="erase"></span>Borrar marcas</button>
+        <span data-reajustar></span>
       </div>
       <div class="caja" id="caja">
         <div class="pendientes" id="adjuntos" hidden></div>
@@ -421,6 +422,7 @@ textarea:focus-visible{outline:none}
   }
   // Markdown del tutor → bloques del diseño: párrafos, títulos, listas numeradas y con viñetas, y bloques de código con «Copiar»
   function bloques(t, cursor, excel){   // excel: en el texto (no en los bloques de código), celdas y fórmulas como código
+    if (window.Ilustraciones) t = Ilustraciones.antes(t);      // fórmulas, ```svg y ```grafica (ilustraciones_ui.js)
     var out = [], partes = esc(t).split(/```/);
     partes.forEach(function(p, i){
       if (i % 2){                       // bloque de código ```...```
@@ -838,6 +840,7 @@ textarea:focus-visible{outline:none}
         var nd = r.dibujos && r.dibujos.dibujos ? r.dibujos.dibujos.length : 0;       // dibujos encima de la app (dibujante.js)
         if (nd) espera.querySelector('.bloques').insertAdjacentHTML('beforeend', '<div class="marcas"><i></i><span>Te lo dibujé encima de ' + esc(APP) + ' (<strong>' + nd + '</strong>)</span></div>');
         if (window.Dibujante && (nd || (window.Voz && Voz.activa()))) Dibujante.mostrar(r.dibujos || [], r.texto || '');
+        if (window.MarcasUI) MarcasUI.enlazar(espera.querySelector('.bloques'));            // marcas_ui.js: el texto de cada marca, enlazado
         if (r.preguntas && r.preguntas.length && window.Preguntas)            // encuesta o preguntas: la respuesta vuelve al tutor
           espera.querySelector('.bloques').appendChild(Preguntas.tarjeta(r.preguntas, function(t){ preguntar(t); }));
         if (r.pedir && window.Ojos && api.ojos_ventanas){       // el tutor pidió ver una ventana: él decide con el botón
@@ -853,6 +856,15 @@ textarea:focus-visible{outline:none}
     });
   }
   window.preguntarDesdeFuera = preguntar;
+  // marcas_ui.js (botón 🎯 Reajustar): cómo ponerse una nota corta y la tarjeta «¿Vuelvo a mirar?» en este chat
+  window.MARCAS_PAGINA = {
+    nota: function(t){ agregarAlChat(esc(t) + ' · ' + hora(), 'nota'); },
+    tarjeta: function(q){
+      var d = agregarAlChat('<div class="bloques"></div>', 'tutor-m');
+      d.querySelector('.bloques').appendChild(Preguntas.tarjeta([q], function(t){ preguntar(t); }));
+      $('chat').scrollTop = $('chat').scrollHeight;
+    }
+  };
 
   // ---- Tarjeta de permiso: «El tutor quiere: …» con Aplicar / No; después, Deshacer ----
   var propuestas = {};

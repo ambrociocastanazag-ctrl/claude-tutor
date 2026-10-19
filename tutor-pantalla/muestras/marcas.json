@@ -1,0 +1,410 @@
+{
+ "dibujos": [
+  {
+   "id": "a1",
+   "hwnd": 1,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    0,
+    5
+   ],
+   "texto": "Negrita",
+   "n": 1,
+   "color": "azul",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "a2",
+   "hwnd": 1,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    1,
+    2
+   ],
+   "texto": "Luego Ver",
+   "n": 2,
+   "color": "verde",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "a3",
+   "hwnd": 1,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    2,
+    7
+   ],
+   "texto": "Subrayar al final",
+   "n": 3,
+   "color": "rojo",
+   "tema": "claro",
+   "entrada": false
+  },
+  {
+   "id": "a4",
+   "hwnd": 1,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    1,
+    8
+   ],
+   "texto": "Color del texto",
+   "n": 4,
+   "color": "naranja",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "a5",
+   "hwnd": 1,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    0,
+    1
+   ],
+   "texto": "Aquí",
+   "n": null,
+   "color": "morado",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "a6",
+   "hwnd": 1,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    2,
+    0
+   ],
+   "texto": "Sin número, amarillo",
+   "n": null,
+   "color": "amarillo",
+   "tema": "claro",
+   "entrada": false
+  },
+  {
+   "id": "b1",
+   "hwnd": 2,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "oscuro",
+   "boton": [
+    0,
+    3
+   ],
+   "texto": "Insertar",
+   "n": 1,
+   "color": "azul",
+   "tema": "oscuro",
+   "entrada": true
+  },
+  {
+   "id": "b2",
+   "hwnd": 2,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "oscuro",
+   "boton": [
+    1,
+    6
+   ],
+   "texto": "Cursiva",
+   "n": 2,
+   "color": "naranja",
+   "tema": "oscuro",
+   "entrada": true
+  },
+  {
+   "id": "b3",
+   "hwnd": 2,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "oscuro",
+   "boton": [
+    2,
+    4
+   ],
+   "texto": "Formato",
+   "n": 3,
+   "color": "verde",
+   "tema": "oscuro",
+   "entrada": true
+  },
+  {
+   "id": "b4",
+   "hwnd": 2,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "oscuro",
+   "boton": [
+    1,
+    0
+   ],
+   "texto": "Archivo",
+   "n": 4,
+   "color": "rojo",
+   "tema": "oscuro",
+   "entrada": false
+  },
+  {
+   "id": "b5",
+   "hwnd": 2,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "oscuro",
+   "r": null,
+   "fuera": "abajo",
+   "texto": "Guardar",
+   "n": 5,
+   "color": "morado",
+   "tema": "oscuro",
+   "entrada": true
+  },
+  {
+   "id": "c1",
+   "hwnd": 3,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "r": null,
+   "fuera": "abajo",
+   "texto": "Negrita",
+   "n": 1,
+   "color": "azul",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "c2",
+   "hwnd": 3,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "r": null,
+   "fuera": "abajo",
+   "texto": "Tabla de datos",
+   "n": 2,
+   "color": "verde",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "c3",
+   "hwnd": 3,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "r": null,
+   "fuera": "arriba",
+   "texto": "Menú Archivo",
+   "n": 3,
+   "color": "rojo",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "c4",
+   "hwnd": 3,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "r": null,
+   "fuera": "izquierda",
+   "texto": "Panel lateral",
+   "n": 4,
+   "color": "naranja",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "c5",
+   "hwnd": 3,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "r": null,
+   "fuera": "derecha",
+   "texto": "Propiedades",
+   "n": 5,
+   "color": "morado",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "c6",
+   "hwnd": 3,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "r": null,
+   "fuera": "abajo",
+   "texto": "Sin número",
+   "n": null,
+   "color": "amarillo",
+   "tema": "claro",
+   "entrada": false
+  },
+  {
+   "id": "c7",
+   "hwnd": 3,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    1,
+    4
+   ],
+   "texto": "Dentro de la vista",
+   "n": 6,
+   "color": "azul",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "d1",
+   "hwnd": 4,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    0,
+    0
+   ],
+   "texto": "Esquina de arriba a la izquierda",
+   "n": 1,
+   "color": "azul",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "d2",
+   "hwnd": 4,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    0,
+    9
+   ],
+   "texto": "Esquina de arriba a la derecha",
+   "n": 2,
+   "color": "verde",
+   "tema": "claro",
+   "entrada": true
+  },
+  {
+   "id": "d3",
+   "hwnd": 4,
+   "cliente": [
+    1280,
+    720
+   ],
+   "escala": 1.25,
+   "forma": "marca",
+   "fondo_demo": "claro",
+   "boton": [
+    2,
+    9
+   ],
+   "texto": "Última columna",
+   "n": 3,
+   "color": "rojo",
+   "tema": "claro",
+   "entrada": false
+  }
+ ]
+}
