@@ -103,6 +103,33 @@
     return {svg: out, w: w, h: h};
   };
 
+  // ---- el diseño de Claude Design («Kit de anotaciones», marcas.js): si está cargado, sus piezas sustituyen a las de
+  //      arriba. Devuelven {g, w, h}: g ya en las coordenadas que usa la colocación (nota y borde locales, flecha de cliente).
+  var KIT = window.Marcas && window.Marcas.tiempo && window.Marcas.piezas ? window.Marcas : null;
+  if (KIT){
+    var K = KIT.piezas;
+    var kp = function(o){ return {color: KIT.colores.indexOf(o.color) >= 0 ? o.color : 'azul', tema: o.tema === 'oscuro' ? 'oscuro' : 'claro', escala: o.escala || 1}; };
+    P.nota = function(o){
+      var q = kp(o); q.texto = o.texto || ''; if (o.n) q.n = o.n;          // la entrada de la nota la anima la forma «marca»
+      var r = K.nota(q); return {svg: r.g, w: r.w, h: r.h};
+    };
+    P.marco = function(o){
+      var q = kp(o), t = o.progreso == null ? 1 : acota(o.progreso);
+      if (t <= 0) return {svg: '', w: o.w, h: o.h};
+      q.w = o.w; q.h = o.h; q.t = t; return {svg: K.marco(q).g, w: o.w, h: o.h};
+    };
+    P.flecha = function(o){
+      var q = kp(o), t = o.progreso == null ? 1 : acota(o.progreso), w = Math.abs(o.x2 - o.x1), h = Math.abs(o.y2 - o.y1);
+      if (t <= 0.01) return {svg: '', w: w, h: h};
+      q.x1 = o.x1; q.y1 = o.y1; q.x2 = o.x2; q.y2 = o.y2; q.t = t; return {svg: K.flecha(q).g, w: w, h: h};
+    };
+    P.borde = function(o){
+      var q = kp(o), dir = FUERA[o.dir] ? o.dir : 'abajo';                  // el kit dibuja su propia flecha: el texto va sin «↓»
+      q.lado = dir; q.texto = (o.n ? o.n + ' · ' : '') + (o.texto ? o.texto + ', ' : '') + FUERA[dir][1];
+      var r = K.borde(q); return {svg: r.g, w: r.w, h: r.h};
+    };
+  }
+
   // =====================================================================================================
   // La forma «marca»
   // =====================================================================================================
@@ -188,5 +215,6 @@
     return cap;
   });
 
-  window.Marcas = Marcas;
+  if (KIT) KIT.adaptadas = P;                       // el kit sigue siendo window.Marcas (con sus íconos y tiempos)
+  else window.Marcas = Marcas;
 })();

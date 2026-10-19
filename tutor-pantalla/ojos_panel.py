@@ -28,7 +28,7 @@ import ojos, archivos, marcador                                                 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
 SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js",
-              "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "ilustraciones_ui.js"]
+              "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "ilustraciones_ui.js"]
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
 FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido

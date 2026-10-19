@@ -18,7 +18,9 @@
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   var PENCIL = 'M4 20l1-4.5L16.5 4a2.1 2.1 0 0 1 3 3L8 18.5zM14.5 6l3.5 3.5';
-  function ic(t){ return '<svg width="' + (t || 15) + '" height="' + (t || 15) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + PENCIL + '"/></svg>'; }
+  function ic(t){
+    if (window.Marcas && window.Marcas.iconos) return window.Marcas.iconos.senalar(t || 15);        // ícono del kit de Claude Design
+    return '<svg width="' + (t || 15) + '" height="' + (t || 15) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + PENCIL + '"/></svg>'; }
   function api(){ return window.pywebview && window.pywebview.api; }
   function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
 

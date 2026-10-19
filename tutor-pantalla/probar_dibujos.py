@@ -19,7 +19,7 @@ sys.path.insert(0, str(AQUI))
 import capa                                                     # noqa: E402
 from PIL import Image, ImageDraw, ImageFont                     # noqa: E402
 
-SCRIPTS = ["dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "formas_marcas.js", "voz.js"]
+SCRIPTS = ["dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "marcas.js", "formas_marcas.js", "voz.js"]
 
 
 def renderizar(lote, carpeta, extra=()):

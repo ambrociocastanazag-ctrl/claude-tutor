@@ -123,7 +123,8 @@
     boton = document.createElement('button'); boton.type = 'button'; boton.id = 'reajustar';
     boton.className = (borrar ? borrar.className : 'btn') + ' reaj-gris';
     boton.style.marginLeft = '0';
-    boton.innerHTML = '<span aria-hidden="true">🎯</span>Reajustar';
+    var ico = window.Marcas && window.Marcas.iconos ? window.Marcas.iconos.reajustar(15) : '<span aria-hidden="true">🎯</span>';   // ícono del kit de Claude Design
+    boton.innerHTML = ico + 'Reajustar';
     boton.onclick = reajustar;
     if (hueco) hueco.replaceWith(boton); else borrar.after(boton);
     estado(); setInterval(estado, 2000);

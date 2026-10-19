@@ -227,7 +227,7 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
   - **Cómo se dibujan:** `marcador.py` (con la misma forma de uso) las convierte en la forma `"marca"` (`formas_marcas.js`), la página las dibuja y `capa.py` las proyecta en el grupo `marcas` (Dia: `marcas_dia`, para que no se borren con las del tutor).
   - **Cómo se ven:** entran dibujándose (350 ms), llevan el número en un círculo y tienen versión oscura si el fondo de la app es oscuro (lo mide `tema_detras` en la captura).
   - **Respaldo:** si la página no puede dibujarlas, vuelve `overlay_dia.py`.
-  - **Diseño:** las piezas de dibujo (`Marcas.piezas.*`) están separadas de la colocación; el diseño de Claude Design entra cambiando solo esas funciones (encargo en `para-claude-design/`).
+  - **Diseño:** el «Kit de anotaciones» de Claude Design (`marcas.js`, funciones puras): notas sólidas con halo, marco con tinte del 7 %, flecha curva, pastilla al borde, resaltador, corchete, «mira aquí» y los íconos de los botones. `formas_marcas.js` lo adapta a la colocación; sin él, usa sus piezas provisionales.
 - **🎯 Reajustar** (`reajustar.py`, botón de `marcas_ui.js`): tras un zoom, un scroll o cambiar el tamaño, cada marca y cada dibujo vuelve a donde está ahora lo que señalaba, y **se desliza** hasta allí (250 ms).
   - **Un control con nombre:** se vuelve a leer la lista de controles, sin imagen.
   - **Una celda, un paso del curso, la interfaz de Dia o una línea:** lo vuelve a ubicar el panel (`registrar_rehacer`).
@@ -276,6 +276,7 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
 | `capa.py` | El proyector: ventanas transparentes que pegan las capas encima de la app, las animan y leen la zona de la lupa. `capa.fotograma()` compone un instante igual que en vivo. |
 | `probar_dibujos.py` | Banco de pruebas sin panel: dibuja un lote de muestras en el Chrome instalado y guarda tiras de 6 momentos y el cuadro final. |
 | `muestras/*.json` | Lotes de ejemplo de cada forma, para `probar_dibujos.py` (`svg_animado.json`: SMIL, CSS y un SVG trampa que debe quedar filtrado; `marcas.json`: la forma «marca» en claro, oscuro y «fuera»). |
+| `marcas.js` | El «Kit de anotaciones» de Claude Design, tal cual (no se edita a mano): `Marcas.piezas`, `Marcas.iconos`, `Marcas.tiempo`. |
 | `formas_marcas.js` | La forma «marca» (las flechas de siempre, en SVG): marco, nota con número, flecha, entrada animada, versión oscura y pastilla «fuera». Las piezas de dibujo, en `Marcas.piezas`. |
 | `marcador.py` | El sustituto de `overlay_dia.py` (misma forma de uso): pasa las marcas a la forma «marca» y las manda a la página; sin página, usa el overlay viejo. `python marcador.py --probar`. |
 | `reajustar.py` | 🎯: vuelve a encontrar lo señalado (controles por nombre; o el trozo de imagen con varias escalas, correlación con FFT). `python reajustar.py --probar`. |
