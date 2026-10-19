@@ -110,6 +110,8 @@
 !/tutor-pantalla/puente.py
 !/tutor-pantalla/curso_pantalla.py
 !/tutor-pantalla/panel_curso.py
+!/tutor-pantalla/motor_figuras.js
+!/tutor-pantalla/probar_figuras.js
 !/tutor-pantalla/formas_marcas.js
 !/tutor-pantalla/marcas.js
 !/tutor-pantalla/marcador.py
@@ -142,3 +144,19 @@
 !/tutor-pantalla/vendor/rough.js
 !/tutor-pantalla/vendor/LICENSE-mathjax.txt
 !/tutor-pantalla/vendor/LICENSE-roughjs.txt
+
+# la Tarjeta SVG (sin estado.json ni config.json, que son de cada persona)
+!/tarjeta-svg/
+/tarjeta-svg/*
+!/tarjeta-svg/README.md
+!/tarjeta-svg/CONTRATO.md
+!/tarjeta-svg/tarjeta.py
+!/tarjeta-svg/abrir_tarjeta.py
+!/tarjeta-svg/tarjeta.html
+!/tarjeta-svg/atajos.js
+!/tarjeta-svg/pestana_escribir.js
+!/tarjeta-svg/pestana_grafica.js
+!/tarjeta-svg/pestana_geometria.js
+!/tarjeta-svg/pestana_asistente.js
+!/tarjeta-svg/asistente_tarjeta.py
+!/tarjeta-svg/vendor/

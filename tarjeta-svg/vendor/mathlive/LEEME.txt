@@ -1,0 +1,14 @@
+MathLive 0.110.0 guardado para usarlo sin internet (npm pack mathlive@0.110.0; licencia MIT en LICENSE.txt).
+
+Se guardó solo lo necesario:
+  mathlive.min.js      el script (UMD: sirve como <script> normal, sin type="module"); define <math-field>
+  mathlive-fonts.css   @font-face de las fuentes KaTeX, con rutas relativas a fonts/
+  fonts/               los 20 .woff2 de KaTeX
+Sin sonidos (se desactivan con MathfieldElement.soundsDirectory = null) y sin teclado en pantalla.
+
+Cómo encuentra las fuentes sin red (lo hace pestana_escribir.js):
+  1. Pone <link rel="stylesheet" href=".../vendor/mathlive/mathlive-fonts.css">. Así las 12 familias KaTeX
+     ya están en document.fonts y MathLive no descarga nada (su comprobación interna lo ve).
+  2. Además fija MathfieldElement.fontsDirectory = '.../vendor/mathlive/fonts' (URL absoluta calculada
+     desde la ruta de pestana_escribir.js), por si la comprobación fallara.
+Para actualizar: mismo npm pack con otra versión y copiar esos mismos archivos.

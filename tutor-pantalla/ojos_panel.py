@@ -28,7 +28,7 @@ import ojos, archivos, marcador                                                 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
 SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js",
-              "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "ilustraciones_ui.js"]
+              "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "motor_figuras.js", "ilustraciones_ui.js"]
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
 FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar"}
 CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
@@ -118,6 +118,23 @@ ILUSTRACIONES EN EL CHAT (se ven dentro de tu respuesta, no encima de la app):
   ```
   f usa x, + - * / ^, sqrt, sin, cos, tan, asin, acos, atan, exp, ln, log, abs, pi, e. "y", "area" y "puntos" son
   opcionales; "g" es la otra curva del área (por defecto el eje x).
+- Geometría exacta: un bloque "geometria" con un guion (el lenguaje de MathStudio: un objeto por línea, nombre
+  obligatorio, en orden; claves sin tilde):
+  ```geometria
+  A=(0,0)
+  B=(4,0)
+  C=(0,3)
+  t=triangulo(A,B,C)
+  h=altura(A,BC)
+  H=interseccion(h,recta(B,C))
+  angulorecto(B,A,C)
+  ```
+  Las notaciones (angulorecto, marcaigual, marcaangulo, marcaparalela, etiqueta) van SIN nombre ni =.
+  Comandos: segmento, recta, semirrecta, circunferencia(A,r | A,B | A,B,C), poligono, triangulo, arco(c,A,B),
+  sector(c,A,B), puntomedio, interseccion(o1,o2[,1|2]), paralela(P,r), perpendicular(P,r), mediatriz(A,B),
+  bisectriz(A,B,C), altura(A,BC), mediana(A,BC), tan(P,c,i) | tan(c1,c2,i), distancia, angulo(A,B,C), area,
+  perimetro, marcaigual(AB,n), marcaangulo(A,B,C,n), angulorecto(A,B,C), marcaparalela(AB,n), etiqueta(AB,"texto").
+  Cada figura del chat trae «Editar en la tarjeta»: la Tarjeta SVG la abre para retocarla y copiarla a Miro.
 Úsalas cuando una figura aclare más que el texto (una forma, una función, un proceso): máximo 1 o 2 por respuesta y
 con poco texto alrededor. Para señalar algo de la app sigue usando las marcas y los dibujos encima de ella."""
 
@@ -677,6 +694,18 @@ class OjosApi(SenalarApi):
         w = min(W * 0.6, 640 * cap.k, H * 0.6 * vw / max(vh, 1)); h = w * vh / max(vw, 1)
         _, lote, avisos = self._ojos.dibujos([{"tipo": "dibujo", "forma": "svg", "svg": svg, "caja": [(W - w) / 2, (H - h) / 2, w, h]}])
         return {"ok": True, "dibujos": lote} if lote else {"ok": False, "error": "; ".join(avisos) or "No pude ponerla en la app."}
+
+    def tarjeta_abrir(self, contenido=None):
+        """El botón «Tarjeta» y «Editar en la tarjeta» de cada figura del chat: abre la Tarjeta SVG (../tarjeta-svg) o la
+        trae al frente, con esa figura cargada. En otro hilo: arrancarla tarda unos segundos y el panel no se congela."""
+        ruta = AQUI.parent / "tarjeta-svg" / "abrir_tarjeta.py"
+        if not ruta.exists(): return {"ok": False, "error": "No encuentro la Tarjeta SVG."}
+        def hilo():
+            sys.path.insert(0, str(ruta.parent))
+            import abrir_tarjeta
+            abrir_tarjeta.abrir(contenido if isinstance(contenido, dict) else None)
+        threading.Thread(target=hilo, daemon=True).start()
+        return {"ok": True}
 
     def guardar_imagen(self, b64, nombre="figura"):
         """«Guardar PNG» de una figura del chat: en pywebview no hay descargas, así que va a su carpeta Descargas."""

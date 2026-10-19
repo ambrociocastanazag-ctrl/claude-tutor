@@ -357,6 +357,7 @@ textarea:focus-visible{outline:none}
         <button class="chip" type="button" data-q="Explícame este paso de otra forma"><span data-ic="swap"></span>Explícalo de otra forma</button>
         <button class="chip suave" type="button" id="borrar"><span data-ic="erase"></span>Borrar marcas</button>
         <span data-reajustar></span>
+        <button class="chip suave" type="button" id="tarjeta" style="display:none" title="Abre la Tarjeta SVG: figuras matemáticas para pegar en Miro"><span data-ic="card"></span>Tarjeta</button>
       </div>
       <div class="caja" id="caja">
         <div class="pendientes" id="adjuntos" hidden></div>
@@ -402,7 +403,7 @@ textarea:focus-visible{outline:none}
     eye:'M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6zM12 14.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2z',
     open:'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
     camera:'M4 8h3l2-2.5h6L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
-    check:'M5 12.5l4.5 4.5L19 7.5', undo:'M9 14L4.5 9.5 9 5M4.5 9.5H14a5.5 5.5 0 0 1 0 11h-3'
+    check:'M5 12.5l4.5 4.5L19 7.5', card:'M4 5h16v14H4zM7.5 15.5l3-4.5 2.5 3 2-2 2.5 3.5', undo:'M9 14L4.5 9.5 9 5M4.5 9.5H14a5.5 5.5 0 0 1 0 11h-3'
   };
   var TAM = {camera:[17,1.8],check:[16,2.4],book:[16,1.8],chat:[16,1.8],chev:[15,2],cursor:[15,1.8],copy:[13,1.9],left:[16,2],right:[16,2],clip:[18,1.8],send:[17,2.2],x:[10,3],upload:[26,2],pen:[15,1.8],spark:[13,2],erase:[14,1.8],hint:[14,1.8],refresh:[14,2],swap:[14,2],eye:[15,1.8],open:[14,1.8],undo:[15,2]};
   function ic(nombre){
@@ -1084,6 +1085,7 @@ textarea:focus-visible{outline:none}
     actualizarEnviar();
     setTimeout(function(){                    // ojos_ui.js, el dibujante y voz.js van después de este script
       $('mirarVentana').hidden = !(window.Ojos && api.ojos_ventanas);
+      if (api.tarjeta_abrir) { $('tarjeta').style.display = ''; $('tarjeta').onclick = function(){ api.tarjeta_abrir(); }; }     // botón «Tarjeta»
       if (window.Voz){ $('leerPaso').innerHTML = IC_LEER; $('leerPaso').hidden = false; }
       window.atajoMirar = mirarVentana;                                   // Ctrl+Alt+M (ojos_panel.atajo)
       if (window.Voz && api.capa_poner && !document.querySelector('.cab-tutor .vz-btn')) document.querySelector('.cab-tutor').appendChild(Voz.boton());

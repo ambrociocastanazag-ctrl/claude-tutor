@@ -141,6 +141,7 @@ Antes de responder algo visual, práctico o de una app, revisa esta tabla y **of
 | dice «mira esto» o necesitas ver su pantalla | el puente y `pedir-captura` (con vista previa; nunca la pantalla entera) |
 | empieza un tema o un curso completo | guía-artefacto con tutor integrado (diagnóstico, clase 0, guía) |
 | necesita algo para repasar | archivo (resumen, hoja de fórmulas, ejercicios) en la carpeta del tema |
+| quiere una figura (ecuación, gráfica, geometría) en SVG para pegar en otra app | la Tarjeta SVG (`tarjeta-svg/`, Ctrl+Alt+L), si se instaló |
 | hay que diagnosticar o comprobar que entendió | preguntas de opción múltiple con `AskUserQuestion` (con «no sé») |
 | pregunta algo técnico que no es de estudio (un error, la PC, un programa) | respóndele directo; si hace falta verlo, ofrécele el asistente o el puente |
 | pide algo para lo que no hay herramienta | búscala y propón opciones (sección siguiente) |
@@ -459,7 +460,27 @@ Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edg
   3. Responde con `python tutor-pantalla/puente.py responder -` y el texto por heredoc; una última línea `MARCAS: [...]` dibuja flechas.
   4. Vuelve a lanzar `esperar`. Si dice «panel cerrado», se acabó.
   - `puente.py pedir-captura "…"` solo le abre la vista previa: la persona decide si la manda.
+- **Ilustraciones en el chat** (todos los tutores): `$…$`/`$$…$$`, bloques ` ```svg `, ` ```grafica {json} ` y ` ```geometria ` (guion), dibujados exactos por `tutor-pantalla/motor_figuras.js`; cada figura trae «Editar en la tarjeta».
 ````
+
+### 4.10 Tarjeta SVG (opcional, necesita la 4.9)
+
+Una ventanita pegada al borde derecho (**Ctrl+Alt+L** la abre y la pliega) para sacar figuras en SVG y copiarlas a cualquier app. Tiene cuatro pestañas:
+- **Escribir:** ecuaciones con MathLive, guardado en `tarjeta-svg/vendor/`, sin internet.
+- **Gráfica.**
+- **Geometría:** un guion por líneas, `A=(0,0)`, `t=triangulo(A,B,C)`, `h=altura(A,BC)`…
+- **Asistente:** dibuja exacto lo que se le pide.
+
+«Copiar SVG» pone en el portapapeles el archivo `.svg`, el SVG y un PNG. Lo que la tarjeta no hace (construcciones complejas) puede abrirse en otra app de la persona si la pone en `tarjeta-svg/config.json` como `{"mathstudio": "<carpeta>"}`; si no, el botón lo avisa.
+
+1. **Los archivos ya están en `tarjeta-svg/`** (y el motor en `tutor-pantalla/motor_figuras.js`): no los reescribas. Usa `pywebview` y `pywin32` (ya en `requirements.txt`).
+2. **Prueba:**
+   - `python tarjeta-svg/tarjeta.py --probar`: avísale antes, porque deja una figura de prueba en su portapapeles;
+   - `python tarjeta-svg/asistente_tarjeta.py --probar`;
+   - `node tutor-pantalla/probar_figuras.js`.
+   Cada una termina en «todo bien».
+3. **Ábrela con su permiso:** `python tarjeta-svg/abrir_tarjeta.py`. Es un solo ejemplar: si ya está abierta, la trae al frente. Los paneles la abren con su botón «Tarjeta».
+4. En su `CLAUDE.md`, añade a la tabla de herramientas la fila de la Tarjeta SVG; si no se instaló, quítala.
 
 ## Paso 5. README de la carpeta
 

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarjeta SVG</title>
+<!-- Cáscara PROVISIONAL (CONTRATO.md §2): el diseño de Claude Design la reemplazará; las pestañas viven en pestana_*.js -->
+<style>
+:root{color-scheme:light;
+  --bg:oklch(0.975 0.006 85); --surface:oklch(0.995 0.003 85); --sunk:oklch(0.942 0.008 85); --line:oklch(0.875 0.01 85);
+  --ink:oklch(0.25 0.01 265); --muted:oklch(0.5 0.01 265); --acc:oklch(0.5 0.17 268); --acc-soft:oklch(0.945 0.03 268); --on-acc:#fff;
+  --ok:oklch(0.5 0.13 150); --bad:oklch(0.53 0.18 25);
+  --sans:'Atkinson Hyperlegible Next','Segoe UI',system-ui,sans-serif; --mono:'Atkinson Hyperlegible Mono','Cascadia Mono',Consolas,monospace}
+:root[data-theme="dark"]{color-scheme:dark;
+  --bg:oklch(0.205 0.008 265); --surface:oklch(0.245 0.01 265); --sunk:oklch(0.17 0.008 265); --line:oklch(0.35 0.012 265);
+  --ink:oklch(0.93 0.01 265); --muted:oklch(0.7 0.01 265); --acc:oklch(0.74 0.12 268); --acc-soft:oklch(0.3 0.05 268); --on-acc:oklch(0.18 0.03 268);
+  --ok:oklch(0.76 0.14 150); --bad:oklch(0.74 0.15 25)}
+*{box-sizing:border-box} html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font:13px/1.4 var(--sans);-webkit-font-smoothing:antialiased;user-select:none}
+button{font:inherit;color:inherit;cursor:pointer}
+svg.ic{width:16px;height:16px;flex:none}
+/* plegada: la pestaña del borde */
+#plegada{display:none;height:100%;flex-direction:column;align-items:center;gap:6px;padding:8px 4px;border:1px solid var(--line);border-right:0;border-radius:12px 0 0 12px;background:var(--surface);cursor:pointer}
+body.plegada #plegada{display:flex} body.plegada #desplegada{display:none}
+#mini{width:36px;height:72px;border-radius:8px;background:var(--sunk);display:grid;place-items:center;overflow:hidden}
+#mini img{max-width:34px;max-height:70px}
+.boton-mini{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.boton-mini.prim{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
+/* desplegada */
+#desplegada{display:flex;flex-direction:column;height:100%;border:1px solid var(--line);border-right:0;border-radius:12px 0 0 12px;background:var(--bg)}
+header{display:flex;align-items:center;gap:2px;padding:6px 6px 0;-webkit-app-region:drag}
+#pestanas{display:flex;gap:1px;min-width:0}
+header button{-webkit-app-region:no-drag}
+.pest{display:flex;align-items:center;gap:5px;padding:6px 9px;border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);font-weight:600}
+.pest[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 -1px 0 var(--line) inset}
+header .hueco{flex:1}
+.icono{width:28px;height:28px;border:0;border-radius:7px;background:transparent;display:grid;place-items:center;color:var(--muted)}
+.icono:hover{background:var(--sunk);color:var(--ink)}
+main{flex:1;min-height:0;background:var(--surface);border-top:1px solid var(--line);overflow:auto;padding:10px}
+#contenido > [hidden]{display:none !important}
+footer{display:flex;align-items:center;gap:6px;padding:7px 8px;border-top:1px solid var(--line);background:var(--bg)}
+#arrastre{width:40px;height:32px;border-radius:7px;border:1px dashed var(--line);display:grid;place-items:center;cursor:grab;overflow:hidden;background:var(--surface)}
+#arrastre img{max-width:38px;max-height:30px;pointer-events:none}
+.btn{height:32px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;display:flex;align-items:center;gap:6px}
+.btn.prim{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.btn:disabled{opacity:.45;cursor:default}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:0 7px;height:30px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--acc-soft);color:var(--acc)}
+footer .hueco{flex:1}
+#aviso{position:fixed;left:50%;bottom:52px;transform:translateX(-50%);padding:6px 12px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+#aviso.ver{opacity:.92}
+textarea,input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px}
+</style>
+</head>
+<body class="plegada">
+<div id="plegada" title="Abrir la tarjeta (Ctrl+Alt+L)">
+  <div id="mini"></div>
+  <button class="boton-mini prim" id="miniCopiar" title="Copiar SVG"></button>
+  <button class="boton-mini" id="miniAbrir" title="Abrir (Ctrl+Alt+L)"></button>
+</div>
+<div id="desplegada">
+  <header>
+    <nav id="pestanas" role="tablist"></nav><span class="hueco"></span>
+    <button class="icono" id="mathstudio" title="Abrir en MathStudio (para lo complejo)"></button>
+    <button class="icono" id="plegar" title="Plegar (Ctrl+Alt+L o Esc)"></button>
+  </header>
+  <main id="contenido"></main>
+  <footer>
+    <div id="arrastre" draggable="true" title="Arrastra la figura a otra app o a una carpeta"></div>
+    <button class="btn prim" id="copiarSvg"><span id="icCopiar"></span>Copiar SVG</button>
+    <button class="btn" id="copiarPng" title="Copiar como imagen PNG">PNG</button>
+    <span class="hueco"></span>
+    <div class="seg" id="tam" title="Tamaño"><button data-v="S">S</button><button data-v="M">M</button><button data-v="L">L</button></div>
+    <div class="seg" id="fondo" title="Fondo"><button data-v="transparente" title="Transparente">◌</button><button data-v="blanco" title="Blanco">■</button></div>
+  </footer>
+</div>
+<div id="aviso" role="status"></div>
+
+<script>window.MathJax = {tex: {packages: {'[+]': []}}, svg: {fontCache: 'none'}, options: {enableMenu: false}, startup: {typeset: false}};</script>
+<script src="/tutor-pantalla/vendor/tex-svg.js"></script>
+<script src="/tutor-pantalla/marcas.js"></script>
+<script src="/tutor-pantalla/motor_figuras.js"></script>
+<script>
+/* La cáscara: pestañas, plegar/desplegar, copiar, arrastrar, tamaño y fondo, y recordar lo escrito (CONTRATO.md §2). */
+(function(){
+  var api = function(){ return window.pywebview && window.pywebview.api; };
+  var $ = function(id){ return document.getElementById(id); };
+  var PESTANAS = {}, ORDEN = ['escribir', 'grafica', 'geometria', 'asistente'], activa = null, anterior = null;
+  var opc = {tam: 'M', fondo: 'transparente'}, ANCHOS = {S: 320, M: 480, L: 720};
+  var ICONOS = {escribir: 'Σ', grafica: '∿', geometria: '△', asistente: '✦'};
+
+  function ic(nombre, tam){ return window.Marcas && Marcas.iconos && Marcas.iconos[nombre] ? Marcas.iconos[nombre](tam || 16) : ''; }
+  function svgIcono(d){ return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; }
+  var I = {copiar: svgIcono('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>'),
+           abrir: svgIcono('<path d="M15 6l-6 6 6 6"/>'), plegar: svgIcono('<path d="M9 6l6 6-6 6"/>'),
+           fuera: svgIcono('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>')};
+
+  // ---- la figura que sale: tamaño y fondo los pone la cáscara, para todas las pestañas igual ----
+  function preparar(svg){
+    if (!svg) return null;
+    var doc = new DOMParser().parseFromString(svg, 'image/svg+xml'), s = doc.documentElement;
+    if (!s || s.nodeName !== 'svg') return svg;
+    if (!s.getAttribute('xmlns')) s.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var vb = (s.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+    var w0 = parseFloat(s.getAttribute('width')) || vb[2] || 400, h0 = parseFloat(s.getAttribute('height')) || vb[3] || 300;
+    if (vb.length !== 4 || vb.some(isNaN)){ vb = [0, 0, w0, h0]; s.setAttribute('viewBox', vb.join(' ')); }
+    var w = ANCHOS[opc.tam] || 480;
+    if (w0 < w * 0.6 && activa === 'escribir') w = Math.max(w0 * {S: 1.5, M: 2.2, L: 3.2}[opc.tam], w0);     // una ecuación: proporcional
+    s.setAttribute('width', Math.round(w)); s.setAttribute('height', Math.round(w * h0 / w0));
+    var viejo = s.querySelector('#tarjeta-fondo'); if (viejo) viejo.remove();
+    if (opc.fondo === 'blanco'){
+      var r = doc.createElementNS('http://www.w3.org/2000/svg', 'rect'); r.setAttribute('id', 'tarjeta-fondo');
+      r.setAttribute('x', vb[0]); r.setAttribute('y', vb[1]); r.setAttribute('width', vb[2]); r.setAttribute('height', vb[3]); r.setAttribute('fill', '#ffffff');
+      s.insertBefore(r, s.firstChild);
+    }
+    return new XMLSerializer().serializeToString(s);
+  }
+  function figura(){
+    var p = PESTANAS[activa], f = p && p.figura ? p.figura() : null;
+    return f && f.svg ? {svg: preparar(f.svg), nombre: f.nombre || activa} : null;
+  }
+  function dataUrl(svg){ return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg))); }
+  function aPng(svg, escala){
+    return new Promise(function(ok, mal){
+      var img = new Image();
+      img.onload = function(){
+        var s = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+        var w = parseFloat(s.getAttribute('width')) || img.width, h = parseFloat(s.getAttribute('height')) || img.height;
+        var c = document.createElement('canvas'); c.width = Math.ceil(w * escala); c.height = Math.ceil(h * escala);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/png'));
+      };
+      img.onerror = function(){ mal(new Error('La figura no se pudo pasar a PNG')); };
+      img.src = dataUrl(svg);
+    });
+  }
+
+  // ---- avisos, miniatura y botones ----
+  var tAviso;
+  function aviso(t){ var a = $('aviso'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); tAviso = setTimeout(function(){ a.classList.remove('ver'); }, 1600); }
+  function refrescar(){
+    var f = figura(), hay = !!f;
+    $('copiarSvg').disabled = $('copiarPng').disabled = $('miniCopiar').disabled = !hay;
+    $('arrastre').innerHTML = $('mini').innerHTML = hay ? '<img alt="" src="' + dataUrl(f.svg) + '">' : '';
+    guardar();
+  }
+  var tGuardar;
+  function guardar(){
+    clearTimeout(tGuardar);
+    tGuardar = setTimeout(function(){
+      var estados = {}; Object.keys(PESTANAS).forEach(function(id){ try { estados[id] = PESTANAS[id].estado ? PESTANAS[id].estado() : null; } catch (e) {} });
+      var a = api(); if (a && a.guardar_estado) a.guardar_estado({pestana: activa, opc: opc, estados: estados});
+    }, 600);
+  }
+
+  function copiarSvg(){
+    var f = figura(); if (!f) return;
+    aPng(f.svg, 2).then(function(png){ return api().copiar_svg(f.svg, f.nombre, png); }, function(){ return api().copiar_svg(f.svg, f.nombre, null); })
+      .then(function(r){ aviso(r && r.ok ? 'SVG copiado' : (r && r.error) || 'No se pudo copiar'); });
+  }
+  function copiarPng(){
+    var f = figura(); if (!f) return;
+    aPng(f.svg, 2).then(function(png){ return api().copiar_png(png, f.nombre); }).then(function(r){ aviso(r && r.ok ? 'PNG copiado' : (r && r.error) || 'No se pudo copiar'); });
+  }
+
+  // ---- pestañas ----
+  function pintarPestanas(){
+    var nav = $('pestanas'); nav.innerHTML = '';
+    ORDEN.concat(Object.keys(PESTANAS).filter(function(k){ return ORDEN.indexOf(k) < 0; })).forEach(function(id){
+      var p = PESTANAS[id]; if (!p) return;
+      var b = document.createElement('button'); b.className = 'pest'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === activa));
+      var icono = p.icono && /</.test(p.icono) ? p.icono : (ic(p.icono || id) || '<span aria-hidden="true">' + (ICONOS[id] || '•') + '</span>');   // HTML, o el nombre de un ícono del kit
+      b.innerHTML = icono + '<span>' + (p.titulo || id) + '</span>';
+      b.onclick = function(){ ir(id); }; nav.appendChild(b);
+    });
+  }
+  function ir(id, contenido){
+    if (!id && contenido) id = {grafica: 'grafica', geometria: 'geometria', latex: 'escribir', svg: 'asistente'}[contenido.tipo] || activa;
+    if (!PESTANAS[id]) return;
+    if (activa && activa !== 'asistente') anterior = activa;
+    activa = id;
+    Object.keys(PESTANAS).forEach(function(k){ PESTANAS[k]._caja.hidden = k !== id; });      // hidden: las pestañas pueden cambiar su clase
+    pintarPestanas();
+    if (contenido && PESTANAS[id].cargar) PESTANAS[id].cargar(contenido);
+    refrescar();
+  }
+  function registrar(id, p){
+    var caja = document.createElement('section'); caja.className = 'panel-pest'; caja.dataset.pestana = id; caja.hidden = true;
+    $('contenido').appendChild(caja); p._caja = caja; PESTANAS[id] = p;
+    try { p.montar(caja); } catch (e) { caja.textContent = 'Esta pestaña falló al abrir: ' + e.message; }
+    if (estadoGuardado && estadoGuardado.estados && estadoGuardado.estados[id] && p.restaurar){ try { p.restaurar(estadoGuardado.estados[id]); } catch (e) {} }
+    if (!activa || (estadoGuardado && estadoGuardado.pestana === id)) ir(id); else pintarPestanas();
+  }
+
+  // ---- plegar / desplegar (Python mueve la ventana; aquí solo cambia lo que se ve) ----
+  function plegada(si){ document.body.classList.toggle('plegada', !!si); if (!si) refrescar(); }
+
+  var estadoGuardado = null;
+  // temaFigura: el estilo de lo que se COPIA (siempre claro: Miro es blanco); tema: el de la ventana
+  // contexto(): la pestaña de la que viene al asistente y lo que tiene (para «retócalo», «ponle el área»)
+  function contexto(){
+    var id = anterior && PESTANAS[anterior] ? anterior : null, p = id && PESTANAS[id];
+    var est = null; try { est = p && p.estado ? p.estado() : null; } catch (e) {}
+    return id ? {pestana: id, contenido: est} : {pestana: null, contenido: null};
+  }
+  window.Tarjeta = {registrar: registrar, cambio: refrescar, ir: ir, aviso: aviso, tema: 'claro', temaFigura: 'claro',
+                    figura: figura, contexto: contexto, _plegada: plegada, opciones: opc};     // Tarjeta.trozo lo pone pestana_asistente.js
+
+  // botones
+  $('icCopiar').innerHTML = I.copiar; $('miniCopiar').innerHTML = I.copiar; $('miniAbrir').innerHTML = I.abrir;
+  $('plegar').innerHTML = I.plegar; $('mathstudio').innerHTML = I.fuera;
+  $('plegada').onclick = function(e){ if (!e.target.closest('#miniCopiar')) api().desplegar(); };
+  $('miniCopiar').onclick = function(e){ e.stopPropagation(); copiarSvg(); };
+  $('plegar').onclick = function(){ api().plegar(); };
+  $('copiarSvg').onclick = copiarSvg; $('copiarPng').onclick = copiarPng;
+  $('mathstudio').onclick = function(){
+    var g = activa === 'geometria' && PESTANAS.geometria && PESTANAS.geometria.estado ? (PESTANAS.geometria.estado() || {}).guion : null;
+    api().abrir_mathstudio(g || null).then(function(r){ aviso(r && r.ok ? (r.copiado ? 'MathStudio abierto: pega el guion (Ctrl+V)' : 'Abriendo MathStudio…') : (r && r.error) || 'No se pudo abrir'); });
+  };
+  [['tam', 'tam'], ['fondo', 'fondo']].forEach(function(par){
+    $(par[0]).addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; opc[par[1]] = b.dataset.v; marcarOpc(); refrescar(); });
+  });
+  function marcarOpc(){ ['tam', 'fondo'].forEach(function(k){ [].forEach.call($(k).children, function(b){ b.setAttribute('aria-pressed', String(b.dataset.v === opc[k])); }); }); }
+  // arrastrar: el archivo .svg (a Miro, al escritorio o a una carpeta)
+  $('arrastre').addEventListener('dragstart', function(e){
+    var f = figura(); if (!f){ e.preventDefault(); return; }
+    var nombre = (f.nombre || 'figura').replace(/[^\w\- ]+/g, '') + '.svg';
+    e.dataTransfer.setData('DownloadURL', 'image/svg+xml:' + nombre + ':' + dataUrl(f.svg));
+    e.dataTransfer.setData('text/uri-list', dataUrl(f.svg));
+    e.dataTransfer.effectAllowed = 'copy';
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !document.body.classList.contains('plegada') && api()) api().plegar(); });
+
+  // arranque: tema y lo que tenía escrito, antes de que se registren las pestañas
+  function listo(){
+    var a = api(); if (!a) return;
+    Promise.all([a.tema(), a.leer_estado()]).then(function(r){
+      window.Tarjeta.tema = r[0] === 'oscuro' ? 'oscuro' : 'claro';
+      document.documentElement.setAttribute('data-theme', window.Tarjeta.tema === 'oscuro' ? 'dark' : 'light');
+      estadoGuardado = r[1] || {};
+      if (estadoGuardado.opc){ opc.tam = estadoGuardado.opc.tam || opc.tam; opc.fondo = estadoGuardado.opc.fondo || opc.fondo; }
+      marcarOpc();
+      ['atajos.js', 'pestana_escribir.js', 'pestana_grafica.js', 'pestana_geometria.js', 'pestana_asistente.js'].forEach(function(n){
+        var s = document.createElement('script'); s.src = '/tarjeta-svg/' + n; s.async = false; document.body.appendChild(s);
+      });
+    });
+  }
+  if (api()) listo(); else window.addEventListener('pywebviewready', listo);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+# Contrato de la Tarjeta SVG (2026-10-18)
+
+Lo que cada pieza promete a las demás. Nadie cambia una firma sin avisar al orquestador. El diseño de Claude Design llegará después: la interfaz de ahora es **provisional**, y todo lo visual pasa por `Figuras.estilo` y por la clase de cada pestaña, para poder cambiarlo sin tocar la lógica.
+
+## Dueños
+
+| Quién | Archivos |
+|---|---|
+| **Orquestador (Opus)** | `tarjeta-svg/tarjeta.py` (ventana, estados, atajo, portapapeles, servidor local), `tarjeta-svg/abrir_tarjeta.py`, `tarjeta-svg/tarjeta.html` (cáscara provisional), este contrato, `README.md`, y `tutor-pantalla/ojos_panel.py` |
+| **Sonnet A · motor** | `tutor-pantalla/motor_figuras.js` (nuevo, común), `tutor-pantalla/probar_figuras.js`, `tutor-pantalla/ilustraciones_ui.js` (pasa a usar el motor y añade ` ```geometria ` y «Editar en la tarjeta»), `tutor-pantalla/probar_ilustraciones.js`, `tarjeta-svg/pestana_grafica.js`, `tarjeta-svg/pestana_geometria.js` |
+| **Sonnet B · escribir** | `tarjeta-svg/vendor/mathlive/` (MathLive 0.110.0 guardado, con sus fuentes y licencia), `tarjeta-svg/atajos.js`, `tarjeta-svg/pestana_escribir.js` |
+| **Sonnet C · asistente y accesos** | `tarjeta-svg/asistente_tarjeta.py`, `tarjeta-svg/pestana_asistente.js`, `mis-clases/servidor.py` (solo la herramienta nueva), y el botón «Tarjeta» en `tutor-pantalla/panel.html` y `panel-excel/panel.html` |
+
+MathStudio (su carpeta va en `tarjeta-svg/config.json`) **no se toca**: solo se lee para copiar ideas y atajos.
+
+## 1. Motor de figuras (`tutor-pantalla/motor_figuras.js`, JS puro, también en node)
+
+```js
+Figuras.estilo                          // tokens por tema: {claro: {...}, oscuro: {...}} (los reemplazará el diseño)
+Figuras.compilar(expr)                  // → f(x) (el intérprete seguro que hoy está en ilustraciones_ui.js; sin eval)
+Figuras.grafica(spec, {tema, tam})      // → {svg, w, h} | lanza Error con mensaje en español
+Figuras.geometria(guion, {tema, tam})   // → {svg, w, h, errores: [{linea, mensaje}], objetos: [...]}  (con errores igual dibuja lo válido)
+Figuras.plano({x, y, ...}, {tema, tam}) // → {svg, w, h}: solo el plano cartesiano (ejes, rejilla, números)
+```
+
+- **`spec` de gráfica:** el mismo de `REGLAS_ILUSTRACIONES` (`titulo`, `x`, `y`, `funciones[{f, nombre, color}]`, `area{f, g, x, color}`, `puntos`). Con `y` omitido, el rango sale solo.
+- **Guion de geometría:** el lenguaje de MathStudio (ver su `DOCUMENTACION_PROYECTO.md`, §8, y `js/geo-comandos.js`).
+  - **Mismos nombres, alias con tilde y en inglés, anidación y atajo `AB`:** el mismo guion tiene que poder pegarse en MathStudio.
+  - **Mínimo obligatorio:** punto `A=(x,y)`, `segmento`, `recta`, `semirrecta`, `circunferencia` (centro y radio, centro y punto, tres puntos), `poligono`, `triangulo`, `arco`, `sector`, `puntomedio`, `interseccion` (recta–recta; recta o circunferencia con circunferencia, con índice 1|2), `paralela`, `perpendicular`, `mediatriz`, `bisectriz`, `altura`, `mediana`, `tan(P,c,i)`, `distancia`, `angulo`, `area`, `perimetro`, `marcaigual`, `marcaangulo`, `angulorecto`, `marcaparalela`, `etiqueta`.
+  - **Lo que no sepa hacer:** devuelve el error «esto, en MathStudio» en esa línea, nunca un dibujo equivocado.
+- **El SVG que sale:**
+  - `width`/`height` en px y `viewBox` con margen (la lección de MathStudio: nunca la tinta pegada al borde);
+  - fondo transparente o blanco según `{fondo}`;
+  - letra `'Segoe UI', system-ui`;
+  - sin `<script>` ni enlaces;
+  - debe verse igual pegado en Miro.
+- `tam`: `"S" | "M" | "L"` (por ejemplo 320, 480 y 720 px de ancho).
+
+## 2. La cáscara y las pestañas (`tarjeta.html` + `pestana_*.js`)
+
+Cada pestaña se registra así, y la cáscara pone las pestañas, la barra de acciones y el estado:
+
+```js
+Tarjeta.registrar(id, {titulo, icono,                 // id: 'escribir' | 'grafica' | 'geometria' | 'asistente'
+  montar(contenedor),                                  // dibuja su interfaz dentro de contenedor (una sola vez)
+  figura() → {svg, nombre} | null,                     // lo que se copia o arrastra ahora (null: nada que copiar),
+                                                       // SIEMPRE con el estilo Tarjeta.temaFigura ('claro': Miro es blanco)
+  cargar(contenido),                                   // pone algo que llega de fuera (del asistente o de un tutor)
+  estado() → objeto, restaurar(objeto)})               // para recordar lo escrito entre sesiones
+Tarjeta.cambio()                                       // la pestaña avisa que su figura cambió (miniatura y botones)
+Tarjeta.ir(id, contenido?)                             // cambia de pestaña (y le pasa contenido)
+Tarjeta.aviso(texto)                                   // la confirmación breve («Copiado»)
+Tarjeta.tema                                           // 'claro' | 'oscuro'
+```
+
+`contenido` de `cargar` / `Tarjeta.ir`: `{tipo: 'grafica', spec}`, `{tipo: 'geometria', guion}`, `{tipo: 'latex', latex}` o `{tipo: 'svg', svg}`.
+
+## 3. Python de la ventana (`tarjeta.py`, la API que llama la página)
+
+- `copiar_svg(svg, nombre)` pone a la vez varios formatos en el portapapeles de Windows:
+  - el archivo `.svg` temporal (CF_HDROP: Miro lo sube como imagen vectorial al pegar);
+  - `image/svg+xml`;
+  - el texto;
+  - PNG.
+- `copiar_png(b64)`.
+- `abrir_mathstudio(guion?)`: arranca su servidor en el puerto 8000 si no está y abre el navegador.
+- `guardar_estado(obj)` / `leer_estado()`: en `tarjeta-svg/estado.json`, que es suyo y no va al repo.
+- `plegar()` / `desplegar()`.
+- **El asistente:** `asistente_preguntar(texto, contexto)`, que va a `asistente_tarjeta.py` y responde a trozos con `window.Tarjeta.trozo(t)`; y `asistente_reiniciar()`.
+
+## 4. Servidor local y abrir desde fuera (`abrir_tarjeta.py`)
+
+- **La página no se carga como HTML suelto:** `tarjeta.py` la sirve en `http://127.0.0.1:4748/tarjeta-svg/tarjeta.html`, con los estáticos de `tarjeta-svg/` y `tutor-pantalla/` desde la raíz de Cursos (`/tutor-pantalla/motor_figuras.js`, `/tarjeta-svg/vendor/mathlive/...`). Solo escucha en 127.0.0.1.
+- **El asistente:** `asistente_tarjeta.Asistente()` con `.preguntar(texto, contexto, al_trozo)` → texto completo, más `.reiniciar()` y `.cerrar()`.
+- `tarjeta.py` escucha en `127.0.0.1:4748`:
+  - `GET /hola` → `{ok}`;
+  - `POST /mostrar` → la despliega al frente;
+  - `POST /figura {contenido}` → `Tarjeta.ir(...)` y la despliega.
+- Un solo ejemplar: si el puerto ya responde, no se abre otra.
+- `python tarjeta-svg/abrir_tarjeta.py [--figura '<json contenido>']`: si la tarjeta vive, le manda la orden; si no, la arranca suelta (sin consola) y luego se la manda. **Todos los accesos usan esto:**
+  - «Mis clases», como herramienta `tarjeta`;
+  - el botón de los paneles: `api.tarjeta_abrir(contenido?)` en `OjosApi`, que lo pone el orquestador;
+  - «Editar en la tarjeta» de cada figura del chat.
+
+## 5. El asistente de la tarjeta (`asistente_tarjeta.py`)
+
+- Usa `tutor-pantalla/asistente.Sesion` con sus propias reglas: responde muy corto y **siempre con la figura en bloques** (` ```grafica {json} `, ` ```geometria ` con un guion del lenguaje de §1, `$$…$$`, o ` ```svg ` solo si nada de lo anterior sirve), y la tarjeta los dibuja exactos.
+- Recibe como contexto la pestaña activa y lo que hay en ella, para poder «retocar esto».
+- Herramientas: solo WebSearch y WebFetch, como el asistente.
+
+## Verificación
+
+- **Haiku:** cada Sonnet lanza un solo Haiku, sin contexto, que revisa **capturas**, y lo reutiliza con SendMessage. El informe dice qué miró.
+- **Ventanas:** las pruebas en vivo, solo con ventanas propias; nunca la pantalla entera ni ventanas o archivos del usuario. MathStudio no se modifica.
+- **Pruebas mínimas:**
+  - `node tutor-pantalla/probar_figuras.js` (incluye guiones de MathStudio de su documentación);
+  - `node tutor-pantalla/probar_ilustraciones.js`;
+  - `python tarjeta-svg/tarjeta.py --probar`.
