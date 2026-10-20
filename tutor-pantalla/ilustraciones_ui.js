@@ -294,7 +294,7 @@
   function svgTexto(cuerpo, P){                             // SVG del tutor → {svg, w, h} con colores del tema, o {aviso}
     var U = RAIZ.Dibujante && Dibujante.U;
     if (!U || !U.limpiarSvg) return {aviso: 'el filtro de figuras no está disponible'};
-    var sano = U.limpiarSvg(cuerpo);
+    var sano = U.limpiarSvg(cuerpo, (P && P.modo) || 'claro');      // los colores, en la paleta plana del tema del panel
     if (!sano) return {aviso: 'No pude dibujar la figura (' + (U.limpiarSvg.error || 'SVG no válido') + ')'};
     var doc = new DOMParser().parseFromString(sano, 'image/svg+xml'), raiz = doc.documentElement;
     Array.prototype.forEach.call(doc.getElementsByTagName('*'), function(el){

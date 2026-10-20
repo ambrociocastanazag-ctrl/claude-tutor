@@ -21,14 +21,13 @@
 
   // ---- el color según el tema de la app que hay detrás ----
   function pal(o){
-    var col = D.U.color(o.color), osc = o.tema === 'oscuro';
-    var claro = osc ? D.U.mezclar(col, 0.55) : col;                       // en una app oscura, el color se aclara
-    return {col: claro, texto: claro, borde: claro, fondo: osc ? '#141a29' : D.U.mezclar(col, 0.10), fondoOp: osc ? 0.96 : 0.965,
-            numFondo: claro, numTexto: osc ? '#0b1020' : '#ffffff', osc: osc};
+    var Q = D.U.paleta(o.color, o.tema === 'oscuro' ? 'oscuro' : 'claro');           // la paleta plana: la tinta ya viene aclarada en el tema oscuro
+    return {col: Q.tinta, texto: Q.fuerte, borde: Q.tinta, fondo: Q.papel, fondoOp: 1, halo: Q.fondo, sombra: Q.sombra,
+            numFondo: Q.tinta, numTexto: Q.sobre, osc: Q.osc};
   }
-  function sombra(id, s, osc){
+  function sombra(id, s, osc, color){
     return '<filter id="' + id + '" x="-20%" y="-30%" width="140%" height="170%"><feDropShadow dx="0" dy="' + 1.5 * s + '" stdDeviation="' + 2.2 * s +
-      '" flood-color="#0b1020" flood-opacity="' + (osc ? 0.55 : 0.22) + '"/></filter>';
+      '" flood-color="' + (color || '#000000') + '" flood-opacity="' + (osc ? 0.5 : 0.2) + '"/></filter>';
   }
   // rectángulo con las cuatro esquinas redondeadas por separado (las de la pastilla pegada al borde son rectas por fuera)
   function rr(x, y, w, h, r){
@@ -58,9 +57,9 @@
     var s = o.escala || 1, c = pal(o), px = 15 * s, pad = 9 * s, h = px * 1.3 + 1.3 * pad;
     var num = o.n ? P.numero(o) : null, x = pad, texto = o.texto ? String(o.texto) : '';
     var w = pad + (num ? num.w + (texto ? 6 * s : 0) : 0) + (texto ? medir(texto, px) : 0) + pad;
-    var out = '<defs>' + sombra('ns', s, c.osc) + '</defs>' +
+    var out = '<defs>' + sombra('ns', s, c.osc, c.sombra) + '</defs>' +
       '<rect x="' + 1.2 * s + '" y="' + 1.2 * s + '" width="' + (w - 2.4 * s) + '" height="' + (h - 2.4 * s) + '" rx="' + 7 * s + '" fill="' + c.fondo + '" fill-opacity="' + c.fondoOp +
-      '" stroke="' + c.borde + '" stroke-width="' + 2.4 * s + '" filter="url(#ns)"/>';
+      '" stroke="' + c.borde + '" stroke-width="' + 1.5 * s + '" filter="url(#ns)"/>';
     if (num){ out += '<g transform="translate(' + x + ' ' + (h - num.h) / 2 + ')">' + num.svg + '</g>'; x += num.w + (texto ? 6 * s : 0); }
     if (texto) out += '<text x="' + x + '" y="' + h / 2 + '" dominant-baseline="central" font-size="' + px + '" font-weight="600" fill="' + c.texto + '">' + esc(texto) + '</text>';
     return {svg: out, w: w, h: h};
@@ -71,7 +70,7 @@
     var s = o.escala || 1, c = pal(o), sw = 3.2 * s, p = o.progreso == null ? 1 : acota(o.progreso), w = o.w, h = o.h;
     if (p <= 0) return {svg: '', w: w, h: h};
     var da = p >= 1 ? '' : ' pathLength="1" stroke-dasharray="' + p + ' 2"';
-    var halo = c.osc ? '' : '<rect x="' + sw / 2 + '" y="' + sw / 2 + '" width="' + (w - sw) + '" height="' + (h - sw) + '" rx="' + 6 * s + '" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="' + (sw + 2.4 * s) + '"' + da + '/>';
+    var halo = '<rect x="' + sw / 2 + '" y="' + sw / 2 + '" width="' + (w - sw) + '" height="' + (h - sw) + '" rx="' + 6 * s + '" fill="none" stroke="' + c.halo + '" stroke-opacity="0.55" stroke-width="' + (sw + 2.4 * s) + '"' + da + '/>';
     return {w: w, h: h, svg: halo + '<rect x="' + sw / 2 + '" y="' + sw / 2 + '" width="' + (w - sw) + '" height="' + (h - sw) + '" rx="' + 6 * s + '" fill="none" stroke="' + c.col +
       '" stroke-width="' + sw + '" stroke-linejoin="round"' + da + '/>'};
   };
@@ -95,7 +94,7 @@
     var num = o.n ? P.numero(o) : null, x = pad;
     var w = pad + (num ? num.w + 6 * s : 0) + medir(texto, px) + pad, R = 9 * s;
     var r = {abajo: [R, R, 0, 0], arriba: [0, 0, R, R], izquierda: [0, R, R, 0], derecha: [R, 0, 0, R]}[dir];     // el lado del borde, recto
-    var out = '<defs>' + sombra('bs', s, c.osc) + '</defs>' +
+    var out = '<defs>' + sombra('bs', s, c.osc, c.sombra) + '</defs>' +
       '<path d="' + rr(1.2 * s, 1.2 * s, w - 2.4 * s, h - 2.4 * s, r.map(function(v){ return Math.max(0, v - 1.2 * s); })) + '" fill="' + c.fondo + '" fill-opacity="' + c.fondoOp +
       '" stroke="' + c.borde + '" stroke-width="' + 2.4 * s + '" filter="url(#bs)"/>';
     if (num){ out += '<g transform="translate(' + x + ' ' + (h - num.h) / 2 + ')">' + num.svg + '</g>'; x += num.w + 6 * s; }

@@ -44,6 +44,24 @@ voz; si falta, se usa `texto`), `"n"` (número de orden).
 | `rayos_x` | Excel: de las celdas que usa la fórmula al resultado, con los valores viajando | `celda` |
 | `desarmar` | copia ampliada del texto con una llave y una explicación por parte | `original` (en Excel, con `celda`, sale de la celda), `partes`: `[{"texto", "nota"}]` |
 
+**Las figuras de Claude Design** (`profe.js` + `formas_profe.js`, desde 2026-10-19; las variantes aprobadas, contrato en `clase-viva/CONTRATO-FIGURAS.md`). `mano` y `foco` de la tabla de arriba ahora son estas.
+
+| forma | qué es | parámetros propios |
+|---|---|---|
+| `globo` | la explicación junto a la pieza, con un hilo hacia ella (va al hueco libre); en una pieza de texto, pestaña sobre ella | `texto` (1–3 frases), `formula` (texto plano); en una gráfica, `q` y `p` llevan el hilo a ese dato |
+| `pasos` | 2 a 6 pasos sobre la pantalla: número, globo y barra; ≈ 4 s cada uno y al final quedan todos | `pasos`: `[{objetivo, "texto", "formula"}]` |
+| `punto` | un dato exacto de una gráfica, con su ficha | `q`, `p`, `letra`, `texto` (`""` = solo la letra), `lado` (ne, no, se, so, e, o) |
+| `guias` | del punto a los ejes, con el valor en cada eje | `q`, `p`, `textoQ`, `textoP` |
+| `medida` | cota entre dos puntos a la misma altura | `p`, `q1`, `q2`, `texto` |
+| `area` | zona teñida con su rótulo | `rect`: `{"q": [a, b], "p": [a, b]}` o `poli`: `[[q, p], …]`, `texto`, `detalle` |
+| `desplazar` | la curva vieja punteada, la nueva y flechas | `de`, `a` (`[[q, p], [q, p]]`), `nombre`, `nota` |
+| `recorrido` | un punto que recorre valores con sus guías (ciclo de 4 s) | `camino`: `[[q, p], …]` |
+
+- **Gráficas:** el objetivo es una pieza «gráfica» (en la clase viva, un `ref` del mapa). Python añade `d.ejes = {q: [q0, q1], p: [p0, p1]}` y `d.r` es el área de datos; el tutor da valores, no píxeles. Sin `ejes`, esas formas dan error («va sobre una gráfica»).
+- **Paleta plana y tema:** cada dibujo trae `d.tema` (`claro` | `oscuro`): en la clase viva, el de la guía; en las demás apps, `tema_detras` de la última captura; si no, `claro`. Los colores salen de `Profe.paleta(color, tema)`. El tutor escribe colores solo por nombre, también dentro de su SVG.
+- `mano`: `trazo` `circulo` (rodear en «auto»: elipse si es casi cuadrado, lazo redondeado si es ancho; `figura` lo fuerza: `elipse` | `lazo` | `corchetes` | `doble`), `subrayado`, `tache`, `check`, `flecha`; `texto` = nota a mano (Segoe Print). `foco`: velo de papel del color del fondo, no negro.
+- Probar: `python probar_dibujos.py <muestras.json> <carpeta> --fondo <captura.png>` (para las de gráfica, la muestra lleva `r` y `ejes`).
+
 **Forma `3d`.** `{"tipo": "dibujo", "forma": "3d", "spec": {…}, "vista": [30, 22], "giro": "vaiven"}` (`formas_3d.js`). Arma la escena una vez con `Figuras3D.escena` y saca ≤ 60 fotogramas con `dibujar(vista, {encuadre: 'esfera'})` (el tamaño no cambia al girar); `U.fotos` los pasa a PNG y capa.py los repite. Vaivén: giro = vista + 30°·sen (ciclo de 8 s); vuelta: 360° en 9 s; `no`: un solo fotograma. Va sobre una tarjeta con el fondo y el borde del tema del panel (variables `--surface`, `--line`…; `"tema": "claro" | "oscuro"` lo fuerza) y sombra ligera. Con objetivo se encaja en él; sin él, un tercio de la ventana al centro. Si la spec trae errores dibuja lo válido (aviso en consola); si no queda nada, el dibujo da error. `Ojos_panel.ilustracion3d_en_app(spec_json, vista)` es el «Ponlo en la app» de las figuras ```3d del chat.
 
 **Objetivo `"linea"` (cursos de código).** Además de `id`, `caja`, `celda` y `nombre`, un dibujo (o un paso de `fantasma`/`secuencia`) puede apuntar a una línea del editor de VS Code: `{"tipo": "dibujo", "forma": "foco", "linea": 14, "archivo": "Prueba.java", "texto": "Aquí"}`. `archivo` es opcional (si no es el abierto, el dibujo no sale y el tutor lo sabe). El panel lo ubica con `editor_vscode.rect_linea` (ver README, «Señalar una línea del editor»); si la línea no se ve, se dibuja en el borde del editor y se añade «Sube/Baja…» a la respuesta. Necesita `Ojos(raices=[carpetas del curso])`.

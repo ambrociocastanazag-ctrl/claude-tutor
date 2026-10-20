@@ -7,6 +7,7 @@ muestras.json: un lote (DIBUJOS.md, sección 2) {"dibujos": [...]}; "cliente" de
 Fondo de mentira: con "fondo_demo": "claro" | "oscuro" en un dibujo se pinta una ventana llena de botones (3 filas × 10) y
 "boton": [fila, col] pone ese botón como objetivo (r) y todos los botones como "evitar". Sirve para probar las marcas
 (formas_marcas.js, CONTRATO-MARCAS.md) sin una app.
+Tema: cada dibujo puede traer "tema": "claro" | "oscuro" (como lo pone Python); si falta y tiene "fondo_demo", vale ese; si no, claro.
 Por cada dibujo guarda <id>_tira.png (6 momentos de la animación, recortados a lo dibujado) y <id>_final.png
 (el fondo entero con el dibujo al final); con varios dibujos, también _todos_final.png. La lupa lee la zona del fondo, como leería la pantalla.
 Necesita Node y herramientas/ (puppeteer-core con el Chrome instalado)."""
@@ -19,7 +20,7 @@ sys.path.insert(0, str(AQUI))
 import capa                                                     # noqa: E402
 from PIL import Image, ImageDraw, ImageFont                     # noqa: E402
 
-SCRIPTS = ["dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "motor_figuras.js", "motor_3d.js", "formas_3d.js",
+SCRIPTS = ["profe.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "motor_figuras.js", "motor_3d.js", "formas_3d.js", "formas_profe.js",
            "marcas.js", "formas_marcas.js", "voz.js"]
 
 
@@ -70,6 +71,7 @@ def preparar_demo(lote):
     fondos = {}
     for d in lote["dibujos"]:
         modo = d.get("fondo_demo")
+        if modo and not d.get("tema"): d["tema"] = modo           # el fondo de mentira dice el tema de la app de detrás
         if not modo: continue
         w, h = d.get("cliente") or (1280, 720); d["cliente"] = [w, h]
         im, rects = botones_demo(w, h, modo == "oscuro"); fondos[d["id"]] = im
@@ -82,9 +84,10 @@ def preparar_demo(lote):
 def fondo_de(d, fondo):
     w, h = d.get("cliente") or (fondo.size if fondo else (1400, 850))
     if fondo: return fondo.convert("RGBA").resize((w, h)) if fondo.size != (w, h) else fondo.convert("RGBA")
-    im = Image.new("RGBA", (w, h), (246, 246, 248, 255)); dr = ImageDraw.Draw(im)
-    for x in range(0, w, 40): dr.line([(x, 0), (x, h)], fill=(228, 228, 234, 255))
-    for y in range(0, h, 40): dr.line([(0, y), (w, y)], fill=(228, 228, 234, 255))
+    osc = d.get("tema") == "oscuro"
+    im = Image.new("RGBA", (w, h), (30, 34, 46, 255) if osc else (246, 246, 248, 255)); dr = ImageDraw.Draw(im)
+    for x in range(0, w, 40): dr.line([(x, 0), (x, h)], fill=(44, 49, 64, 255) if osc else (228, 228, 234, 255))
+    for y in range(0, h, 40): dr.line([(0, y), (w, y)], fill=(44, 49, 64, 255) if osc else (228, 228, 234, 255))
     return im
 
 

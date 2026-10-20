@@ -38,13 +38,13 @@
   }
 
   // ======================= FANTASMA =======================
-  function cursorSvg(s){
+  function cursorSvg(s, P){
     var k = 1.1 * s, pad = 7 * s, w = Math.ceil(14 * k + 2 * pad), h = Math.ceil(21 * k + 2 * pad);
     var f = 'M0 0 L0 17 L4.2 13.2 L7 19.6 L9.6 18.5 L6.8 12.2 L12.2 12.2 Z';
     return {w: w, h: h, ax: pad, ay: pad, svg:
       '<defs><filter id="sh" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="' + 1.7 * s + '"/></filter></defs>' +
-      '<g transform="translate(' + (pad + 1.6 * s) + ' ' + (pad + 2.4 * s) + ') scale(' + k + ')"><path d="' + f + '" fill="#000" fill-opacity=".38" filter="url(#sh)"/></g>' +
-      '<g transform="translate(' + pad + ' ' + pad + ') scale(' + k + ')"><path d="' + f + '" fill="#fff" stroke="#111" stroke-width="1.25" stroke-linejoin="round"/></g>'};
+      '<g transform="translate(' + (pad + 1.6 * s) + ' ' + (pad + 2.4 * s) + ') scale(' + k + ')"><path d="' + f + '" fill="' + P.sombra + '" fill-opacity="' + (P.osc ? '.6' : '.3') + '" filter="url(#sh)"/></g>' +
+      '<g transform="translate(' + pad + ' ' + pad + ') scale(' + k + ')"><path d="' + f + '" fill="' + P.tinta + '" stroke="' + P.fondo + '" stroke-width="' + 1.6 / 1.1 + '" stroke-linejoin="round"/></g>'};
   }
   // Camino de a a b con curva suave y aceleración: claves [t, x, y] cada ~35 ms (sin repetir la de salida).
   function viaje(a, b, t0, dur, sesgo){
@@ -59,17 +59,17 @@
   }
 
   Dibujante.registrar('fantasma', async function(d, U){
-    var s = d.escala || 1, col = U.color(d.color), pasos = d.pasos || [];
+    var s = d.escala || 1, P = U.paleta(d), col = P.tinta, pasos = d.pasos || [];
     var cw = (d.cliente || [1600, 900])[0], ch = (d.cliente || [1600, 900])[1];
     var caja = new Caja(), piezas = [], tramos = [], cache = {};
     var primero = pasos.filter(function(p){ return p.r; })[0];
     if (!primero) return null;
     var c0 = centro(primero.r);
     var pos = [limitar(c0[0] + 150 * s, 20, cw - 20), limitar(c0[1] + 120 * s, 20, ch - 20)];
-    var cur = cursorSvg(s), imCur = await U.pieza(cur.svg, cur.w, cur.h);
+    var cur = cursorSvg(s, P), imCur = await U.pieza(cur.svg, cur.w, cur.h);
     var R = 28 * s;
     async function anillo(c){                     // el anillo de las ondas, uno por color
-      if (!cache[c]) cache[c] = await U.pieza('<circle cx="' + (R + 3 * s) + '" cy="' + (R + 3 * s) + '" r="' + R + '" fill="' + c + '" fill-opacity=".16" stroke="' + c + '" stroke-width="' + 3 * s + '"/>', 2 * R + 6 * s, 2 * R + 6 * s);
+      if (!cache[c]) cache[c] = await U.pieza('<circle cx="' + (R + 3 * s) + '" cy="' + (R + 3 * s) + '" r="' + R + '" fill="' + c + '" fill-opacity="' + P.relleno + '" stroke="' + c + '" stroke-width="' + 3 * s + '"/>', 2 * R + 6 * s, 2 * R + 6 * s);
       return cache[c];
     }
     var imPunto = await U.pieza('<circle cx="' + 4 * s + '" cy="' + 4 * s + '" r="' + 3.2 * s + '" fill="' + col + '"/>', 8 * s, 8 * s);
@@ -103,12 +103,12 @@
       } else if (acc === 'doble'){
         pulsar(T, pos); await onda(T + 60, pos); pulsar(T + 260, pos); await onda(T + 320, pos); T += 820;
       } else if (acc === 'derecho'){
-        var c2 = col === U.color('naranja') ? U.color('morado') : U.color('naranja');
+        var c2n = col === U.color('naranja') ? 'morado' : 'naranja', P2 = U.paleta(c2n, d.tema), c2 = P2.tinta;
         pulsar(T, pos); await onda(T + 60, pos, c2);
         var etq = 'clic derecho', pxe = Math.round(13 * s), we = U.medir(etq, pxe) + 14 * s, he = pxe * 1.5 + 4 * s;
         var ex = limitar(pos[0] + 16 * s, 2, cw - we - 2), ey = limitar(pos[1] + 30 * s, 2, ch - he - 2);
         var ime = await U.pieza('<rect x="1" y="1" width="' + (we - 2) + '" height="' + (he - 2) + '" rx="' + 6 * s + '" fill="' + c2 + '"/><text x="' + we / 2 + '" y="' + he / 2 +
-                                '" text-anchor="middle" dominant-baseline="central" font-size="' + pxe + '" font-weight="600" fill="#fff">' + etq + '</text>', we, he);
+                                '" text-anchor="middle" dominant-baseline="central" font-size="' + pxe + '" font-weight="600" fill="' + P2.sobre + '">' + etq + '</text>', we, he);
         piezas.push(poner(ime, 0, 0, [[T + 90, ex, ey, 0, 1], [T + 260, ex, ey, 1, 1], [T + 950, ex, ey, 1, 1], [T + 1200, ex, ey, 0, 1]]));
         caja.mas(ex, ey, we, he); T += 950;
       } else if (acc === 'arrastrar' && p.hasta_r){
@@ -155,10 +155,10 @@
         }
         var tipx = limitar(p.r[0] + Math.min(p.r[2] / 2, 30 * s), bx + 14 * s, bx + bw - 14 * s);
         var oy = abajo ? 10 * s : 0, hg = bh + 10 * s, tipy = abajo ? 0 : hg;
-        var cuerpo = '<rect x="1" y="' + (oy + 1) + '" width="' + (bw - 2) + '" height="' + (bh - 2) + '" rx="' + 8 * s + '" fill="#fff" stroke="' + col + '" stroke-width="' + 2.4 * s + '"/>';
+        var cuerpo = '<rect x="1" y="' + (oy + 1) + '" width="' + (bw - 2) + '" height="' + (bh - 2) + '" rx="' + 8 * s + '" fill="' + P.papel + '" stroke="' + col + '" stroke-width="' + 1.5 * s + '"/>';
         var cola = abajo ? [[tipx - bx - 7 * s, oy + 1], [tipx - bx, 0], [tipx - bx + 7 * s, oy + 1]] : [[tipx - bx - 7 * s, bh - 1], [tipx - bx, hg], [tipx - bx + 7 * s, bh - 1]];
-        cuerpo += '<polygon points="' + cola.map(function(q){ return q.join(','); }).join(' ') + '" fill="#fff" stroke="' + col + '" stroke-width="' + 2.4 * s + '" stroke-linejoin="round"/>' +
-                  '<rect x="' + (tipx - bx - 5 * s) + '" y="' + (abajo ? oy - 1 : bh - 4 * s) + '" width="' + 10 * s + '" height="' + 5 * s + '" fill="#fff"/>';
+        cuerpo += '<polygon points="' + cola.map(function(q){ return q.join(','); }).join(' ') + '" fill="' + P.papel + '" stroke="' + col + '" stroke-width="' + 1.5 * s + '" stroke-linejoin="round"/>' +
+                  '<rect x="' + (tipx - bx - 5 * s) + '" y="' + (abajo ? oy - 1 : bh - 4 * s) + '" width="' + 10 * s + '" height="' + 5 * s + '" fill="' + P.papel + '"/>';
         var imB = await U.pieza(cuerpo, bw, hg);
         var tx = tipx, ty = abajo ? by - 10 * s : by + bh + 10 * s, tb = T;
         var pB = poner(imB, tipx - bx, tipy, [[tb, tx, ty, 0, 0.8], [tb + 180, tx, ty, 1, 1]]), letras = [pB];
@@ -173,7 +173,7 @@
           var pre = txt.slice(0, Math.min(txt.length, j * g)), ini = txt.slice(0, (j - 1) * g), parte = txt.slice((j - 1) * g, j * g);
           var tj = ts + (j - 1) * dt + 40, xj = x0 + U.medir(ini, px, false), wj = Math.ceil(U.medir(parte, px, false)) + 4;
           if (parte.trim()){
-            var iml = await U.pieza('<text x="2" y="' + hl / 2 + '" dominant-baseline="central" font-size="' + px + '" font-weight="400" fill="#1f2430" xml:space="preserve">' + U.esc(parte) + '</text>', wj, hl);
+            var iml = await U.pieza('<text x="2" y="' + hl / 2 + '" dominant-baseline="central" font-size="' + px + '" font-weight="400" fill="' + P.texto + '" xml:space="preserve">' + U.esc(parte) + '</text>', wj, hl);
             var pl = poner(iml, 2, hl / 2, [[tj, xj, yc, 0, 1], [tj + 50, xj, yc, 1, 1]]);
             letras.push(pl); piezas.push(pl);
           }
@@ -204,7 +204,7 @@
 
   // Nota sin flecha pegada a la figura de la guía: debajo, encima, a la derecha o a la izquierda, en un hueco libre.
   function notaLibre(d, U, texto, fig, color, t0, caja){
-    var s = d.escala || 1, col = U.color(color || d.color), px = Math.round(15 * s), pad = 9 * s;
+    var s = d.escala || 1, PL = U.paleta(color || d.color, d.tema), px = Math.round(15 * s), pad = 9 * s;
     var cw = (d.cliente || [1600, 900])[0], ch = (d.cliente || [1600, 900])[1];
     var w = U.medir(texto, px) + 2 * pad, h = px * 1.3 + 1.3 * pad, g = 9 * s;
     var evi = (d.evitar || []).filter(function(e){ return !U.choca(e, fig); });
@@ -217,8 +217,9 @@
     }
     if (!c) c = [limitar(cands[0][0], 2, cw - w - 2), limitar(cands[0][1], 2, ch - h - 2), w, h];
     caja.mas(c[0] - 4 * s, c[1] - 4 * s, w + 8 * s, h + 8 * s);
-    var svg = '<rect x="' + (4 * s) + '" y="' + (4 * s) + '" width="' + w + '" height="' + h + '" rx="' + 7 * s + '" fill="' + U.mezclar(col, 0.10) + '" fill-opacity="0.965" stroke="' + col + '" stroke-width="' + 2.4 * s + '"/>' +
-      '<text x="' + (4 * s + pad) + '" y="' + (4 * s + h / 2) + '" dominant-baseline="central" font-size="' + px + '" font-weight="600" fill="' + col + '">' + U.esc(texto) + '</text>';
+    var svg = U.sombraRR(4 * s, 4 * s, w, h, 7 * s, PL, s, 0.5) +
+      '<rect x="' + (4 * s) + '" y="' + (4 * s) + '" width="' + w + '" height="' + h + '" rx="' + 7 * s + '" fill="' + PL.papel + '" stroke="' + PL.tinta + '" stroke-width="' + 1.5 * s + '"/>' +
+      '<text x="' + (4 * s + pad) + '" y="' + (4 * s + h / 2) + '" dominant-baseline="central" font-size="' + px + '" font-weight="600" fill="' + PL.fuerte + '">' + U.esc(texto) + '</text>';
     return U.pieza(svg, w + 8 * s, h + 8 * s).then(function(im){
       var x = c[0] - 4 * s, y = c[1] - 4 * s;
       return poner(im, 0, 0, [[t0, x, y, 0, 1], [t0 + 250, x, y, 1, 1]]);
@@ -249,7 +250,7 @@
   }
 
   Dibujante.registrar('guia', async function(d, U){
-    var s = d.escala || 1, col = U.color(d.color), r = d.r;
+    var s = d.escala || 1, P = U.paleta(d), col = P.tinta, r = d.r;
     if (!r) return null;
     var f = trazoGuia(d.figura || 'rect', r, s), gr = 3 * s, N = 14, FPS = 20, REV = N * 1000 / FPS;
     var caja = new Caja(); caja.mas(f.caja[0], f.caja[1], f.caja[2], f.caja[3]);
@@ -259,7 +260,7 @@
       var u = suave((k + 1) / n), id = 'm' + k;
       var s1 = '<defs><mask id="' + id + '" maskUnits="userSpaceOnUse" x="-2000" y="-2000" width="9000" height="9000">' +
                '<path d="' + f.d + '" pathLength="1" fill="none" stroke="#fff" stroke-width="' + gr * 4 + '" stroke-dasharray="1 2" stroke-dashoffset="' + (1 - u) + '"/></mask></defs>';
-      if (f.relleno) s1 += '<path d="' + f.d + '" fill="' + col + '" fill-opacity="' + 0.09 * u + '" stroke="none"/>';
+      if (f.relleno) s1 += '<path d="' + f.d + '" fill="' + col + '" fill-opacity="' + P.relleno * 0.6 * u + '" stroke="none"/>';
       s1 += '<g mask="url(#' + id + ')"><path d="' + f.d + '" fill="none" stroke="' + col + '" stroke-width="' + gr + '" ' + dash + '/></g>';
       if (f.flecha && u > 0.88) s1 += cabeza(f.flecha[0], f.flecha[1], f.flecha[2], f.flecha[3], col, s);
       return s1;
@@ -285,18 +286,18 @@
     var cw = (d.cliente || [1600, 900])[0], ch = (d.cliente || [1600, 900])[1];
     var caja = new Caja(), piezas = [], tramos = [], TP = 1500, Rc = 13 * s, SEG = 7;
     for (var i = 0; i < pasos.length; i++){
-      var p = pasos[i], t0 = i * TP, col = U.color(p.color || d.color), r = p.r, ultimo = i === pasos.length - 1;
+      var p = pasos[i], t0 = i * TP, PS = U.paleta(p.color || d.color, d.tema), col = PS.tinta, r = p.r, ultimo = i === pasos.length - 1;
       // contorno suave del objetivo
       var pe = 3 * s, ow = r[2] + 2 * pe, oh = r[3] + 2 * pe, ox = r[0] - pe, oy = r[1] - pe;
-      var imo = await U.pieza('<rect x="' + 2 * s + '" y="' + 2 * s + '" width="' + (ow - 4 * s) + '" height="' + (oh - 4 * s) + '" rx="' + 6 * s + '" fill="' + col + '" fill-opacity=".08" stroke="' + col + '" stroke-width="' + 2.4 * s + '"/>', ow, oh);
+      var imo = await U.pieza('<rect x="' + 2 * s + '" y="' + 2 * s + '" width="' + (ow - 4 * s) + '" height="' + (oh - 4 * s) + '" rx="' + 6 * s + '" fill="' + col + '" fill-opacity="' + PS.relleno * 0.55 + '" stroke="' + col + '" stroke-width="' + 2.4 * s + '"/>', ow, oh);
       piezas.push(poner(imo, 0, 0, [[t0, ox, oy, 0, 0.96], [t0 + 250, ox, oy, 1, 1]]));
       caja.mas(ox, oy, ow, oh);
       // el número: pop 0.6 → 1.1 → 1, en la esquina de arriba a la izquierda (no tapa el objetivo)
       var cx = limitar(r[0] - 4 * s, Rc + 3 * s, cw - Rc - 3 * s), cy = limitar(r[1] - 4 * s, Rc + 3 * s, ch - Rc - 3 * s), W = Math.ceil(2 * Rc + 8 * s);
       var imn = await U.pieza('<defs><filter id="sh" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="' + 1.5 * s + '"/></filter></defs>' +
-        '<circle cx="' + (W / 2 + 0.8 * s) + '" cy="' + (W / 2 + 1.8 * s) + '" r="' + Rc + '" fill="#000" fill-opacity=".3" filter="url(#sh)"/>' +
-        '<circle cx="' + W / 2 + '" cy="' + W / 2 + '" r="' + Rc + '" fill="' + col + '" stroke="#fff" stroke-width="' + 2 * s + '"/>' +
-        '<text x="' + W / 2 + '" y="' + W / 2 + '" text-anchor="middle" dominant-baseline="central" font-size="' + Math.round(15 * s) + '" font-weight="700" fill="#fff">' + U.esc(p.n != null ? p.n : i + 1) + '</text>', W, W);
+        '<circle cx="' + (W / 2 + 0.8 * s) + '" cy="' + (W / 2 + 1.8 * s) + '" r="' + Rc + '" fill="' + PS.sombra + '" fill-opacity="' + (PS.osc ? '.6' : '.3') + '" filter="url(#sh)"/>' +
+        '<circle cx="' + W / 2 + '" cy="' + W / 2 + '" r="' + Rc + '" fill="' + col + '" stroke="' + PS.fondo + '" stroke-width="' + 2 * s + '"/>' +
+        '<text x="' + W / 2 + '" y="' + W / 2 + '" text-anchor="middle" dominant-baseline="central" font-size="' + Math.round(15 * s) + '" font-weight="700" fill="' + PS.sobre + '">' + U.esc(p.n != null ? p.n : i + 1) + '</text>', W, W);
       piezas.push({png: imn.png, ax: W / 2, ay: W / 2, ruta: aparece([[t0, cx, cy, 0, 0.6], [t0 + 150, cx, cy, 1, 1.1], [t0 + 280, cx, cy, 1, 1]])});
       caja.mas(cx - W / 2, cy - W / 2, W, W);
       // nota con el texto del paso

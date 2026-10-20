@@ -30,39 +30,13 @@
     cajas.forEach(function(c){ x0 = Math.min(x0, c[0]); y0 = Math.min(y0, c[1]); x1 = Math.max(x1, c[0] + c[2]); y1 = Math.max(y1, c[1] + c[3]); });
     return [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad];
   }
-  function sombra(id, dy, desv, op){
-    return '<filter id="' + id + '" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="' + dy + '" stdDeviation="' + desv + '" flood-color="#0b1020" flood-opacity="' + op + '"/></filter>';
+  function sombra(id, dy, desv, op, P){      // P: la paleta del dibujo (su color de sombra)
+    return '<filter id="' + id + '" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="' + dy + '" stdDeviation="' + desv + '" flood-color="' + (P ? P.sombra : '#000000') + '" flood-opacity="' + op + '"/></filter>';
   }
   var med = document.createElement('canvas').getContext('2d');
   function medirFuente(texto, px, fuente){ med.font = px + 'px ' + fuente; return med.measureText(String(texto)).width; }
 
-  // =====================================================================================================
-  // 1. foco: oscurece todo menos el objetivo; un anillo late alrededor
-  // =====================================================================================================
-  D.registrar('foco', async function(d, U){
-    if (!d.r) throw new Error('foco necesita un objetivo');
-    var s = d.escala || 1, c = clientes(d), col = U.color(d.color);
-    var osc = d.oscuro == null ? 0.55 : Math.max(0, Math.min(1, d.oscuro));
-    var m = 6 * s, hx = d.r[0] - m, hy = d.r[1] - m, hw = d.r[2] + 2 * m, hh = d.r[3] + 2 * m, rx = 9 * s;
-    var desv = 3.2 * s;
-    var cont =
-      '<defs><filter id="bl" filterUnits="userSpaceOnUse" x="-50" y="-50" width="' + (c[0] + 100) + '" height="' + (c[1] + 100) + '"><feGaussianBlur stdDeviation="' + desv + '"/></filter>' +
-      '<mask id="mk" maskUnits="userSpaceOnUse" x="0" y="0" width="' + c[0] + '" height="' + c[1] + '"><rect width="' + c[0] + '" height="' + c[1] + '" fill="#fff"/>' +
-      '<rect x="' + hx + '" y="' + hy + '" width="' + hw + '" height="' + hh + '" rx="' + rx + '" fill="#000" filter="url(#bl)"/></mask></defs>' +
-      '<rect width="' + c[0] + '" height="' + c[1] + '" fill="#080d1c" fill-opacity="' + osc + '" mask="url(#mk)"/>' +
-      '<rect x="' + hx + '" y="' + hy + '" width="' + hw + '" height="' + hh + '" rx="' + rx + '" fill="none" stroke="' + col + '" stroke-opacity="0.9" stroke-width="' + 2 * s + '"/>';
-    var nota = d.texto ? U.nota(d, d.texto, {color: d.color}) : null;
-    // anillo que late: una pieza centrada en el hueco
-    var g = 14 * s, pw = hw + 2 * g, ph = hh + 2 * g;
-    var anillo = await U.pieza('<defs>' + sombra('gl', 0, 4 * s, 0.0) + '</defs>' +
-      '<rect x="' + (g + 1.5 * s) + '" y="' + (g + 1.5 * s) + '" width="' + (hw - 3 * s) + '" height="' + (hh - 3 * s) + '" rx="' + rx + '" fill="none" stroke="' + col + '" stroke-opacity="0.35" stroke-width="' + 9 * s + '"/>' +
-      '<rect x="' + g + '" y="' + g + '" width="' + hw + '" height="' + hh + '" rx="' + rx + '" fill="none" stroke="' + col + '" stroke-width="' + 3 * s + '"/>', pw, ph);
-    var cx = hx + hw / 2, cy = hy + hh / 2;
-    return U.capa(d, [0, 0, c[0], c[1]], cont + (nota ? nota.svg : ''), {
-      piezas: [{png: anillo.png, ax: pw / 2, ay: ph / 2, ruta: [[0, cx, cy, 0.95, 1], [800, cx, cy, 0.4, 1.06], [1600, cx, cy, 0.95, 1]]}],
-      duracion: 1600, repetir: true, pausa: 0
-    });
-  });
+  // 1. foco y 3. mano: ahora son las de Claude Design (formas_profe.js, contrato en clase-viva/CONTRATO-FIGURAS.md)
 
   // =====================================================================================================
   // 2. teclas: se pulsan una tras otra, quedan pulsadas y se sueltan
@@ -76,7 +50,7 @@
   D.registrar('teclas', async function(d, U){
     var lista = (d.teclas || []).slice(0, 5).map(etiqueta);
     if (!lista.length) throw new Error('teclas: falta la lista «teclas»');
-    var s = d.escala || 1, c = clientes(d), col = U.color(d.color);
+    var s = d.escala || 1, c = clientes(d), P = U.paleta(d), col = P.tinta;
     var px = 17 * s, alto = 40 * s, dep = 4 * s, baja = 3 * s, pad = 7 * s, hueco = 28 * s;
     var anchos;
     // se mide con U.medir (semibold) y con la fuente de símbolos; vale el mayor
@@ -92,25 +66,24 @@
     } else cands = [[(c[0] - tw) / 2, c[1] - th - 28 * s, tw, th]];
     var pl = mejor(d, cands, relevantes(d).concat(r ? [fuerte(r)] : []));
     var x0 = pl[0] + 12 * s, y0 = pl[1] + 12 * s;
-    var cont = '<defs>' + sombra('pl', 3 * s, 6 * s, 0.28) + '</defs>' +
-      '<rect x="' + pl[0] + '" y="' + pl[1] + '" width="' + tw + '" height="' + th + '" rx="' + 14 * s + '" fill="#fff" fill-opacity="0.86" stroke="' + col + '" stroke-opacity="0.55" stroke-width="' + 1.6 * s + '" filter="url(#pl)"/>';
+    var cont = '<defs>' + sombra('pl', 3 * s, 6 * s, P.osc ? 0.5 : 0.22, P) + '</defs>' +
+      '<rect x="' + pl[0] + '" y="' + pl[1] + '" width="' + tw + '" height="' + th + '" rx="' + 14 * s + '" fill="' + P.papel + '" stroke="' + col + '" stroke-width="' + 1.5 * s + '" filter="url(#pl)"/>';
     var pos = [], x = x0;
     lista.forEach(function(t, i){
       pos.push(x);
-      if (i < lista.length - 1) cont += '<text x="' + (x + anchos[i] + hueco / 2) + '" y="' + (y0 + alto / 2) + '" text-anchor="middle" dominant-baseline="central" font-size="' + 22 * s + '" font-weight="600" fill="#596072">+</text>';
+      if (i < lista.length - 1) cont += '<text x="' + (x + anchos[i] + hueco / 2) + '" y="' + (y0 + alto / 2) + '" text-anchor="middle" dominant-baseline="central" font-size="' + 22 * s + '" font-weight="600" fill="' + P.suave + '">+</text>';
       x += anchos[i] + hueco;
     });
     var nota = d.texto ? U.nota(d, d.texto, {color: d.color, cerca: pl}) : null;
     if (nota) cont += nota.svg;
     // dibujo de una tecla: arriba (levantada) o abajo (pulsada)
     function tecla(t, w, abajo){
-      var ty = pad + (abajo ? baja : 0), g = abajo ? ['#dfe3ec', '#cdd2df'] : ['#ffffff', '#eceff6'];
-      return '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + g[0] + '"/><stop offset="1" stop-color="' + g[1] + '"/></linearGradient>' +
-        '<filter id="s" x="-20%" y="-20%" width="140%" height="160%"><feGaussianBlur stdDeviation="' + 2.2 * s + '"/></filter></defs>' +
-        '<rect x="' + (pad + 1) + '" y="' + (pad + dep + 3 * s) + '" width="' + (w - 2) + '" height="' + alto + '" rx="' + 8 * s + '" fill="#0b1020" fill-opacity="' + (abajo ? 0.12 : 0.3) + '" filter="url(#s)"/>' +
-        '<rect x="' + pad + '" y="' + (pad + dep) + '" width="' + w + '" height="' + alto + '" rx="' + 8 * s + '" fill="#9aa1b2"/>' +
-        '<rect x="' + pad + '" y="' + ty + '" width="' + w + '" height="' + alto + '" rx="' + 8 * s + '" fill="url(#g)" stroke="#aab0c0" stroke-width="' + 1.3 * s + '"/>' +
-        '<text x="' + (pad + w / 2) + '" y="' + (ty + alto / 2 + 1 * s) + '" text-anchor="middle" dominant-baseline="central" font-family="' + FUENTE_TECLA + '" font-size="' + px + '" font-weight="600" fill="' + (abajo ? '#1a1e2a' : '#2b3040') + '">' + U.esc(t) + '</text>';
+      var ty = pad + (abajo ? baja : 0);
+      return '<defs><filter id="s" x="-20%" y="-20%" width="140%" height="160%"><feGaussianBlur stdDeviation="' + 2.2 * s + '"/></filter></defs>' +
+        '<rect x="' + (pad + 1) + '" y="' + (pad + dep + 3 * s) + '" width="' + (w - 2) + '" height="' + alto + '" rx="' + 8 * s + '" fill="' + P.sombra + '" fill-opacity="' + (abajo ? 0.12 : 0.3) * (P.osc ? 1.6 : 1) + '" filter="url(#s)"/>' +
+        '<rect x="' + pad + '" y="' + (pad + dep) + '" width="' + w + '" height="' + alto + '" rx="' + 8 * s + '" fill="' + P.borde + '"/>' +
+        '<rect x="' + pad + '" y="' + ty + '" width="' + w + '" height="' + alto + '" rx="' + 8 * s + '" fill="' + (abajo ? P.tenue : P.papel) + '" stroke="' + (abajo ? col : P.borde) + '" stroke-width="' + 1.3 * s + '"/>' +
+        '<text x="' + (pad + w / 2) + '" y="' + (ty + alto / 2 + 1 * s) + '" text-anchor="middle" dominant-baseline="central" font-family="' + FUENTE_TECLA + '" font-size="' + px + '" font-weight="600" fill="' + (abajo ? P.fuerte : P.texto) + '">' + U.esc(t) + '</text>';
     }
     var piezas = [], t0 = 350, paso = 380;
     var pulsa = lista.map(function(_, i){ return t0 + i * paso; });
@@ -127,138 +100,11 @@
   });
 
   // =====================================================================================================
-  // 3. mano: trazo a mano alzada (rough.js) que se va dibujando
-  // =====================================================================================================
-  var MANO = "'Ink Free', 'Segoe Print', cursive";
-  function atan2d(y, x){ return Math.atan2(y, x); }
-
-  D.registrar('mano', async function(d, U){
-    if (!d.r) throw new Error('mano necesita un objetivo');
-    await U.cargar('rough');
-    var s = d.escala || 1, c = clientes(d), col = U.color(d.color), r = d.r, trazo = d.trazo || 'circulo';
-    var gen = rough.generator();
-    var sw = 3.4 * s;
-    function opc(sem){ return {seed: sem, roughness: 1.1, bowing: 1.2, strokeWidth: sw, stroke: col, fill: 'none'}; }
-    var cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, m = 11 * s;
-    var trozos = [];                 // cada trozo es una lista de paths (d) que se dibujan seguidos
-    function paths(drawable){ return gen.toPaths(drawable).map(function(p){ return p.d; }); }
-    var pts = [], pad = 8 * s;
-    var cajaTrazo, inicio = null, tipo = trazo;
-    if (tipo === 'circulo'){
-      var a = Math.max(r[2] / 2 + m, 22 * s), b = Math.max(r[3] / 2 + m, 22 * s);
-      if (r[2] > 3 * r[3]) b = r[3] / 2 + m * 0.9;
-      var ang0 = -2.0, vuelta = Math.PI * 2 + 0.55, n = 15, tilt = -0.07;
-      for (var i = 0; i <= n; i++){
-        var u = i / n, th = ang0 + u * vuelta, k = 1 + 0.02 + 0.075 * u;
-        var ex = Math.cos(th) * a * k, ey = Math.sin(th) * b * k;
-        pts.push([cx + ex * Math.cos(tilt) - ey * Math.sin(tilt), cy + ex * Math.sin(tilt) + ey * Math.cos(tilt)]);
-      }
-      trozos.push(paths(gen.curve(pts, opc(11))));
-      cajaTrazo = [cx - a * 1.12, cy - b * 1.12, a * 2.24, b * 2.24];
-    } else if (tipo === 'subrayado'){
-      var y = r[1] + r[3] + 7 * s, x0 = r[0] - 4 * s, x1 = r[0] + r[2] + 6 * s, w = x1 - x0, q = [];
-      for (var j = 0; j <= 5; j++) q.push([x0 + w * j / 5, y + Math.sin(j * 1.3) * 2.2 * s + j * 0.6 * s]);
-      trozos.push(paths(gen.curve(q, opc(5))));
-      cajaTrazo = [x0, y - 6 * s, w, 14 * s];
-    } else if (tipo === 'tache'){
-      var tw = Math.max(r[2], 22 * s) + 8 * s, th2 = Math.max(r[3], 22 * s) + 8 * s;
-      var X0 = cx - tw / 2, X1 = cx + tw / 2, Y0 = cy - th2 / 2, Y1 = cy + th2 / 2;
-      trozos.push(paths(gen.line(X0, Y0, X1, Y1, opc(3))));
-      trozos.push(paths(gen.line(X1, Y0 + 2 * s, X0 + 2 * s, Y1, opc(8))));
-      cajaTrazo = [X0, Y0, tw, th2];
-    } else if (tipo === 'check'){
-      var W = 26 * s, H = 28 * s, gp = 10 * s, rel = relevantes(d).concat([fuerte(r)]);
-      var cs = [[r[0] + r[2] + gp, cy - H * 0.55, W, H], [r[0] - gp - W, cy - H * 0.55, W, H], [cx - W / 2, r[1] - gp - H, W, H], [cx - W / 2, r[1] + r[3] + gp, W, H]];
-      var cb = mejor(d, cs, rel);
-      trozos.push(paths(gen.linearPath([[cb[0], cb[1] + H * 0.55], [cb[0] + W * 0.34, cb[1] + H], [cb[0] + W, cb[1]]], opc(6))));
-      cajaTrazo = cb;
-    } else if (tipo === 'flecha'){
-      var L = 85 * s, rel2 = relevantes(d).concat([fuerte(r)]);
-      var dirs = [[-1, -0.75], [1, -0.75], [-1, 0.75], [1, 0.75], [0, -1], [0, 1], [-1, 0], [1, 0]];
-      var tx = d.texto ? medirFuente(d.texto, 26 * s, MANO) : 0, th3 = 30 * s, mejorC = null, mejorP = Infinity;
-      dirs.forEach(function(v){
-        var nv = Math.hypot(v[0], v[1]), ux = v[0] / nv, uy = v[1] / nv;
-        // salida del rectángulo (con margen) por esa dirección
-        var hx = r[2] / 2 + 6 * s, hy = r[3] / 2 + 6 * s, tt = Math.min(ux ? hx / Math.abs(ux) : 1e9, uy ? hy / Math.abs(uy) : 1e9);
-        var sx = cx + ux * (tt + L), sy = cy + uy * (tt + L);
-        var tb = null, pen;
-        if (d.texto){
-          var cand = [[sx - tx / 2, sy - th3 - 6 * s, tx, th3], [sx - tx / 2, sy + 6 * s, tx, th3], [sx + 6 * s, sy - th3 / 2, tx, th3], [sx - tx - 6 * s, sy - th3 / 2, tx, th3]];
-          tb = mejor(d, cand, rel2);
-          var pref = ux > 0.3 ? 2 : ux < -0.3 ? 3 : (uy < 0 ? 0 : 1);
-          if (puntuar(d, cand[pref], rel2) <= puntuar(d, tb, rel2) + 1e-6) tb = cand[pref];
-        } else tb = [sx - 8 * s, sy - 8 * s, 16 * s, 16 * s];
-        pen = puntuar(d, tb, rel2) + puntuar(d, [sx - 4, sy - 4, 8, 8], rel2) * 3 + (uy > 0 ? 1 : 0);
-        if (pen < mejorP - 1e-6){ mejorP = pen; mejorC = {sx: sx, sy: sy, ux: ux, uy: uy, tt: tt, tb: tb}; }
-      });
-      var M = mejorC, tipX = cx + M.ux * (M.tt + 5 * s), tipY = cy + M.uy * (M.tt + 5 * s);
-      var dx = tipX - M.sx, dy = tipY - M.sy, lg = Math.hypot(dx, dy), curv = 0.14 * lg;
-      var mx = (M.sx + tipX) / 2 - dy / lg * curv, my = (M.sy + tipY) / 2 + dx / lg * curv;
-      var tdx = tipX - mx, tdy = tipY - my, tl = Math.hypot(tdx, tdy), ex2 = tdx / tl, ey2 = tdy / tl, hl = 15 * s;
-      var h1 = [tipX - ex2 * hl - ey2 * hl * 0.55, tipY - ey2 * hl + ex2 * hl * 0.55], h2 = [tipX - ex2 * hl + ey2 * hl * 0.55, tipY - ey2 * hl - ex2 * hl * 0.55];
-      trozos.push(paths(gen.curve([[M.sx, M.sy], [mx, my], [tipX, tipY]], opc(4))));
-      trozos.push(paths(gen.linearPath([h1, [tipX, tipY], h2], opc(9))));
-      cajaTrazo = union([[Math.min(M.sx, tipX, mx), Math.min(M.sy, tipY, my), Math.abs(tipX - M.sx) || 1, Math.abs(tipY - M.sy) || 1]], 0);
-      inicio = M.tb;
-    } else throw new Error('mano: trazo desconocido «' + tipo + '»');
-
-    // texto a mano junto al trazo
-    var caja = cajaTrazo, textoSVG = '', tcaja = null, pxm = 26 * s;
-    if (d.texto){
-      var tw2 = medirFuente(d.texto, pxm, MANO), th4 = 31 * s;
-      if (inicio) tcaja = inicio;
-      else {
-        var g2 = 8 * s, o = cajaTrazo, rel3 = relevantes(d).concat([fuerte(r)]);
-        var cc = tipo === 'subrayado' ? [[o[0], o[1] + o[3] + g2 / 2, tw2, th4], [o[0] + o[2] - tw2, o[1] + o[3] + g2 / 2, tw2, th4], [o[0] + o[2] + g2, o[1] + o[3] / 2 - th4 / 2, tw2, th4], [o[0], r[1] - th4 - 6 * s, tw2, th4]]
-          : [[o[0] + o[2] + g2, o[1] + o[3] / 2 - th4 / 2, tw2, th4], [o[0] + o[2] / 2 - tw2 / 2, o[1] + o[3] + g2 / 2, tw2, th4], [o[0] + o[2] / 2 - tw2 / 2, o[1] - th4 - g2 / 2, tw2, th4], [o[0] - g2 - tw2, o[1] + o[3] / 2 - th4 / 2, tw2, th4]];
-        tcaja = mejor(d, cc, rel3.concat([fuerte(cajaTrazo)]));
-      }
-      caja = union([cajaTrazo, tcaja], 0);
-      textoSVG = function(op){
-        return '<text x="' + (tcaja[0] + tcaja[2] / 2) + '" y="' + (tcaja[1] + tcaja[3] / 2) + '" text-anchor="middle" dominant-baseline="central" font-family="' + MANO + '" font-size="' + pxm + '" fill="' + col + '" fill-opacity="' + op + '" stroke="#fff" stroke-opacity="' + op * 0.7 + '" stroke-width="' + 4 * s + '" stroke-linejoin="round" paint-order="stroke" transform="rotate(-2 ' + (tcaja[0] + tcaja[2] / 2) + ' ' + (tcaja[1] + tcaja[3] / 2) + ')">' + U.esc(d.texto) + '</text>';
-      };
-    }
-    caja = union([caja], pad + 6 * s);
-
-    // longitudes (para repartir el tiempo entre trozos y paths)
-    var todos = [];
-    trozos.forEach(function(lista, ti){ lista.forEach(function(dd){ todos.push({d: dd, ti: ti, len: 1}); }); });
-    todos.forEach(function(p){
-      try { var e = document.createElementNS('http://www.w3.org/2000/svg', 'path'); e.setAttribute('d', p.d); p.len = Math.max(1, e.getTotalLength()); } catch (e2){}
-    });
-    var suma = todos.reduce(function(a, p){ return a + p.len; }, 0), acum = 0;
-    todos.forEach(function(p){ p.a = acum / suma; acum += p.len; p.b = acum / suma; });
-    var N = 16, TR = 12, FPS = 24;
-    function frame(k){
-      var g = Math.min(1, (k + 1) / TR); g = 0.5 - 0.5 * Math.cos(Math.PI * g);
-      if (k + 1 >= TR) g = 1;
-      var o = '';
-      todos.forEach(function(p){
-        var q = Math.max(0, Math.min(1, (g - p.a) / (p.b - p.a)));
-        if (q <= 0) return;
-        var da = q >= 1 ? '' : ' stroke-dasharray="1 2" stroke-dashoffset="' + (1 - q) + '"';
-        o += '<path d="' + p.d + '" pathLength="1" fill="none" stroke="#fff" stroke-opacity="0.6" stroke-width="' + (sw + 3.2 * s) + '" stroke-linecap="round" stroke-linejoin="round"' + da + '/>';
-      });
-      todos.forEach(function(p){
-        var q = Math.max(0, Math.min(1, (g - p.a) / (p.b - p.a)));
-        if (q <= 0) return;
-        var da = q >= 1 ? '' : ' stroke-dasharray="1 2" stroke-dashoffset="' + (1 - q) + '"';
-        o += '<path d="' + p.d + '" pathLength="1" fill="none" stroke="' + col + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round"' + da + '/>';
-      });
-      if (textoSVG){ var op = Math.max(0, Math.min(1, (k + 1 - (TR - 2)) / 4)); if (op > 0) o += textoSVG(op); }
-      return o;
-    }
-    var fotos = await U.fotos(d, caja, N, function(k){ return frame(k); });
-    if (!fotos.length) return null;
-    return U.capa(d, caja, '', {fotos: fotos, fps: FPS, duracion: Math.ceil(N * 1000 / FPS), repetir: false});
-  });
-
-  // =====================================================================================================
   // 4. lupa: la zona aumentada en una lente cercana (los píxeles los pone capa.py en vivo)
   // =====================================================================================================
   D.registrar('lupa', async function(d, U){
     if (!d.r) throw new Error('lupa necesita una zona');
-    var s = d.escala || 1, c = clientes(d), col = U.color(d.color), aum = d.aumento > 0 ? d.aumento : 2.5;
+    var s = d.escala || 1, c = clientes(d), P = U.paleta(d), col = P.tinta, aum = d.aumento > 0 ? d.aumento : 2.5;
     var mz = 3, z = [Math.max(0, d.r[0] - mz), Math.max(0, d.r[1] - mz), d.r[2] + 2 * mz, d.r[3] + 2 * mz];
     z = [z[0], z[1], Math.min(z[2], c[0] - z[0]), Math.min(z[3], c[1] - z[1])];
     var lw = z[2] * aum, lh = z[3] * aum;
@@ -285,23 +131,23 @@
     var pa = ls.slice().sort(function(a, b){ return b.cross - a.cross || b.dot - a.dot; })[0];
     var pb = ls.slice().sort(function(a, b){ return a.cross - b.cross || b.dot - a.dot; })[0];
     function ec(cj, e){ return [cj[0] + (e[0] > 0 ? cj[2] : 0), cj[1] + (e[1] > 0 ? cj[3] : 0)]; }
-    var cont = '<defs>' + sombra('zs', 1 * s, 1.4 * s, 0.25) + '</defs>';
+    var cont = '<defs>' + sombra('zs', 1 * s, 1.4 * s, 0.25, P) + '</defs>';
     [pa, pb].forEach(function(p, i){
       if (i && pa.e === pb.e) return;
       var A = ec(z, p.e), B = ec(lente, p.e);
       cont += '<line x1="' + A[0] + '" y1="' + A[1] + '" x2="' + B[0] + '" y2="' + B[1] + '" stroke="' + col + '" stroke-opacity="0.75" stroke-width="' + 1.5 * s + '" stroke-dasharray="' + 5 * s + ' ' + 4 * s + '"/>';
     });
-    cont += '<rect x="' + (z[0] - 1) + '" y="' + (z[1] - 1) + '" width="' + (z[2] + 2) + '" height="' + (z[3] + 2) + '" rx="' + 3 * s + '" fill="none" stroke="#fff" stroke-opacity="0.8" stroke-width="' + 3.4 * s + '"/>' +
+    cont += '<rect x="' + (z[0] - 1) + '" y="' + (z[1] - 1) + '" width="' + (z[2] + 2) + '" height="' + (z[3] + 2) + '" rx="' + 3 * s + '" fill="none" stroke="' + P.fondo + '" stroke-opacity="0.8" stroke-width="' + 3.4 * s + '"/>' +
       '<rect x="' + (z[0] - 1) + '" y="' + (z[1] - 1) + '" width="' + (z[2] + 2) + '" height="' + (z[3] + 2) + '" rx="' + 3 * s + '" fill="none" stroke="' + col + '" stroke-width="' + 1.8 * s + '"/>';
     var nota = d.texto ? U.nota(d, d.texto, {color: d.color, cerca: lente}) : null;
     if (nota) cont += nota.svg;
     // marco de la lente (va encima de la imagen aumentada, por eso es una pieza fija)
     var g = 12 * s, pw = lw + 2 * g, ph = lh + 2 * g, et = '×' + (Math.round(real * 10) / 10).toString().replace(/\.0$/, ''), px = 13 * s;
     var ew = U.medir(et, px) + 14 * s, eh = 21 * s;
-    var marco = await U.pieza('<defs>' + sombra('ms', 2 * s, 3.5 * s, 0.4) + '</defs>' +
+    var marco = await U.pieza('<defs>' + sombra('ms', 2 * s, 3.5 * s, 0.4, P) + '</defs>' +
       '<g filter="url(#ms)"><rect x="' + (g + 1.5 * s) + '" y="' + (g + 1.5 * s) + '" width="' + (lw - 3 * s) + '" height="' + (lh - 3 * s) + '" rx="' + radio + '" fill="none" stroke="' + col + '" stroke-width="' + 3 * s + '"/></g>' +
       '<rect x="' + (g + 7 * s) + '" y="' + (g + 7 * s) + '" width="' + ew + '" height="' + eh + '" rx="' + eh / 2 + '" fill="' + col + '"/>' +
-      '<text x="' + (g + 7 * s + ew / 2) + '" y="' + (g + 7 * s + eh / 2 + 0.5) + '" text-anchor="middle" dominant-baseline="central" font-size="' + px + '" font-weight="700" fill="#fff">' + U.esc(et) + '</text>', pw, ph);
+      '<text x="' + (g + 7 * s + ew / 2) + '" y="' + (g + 7 * s + eh / 2 + 0.5) + '" text-anchor="middle" dominant-baseline="central" font-size="' + px + '" font-weight="700" fill="' + P.sobre + '">' + U.esc(et) + '</text>', pw, ph);
     var caja = union([z, lente].concat(nota ? [nota.caja] : []), 16 * s);
     return U.capa(d, caja, cont, {
       lupa: {zona: z, en: lente, radio: radio, fps: 8},
@@ -342,6 +188,64 @@
     var l = v.toLowerCase();
     return !/url\(|expression|@import|javascript:|behavior|binding/.test(l);
   }
+  // ---- colores del SVG libre: todo pasa por la paleta plana (D.U.paleta) y el tema del dibujo ----
+  // Mapeo (colorTutor): nuestros nombres (azul, verde, rojo, naranja, amarillo, morado) → su tinta; 'texto', 'suave', 'papel', 'borde',
+  // 'fondo', 'fuerte' y 'tenue' → ese tono neutro. Cualquier otro color (nombre CSS, #hex, rgb(), hsl()) se mira por su matiz:
+  // rojo/rosa → rojo, naranja/marrón → naranja, amarillo/dorado → amarillo, verde/lima → verde, cian/azul → azul, violeta/magenta → morado
+  // (muy claro → tenue, muy oscuro → fuerte). Los grises se dejan, salvo el casi negro (→ texto) y el casi blanco (→ papel), para que
+  // se lea igual en una app oscura. none, transparent, currentColor y url(#…) no se tocan.
+  var CSS = {red: 'ff0000', blue: '0000ff', green: '008000', lime: '00ff00', orange: 'ffa500', yellow: 'ffff00', purple: '800080', magenta: 'ff00ff',
+             fuchsia: 'ff00ff', cyan: '00ffff', aqua: '00ffff', pink: 'ffc0cb', hotpink: 'ff69b4', brown: 'a52a2a', gold: 'ffd700', navy: '000080',
+             teal: '008080', olive: '808000', maroon: '800000', violet: 'ee82ee', indigo: '4b0082', crimson: 'dc143c', coral: 'ff7f50', salmon: 'fa8072',
+             tomato: 'ff6347', orchid: 'da70d6', turquoise: '40e0d0', skyblue: '87ceeb', lightblue: 'add8e6', lightgreen: '90ee90', darkgreen: '006400',
+             darkblue: '00008b', darkred: '8b0000', darkorange: 'ff8c00', royalblue: '4169e1', dodgerblue: '1e90ff', steelblue: '4682b4', limegreen: '32cd32',
+             forestgreen: '228b22', seagreen: '2e8b57', firebrick: 'b22222', orangered: 'ff4500', khaki: 'f0e68c', plum: 'dda0dd', slateblue: '6a5acd',
+             black: '000000', white: 'ffffff', gray: '808080', grey: '808080', silver: 'c0c0c0', lightgray: 'd3d3d3', lightgrey: 'd3d3d3',
+             darkgray: 'a9a9a9', darkgrey: 'a9a9a9', dimgray: '696969', dimgrey: '696969', whitesmoke: 'f5f5f5', gainsboro: 'dcdcdc'};
+  var NOMBRES = {azul: 1, verde: 1, rojo: 1, naranja: 1, amarillo: 1, morado: 1};
+  var NEUTROS = {texto: 1, suave: 1, papel: 1, borde: 1, fondo: 1, fuerte: 1, tenue: 1};
+  function rgbDe(v){          // 'rgb(…)', '#abc', '#aabbcc', 'hsl(…)' o nombre CSS → [r, g, b] 0-255, o null
+    var m;
+    if ((m = /^#([0-9a-f]{3,8})$/.exec(v))){
+      var h = m[1]; if (h.length === 3 || h.length === 4) h = h.replace(/./g, '$&$&');
+      if (h.length !== 6 && h.length !== 8) return null;
+      return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+    }
+    if ((m = /^rgba?\(\s*([0-9.]+)(%?)[\s,]+([0-9.]+)(%?)[\s,]+([0-9.]+)(%?)/.exec(v))){
+      return [m[1], m[3], m[5]].map(function(x, i){ return Math.round(parseFloat(x) * ([m[2], m[4], m[6]][i] ? 2.55 : 1)); });
+    }
+    if ((m = /^hsla?\(\s*([0-9.]+)(?:deg)?[\s,]+([0-9.]+)%[\s,]+([0-9.]+)%/.exec(v))){
+      var hh = parseFloat(m[1]) / 360, ss = parseFloat(m[2]) / 100, ll = parseFloat(m[3]) / 100;
+      var q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss, p2 = 2 * ll - q;
+      var f = function(t){ t = (t + 1) % 1; return t < 1 / 6 ? p2 + (q - p2) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p2 + (q - p2) * (2 / 3 - t) * 6 : p2; };
+      return [f(hh + 1 / 3), f(hh), f(hh - 1 / 3)].map(function(x){ return Math.round(x * 255); });
+    }
+    return CSS[v] ? rgbDe('#' + CSS[v]) : null;
+  }
+  function colorTutor(valor, tema){
+    var v = String(valor == null ? "" : valor).trim().toLowerCase();
+    if (!v || /^(none|transparent|inherit|currentcolor|context-fill|context-stroke|initial|unset)$/.test(v) || v.indexOf('url(') >= 0) return valor;
+    if (NOMBRES[v]) return D.U.paleta(v, tema).tinta;
+    if (NEUTROS[v]) return D.U.paleta('azul', tema)[v];
+    var c = rgbDe(v);
+    if (!c) return valor;
+    var r = c[0] / 255, g = c[1] / 255, b = c[2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, dlt = mx - mn;
+    var sat = dlt === 0 ? 0 : dlt / (1 - Math.abs(2 * l - 1));
+    if (sat < 0.15){                                       // gris: solo el casi negro y el casi blanco cambian
+      if (l < 0.2) return D.U.paleta('azul', tema).texto;
+      if (l > 0.92) return D.U.paleta('azul', tema).papel;
+      return valor;
+    }
+    var hue = dlt === 0 ? 0 : mx === r ? ((g - b) / dlt + (g < b ? 6 : 0)) * 60 : mx === g ? ((b - r) / dlt + 2) * 60 : ((r - g) / dlt + 4) * 60;
+    var nom = hue < 15 || hue >= 335 ? 'rojo' : hue < 40 ? 'naranja' : hue < 70 ? 'amarillo' : hue < 170 ? 'verde' : hue < 255 ? 'azul' : 'morado';
+    var P = D.U.paleta(nom, tema);
+    return l > 0.85 ? P.tenue : l < 0.22 ? P.fuerte : P.tinta;
+  }
+  var PROP_COLOR = /^(fill|stroke|stop-color|flood-color|color)$/;
+  function colorEnEstilo(css, tema){          // fill:red; stroke:#00f … dentro de style="" o de un <style>
+    return css.replace(/(^|[;{\s])(fill|stroke|stop-color|flood-color|color)(\s*:\s*)([^;}!]+)/gi, function(t, a, prop, sep, val){ return a + prop + sep + colorTutor(val, tema); });
+  }
+
   function limpiar(origen, cuenta){
     var nombre = origen.localName.toLowerCase();
     if (!ELEM[nombre]) return null;
@@ -356,15 +260,19 @@
       }
       if (an === 'attributename' && /^(on|href|xlink:href|style$)/i.test(a.value.trim())) return null;   // no se animan enlaces ni eventos
       if (!ATTR[an]) continue;
-      if (an === 'style'){ if (estiloSeguro(a.value)) nuevo.setAttribute('style', a.value); continue; }
+      if (an === 'style'){ if (estiloSeguro(a.value)) nuevo.setAttribute('style', colorEnEstilo(a.value, cuenta.tema)); continue; }
       if (an === 'class'){ if (/^[\w\- ]{1,200}$/.test(a.value)) nuevo.setAttribute('class', a.value); continue; }   // para el CSS propio
       if (!valorSeguro(an, a.value)) continue;
-      nuevo.setAttribute(ATTR[an], a.value);
+      var val = a.value;
+      if (PROP_COLOR.test(an)) val = colorTutor(val, cuenta.tema);
+      else if (/^(from|to|by|values)$/.test(an) && PROP_COLOR.test((origen.getAttribute('attributeName') || '').toLowerCase()))
+        val = val.split(';').map(function(x){ return colorTutor(x, cuenta.tema); }).join(';');       // animate fill/stroke
+      nuevo.setAttribute(ATTR[an], val);
     }
     if (nombre === 'style'){                                   // CSS propio (animaciones con @keyframes), sin nada externo
       var css = origen.textContent || '';
       if (css.length > 8000 || !estiloSeguro(css)) return null;
-      nuevo.appendChild(document.createTextNode(css));
+      nuevo.appendChild(document.createTextNode(colorEnEstilo(css, cuenta.tema)));
       return nuevo;
     }
     var conTexto = nombre === 'text' || nombre === 'tspan';
@@ -448,7 +356,8 @@
   // El mismo filtro, para quien necesite un SVG limpio sin encajarlo en un objetivo (ilustraciones del chat,
   // ilustraciones_ui.js): texto SVG → texto SVG filtrado (mismos elementos y atributos que la forma «svg»), o null si no
   // es un SVG válido, es demasiado grande (30 KB / 500 elementos) o no queda nada que dibujar. El motivo, en limpiarSvg.error.
-  D.U.limpiarSvg = function(texto){
+  D.U.limpiarSvg = function(texto, tema){     // tema: 'claro' | 'oscuro' (si falta, el de la página, o claro)
+    if (tema !== 'oscuro' && tema !== 'claro'){ var dt = document.documentElement.getAttribute('data-theme'); tema = dt === 'oscuro' || dt === 'dark' ? 'oscuro' : 'claro'; }
     D.U.limpiarSvg.error = '';
     try {
       texto = String(texto || '');
@@ -456,7 +365,7 @@
       if (texto.length > 30000) throw new Error('demasiado grande (máximo 30 KB)');
       var doc = new DOMParser().parseFromString(texto, 'image/svg+xml');
       if (doc.getElementsByTagName('parsererror').length || !doc.documentElement || doc.documentElement.localName.toLowerCase() !== 'svg') throw new Error('no es un SVG válido');
-      var limpio = limpiar(doc.documentElement, {n: 0});
+      var limpio = limpiar(doc.documentElement, {n: 0, tema: tema});
       if (!limpio || !cuentaDibujo(limpio)) throw new Error('no queda nada que dibujar después de filtrarlo');
       limpio.setAttribute('xmlns', NS);
       return new XMLSerializer().serializeToString(limpio);
@@ -470,7 +379,7 @@
     if (texto.length > 30000) throw new Error('svg: demasiado grande (' + Math.round(texto.length / 1000) + ' KB, máximo 30 KB)');
     var doc = new DOMParser().parseFromString(texto, 'image/svg+xml');
     if (doc.getElementsByTagName('parsererror').length || !doc.documentElement || doc.documentElement.localName.toLowerCase() !== 'svg') throw new Error('svg: no es un SVG válido');
-    var raiz = doc.documentElement, cuenta = {n: 0};
+    var raiz = doc.documentElement, cuenta = {n: 0, tema: d.tema === 'oscuro' ? 'oscuro' : 'claro'};
     var limpio = limpiar(raiz, cuenta);
     if (!limpio || !cuentaDibujo(limpio)) throw new Error('svg: no queda nada que dibujar después de filtrarlo');
     var vb = (raiz.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
@@ -486,6 +395,7 @@
     limpio.setAttribute('x', d.r[0]); limpio.setAttribute('y', d.r[1]); limpio.setAttribute('width', d.r[2]); limpio.setAttribute('height', d.r[3]);
     limpio.setAttribute('viewBox', vb.join(' ')); limpio.setAttribute('preserveAspectRatio', par);
     limpio.setAttribute('overflow', slice ? 'hidden' : 'visible');
+    if (!limpio.hasAttribute('fill')) limpio.setAttribute('fill', U.paleta(d).texto);     // lo que no trae color se lee en el tema
     var s = d.escala || 1;
     var nota = d.texto ? U.nota(d, d.texto, {color: d.color}) : null;
     var caja = union([d.r].concat(nota ? [nota.caja] : []), (slice ? 4 : 28) * s);

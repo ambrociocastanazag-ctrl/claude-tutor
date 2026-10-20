@@ -146,12 +146,24 @@
 !/tutor-pantalla/muestras/marcas.json
 !/tutor-pantalla/muestras/3d.json
 !/tutor-pantalla/muestras/3d_vuelta.json
+!/tutor-pantalla/muestras/colores.json
+!/tutor-pantalla/profe.js
+!/tutor-pantalla/formas_profe.js
 !/tutor-pantalla/vendor/
 /tutor-pantalla/vendor/*
 !/tutor-pantalla/vendor/tex-svg.js
 !/tutor-pantalla/vendor/rough.js
 !/tutor-pantalla/vendor/LICENSE-mathjax.txt
 !/tutor-pantalla/vendor/LICENSE-roughjs.txt
+
+# Clase viva: la guía en una ventana con el tutor (sin estado.json, .navegador/ ni capas/, que son de cada persona)
+!/clase-viva/
+/clase-viva/*
+!/clase-viva/README.md
+!/clase-viva/CONTRATO-FIGURAS.md
+!/clase-viva/clase_viva.py
+!/clase-viva/puente_clase.js
+!/clase-viva/modo_clase.js
 
 # la Tarjeta SVG (sin estado.json ni config.json, que son de cada persona)
 !/tarjeta-svg/

@@ -4,9 +4,10 @@
    Todo en píxeles de cliente; los tamaños se multiplican por d.escala. */
 (function(){
   if (!window.Dibujante) return;
-  var TINTA = '#1a1f2e', MONO = "Consolas, 'Cascadia Mono', 'Courier New', monospace";
+  var MONO = "Consolas, 'Cascadia Mono', 'Courier New', monospace";
   var PALETA = ['azul', 'verde', 'naranja', 'morado', 'rojo', 'amarillo'];
   var lienzo = document.createElement('canvas').getContext('2d');
+  var REL = 0.15;                   // el relleno de los recuadros según el tema (lo pone cada forma al empezar: U.paleta(d).relleno)
 
   function medirMono(t, px){ lienzo.font = '600 ' + px + 'px ' + MONO; return lienzo.measureText(String(t)).width; }
   function num(v){
@@ -25,9 +26,9 @@
     var w = Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]), h = Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]);
     return w > 0 && h > 0 ? w * h : 0;
   }
-  function defsSombra(s){
+  function defsSombra(s, P){
     return '<defs><filter id="sombra" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="' + 3 * s +
-      '" stdDeviation="' + 5 * s + '" flood-color="#0b1020" flood-opacity="0.28"/></filter></defs>';
+      '" stdDeviation="' + 5 * s + '" flood-color="' + P.sombra + '" flood-opacity="' + (P.osc ? 0.5 : 0.2) + '"/></filter></defs>';
   }
   // El hueco libre más cercano al objetivo para una caja de w×h: no tapa `cerca`/d.r ni d.evitar (ni `evitar` extra).
   function hueco(d, U, w, h, opc){
@@ -63,12 +64,12 @@
   function marcoR(r, col, s, fuerte){             // recuadro de color alrededor de una celda
     var c = infla(r, (fuerte ? 3.5 : 2) * s);
     return '<rect x="' + c[0] + '" y="' + c[1] + '" width="' + c[2] + '" height="' + c[3] + '" rx="' + 4 * s + '" fill="' + col +
-      '" fill-opacity="' + (fuerte ? 0.2 : 0.12) + '" stroke="' + col + '" stroke-width="' + (fuerte ? 4 : 2.6) * s + '"/>';
+      '" fill-opacity="' + (fuerte ? REL * 1.3 : REL * 0.8) + '" stroke="' + col + '" stroke-width="' + (fuerte ? 4 : 2.6) * s + '"/>';
   }
   function anidar(t, x, y){ return t.svg.replace('<svg', '<svg x="' + x + '" y="' + y + '"'); }
 
   // ---------------------------------------------------------------- formula
-  function barras(U, g, x, y, w, h, col, s){
+  function barras(U, g, x, y, w, h, col, s, P){
     var vals = g.valores.slice(), etq = (g.etiquetas || []).slice(), n = vals.length, out = '';
     if (n > 20){                                   // agrupa en 20 barras (promedio de cada grupo)
       var G = 20, nv = [], ne = [];
@@ -83,49 +84,49 @@
     var mx = Math.max.apply(null, vals.concat([g.linea ? g.linea.valor : -1e18, 0])), mn = Math.min.apply(null, vals.concat([g.linea ? g.linea.valor : 1e18, 0]));
     if (mx === mn) mx = mn + 1;
     function Y(v){ return base - (v - mn) / (mx - mn) * (base - top); }
-    var y0 = Y(0), slot = w / n, bw = slot * 0.66, cual = mezclar(col);
-    function mezclar(c){ return U.mezclar(c, 0.55); }
+    var y0 = Y(0), slot = w / n, bw = slot * 0.66, cual = P.tenue;
     for (var i = 0; i < n; i++){
       var bx = x + i * slot + (slot - bw) / 2, v = vals[i], yv = Y(v);
       out += '<rect x="' + bx + '" y="' + Math.min(yv, y0) + '" width="' + bw + '" height="' + Math.max(1.5, Math.abs(y0 - yv)) + '" rx="' + 2 * s + '" fill="' + cual + '" stroke="' + col + '" stroke-width="' + 1.2 * s + '"/>';
-      if (n <= 10) out += '<text x="' + (bx + bw / 2) + '" y="' + (Math.min(yv, y0) - 3 * s) + '" text-anchor="middle" font-size="' + 10 * s + '" font-weight="600" fill="' + TINTA + '">' + U.esc(num(v)) + '</text>';
+      if (n <= 10) out += '<text x="' + (bx + bw / 2) + '" y="' + (Math.min(yv, y0) - 3 * s) + '" text-anchor="middle" font-size="' + 10 * s + '" font-weight="600" fill="' + P.texto + '">' + U.esc(num(v)) + '</text>';
     }
     var ancho = 0; etq.forEach(function(e){ ancho = Math.max(ancho, U.medir(corto(e, 5), pxE)); });
     var paso = Math.max(1, Math.ceil((ancho + 5 * s) / slot));
-    for (i = 0; i < n; i += paso) out += '<text x="' + (x + i * slot + slot / 2) + '" y="' + (base + 12 * s) + '" text-anchor="middle" font-size="' + pxE + '" fill="#4a5163">' + U.esc(corto(etq[i], 5)) + '</text>';
-    out += '<line x1="' + x + '" y1="' + y0 + '" x2="' + (x + w) + '" y2="' + y0 + '" stroke="#8a91a3" stroke-width="' + 1.4 * s + '"/>';
+    for (i = 0; i < n; i += paso) out += '<text x="' + (x + i * slot + slot / 2) + '" y="' + (base + 12 * s) + '" text-anchor="middle" font-size="' + pxE + '" fill="' + P.suave + '">' + U.esc(corto(etq[i], 5)) + '</text>';
+    out += '<line x1="' + x + '" y1="' + y0 + '" x2="' + (x + w) + '" y2="' + y0 + '" stroke="' + P.borde + '" stroke-width="' + 1.4 * s + '"/>';
     if (g.linea){
-      var yl = Y(g.linea.valor), c2 = U.color('rojo'), tx = (g.linea.texto || '') + ' ' + num(g.linea.valor);
+      var yl = Y(g.linea.valor), c2 = U.paleta('rojo', P.osc ? 'oscuro' : 'claro').tinta, tx = (g.linea.texto || '') + ' ' + num(g.linea.valor);
       out += '<line x1="' + x + '" y1="' + yl + '" x2="' + (x + w) + '" y2="' + yl + '" stroke="' + c2 + '" stroke-width="' + 2 * s + '" stroke-dasharray="' + 6 * s + ' ' + 4 * s + '"/>' +
         '<text x="' + (x + w) + '" y="' + (yl - 4 * s) + '" text-anchor="end" font-size="' + 12.5 * s + '" font-weight="700" fill="' + c2 +
-        '" stroke="#ffffff" stroke-width="' + 3.2 * s + '" paint-order="stroke" stroke-linejoin="round">' + U.esc(tx) + '</text>';
+        '" stroke="' + P.papel + '" stroke-width="' + 3.2 * s + '" paint-order="stroke" stroke-linejoin="round">' + U.esc(tx) + '</text>';
     }
     return out;
   }
 
   Dibujante.registrar('formula', async function(d, U){
-    var s = d.escala || 1, col = U.color(d.color), pad = 16 * s, cw = (d.cliente || [1600, 900])[0];
+    var s = d.escala || 1, P = U.paleta(d), col = P.tinta, pad = 16 * s, cw = (d.cliente || [1600, 900])[0];
     var px = 24 * s, t = null;
+    REL = P.relleno;
     try {
-      t = await U.tex(d.latex || '', {px: px, color: TINTA});
+      t = await U.tex(d.latex || '', {px: px, color: P.texto, tema: d.tema});
       var libre = cw - 2 * pad - 24 * s;
-      if (t.w > libre) t = await U.tex(d.latex, {px: px * libre / t.w, color: TINTA});
+      if (t.w > libre) t = await U.tex(d.latex, {px: px * libre / t.w, color: P.texto, tema: d.tema});
     } catch (e){ t = null; }
     if (!t){                                        // LaTeX inválido: se muestra tal cual, en monoespaciado
       var pm = 17 * s, txt = corto(d.latex || '', 80), wm = medirMono(txt, pm);
-      t = {w: wm, h: pm * 1.6, svg: '<text x="0" y="' + pm * 1.2 + '" font-family="' + MONO + '" font-size="' + pm + '" font-weight="600" fill="' + TINTA + '">' + U.esc(txt) + '</text>', plano: true};
+      t = {w: wm, h: pm * 1.6, svg: '<text x="0" y="' + pm * 1.2 + '" font-family="' + MONO + '" font-size="' + pm + '" font-weight="600" fill="' + P.texto + '">' + U.esc(txt) + '</text>', plano: true};
     }
     var g = d.grafica && d.grafica.valores && d.grafica.valores.length > 1 ? d.grafica : null;
     var gw = g ? Math.max(270 * s, Math.min(t.w, 440 * s)) : 0, gh = g ? 138 * s : 0, gap = g ? 14 * s : 0;
     var w = Math.max(120 * s, Math.max(t.w, gw) + 2 * pad), h = t.h + gap + gh + 2 * pad;
     var caja = hueco(d, U, w, h);
-    var out = defsSombra(s);
+    var out = defsSombra(s, P);
     if (d.r) out += marcoR(d.r, col, s) + flechaA(U, caja, d.r, col, s);
-    out += '<rect x="' + caja[0] + '" y="' + caja[1] + '" width="' + w + '" height="' + h + '" rx="' + 10 * s + '" fill="#ffffff" fill-opacity="0.97" stroke="' + col +
-      '" stroke-width="' + 2 * s + '" filter="url(#sombra)"/>';
+    out += '<rect x="' + caja[0] + '" y="' + caja[1] + '" width="' + w + '" height="' + h + '" rx="' + 10 * s + '" fill="' + P.papel + '" stroke="' + col +
+      '" stroke-width="' + 1.5 * s + '" filter="url(#sombra)"/>';
     var tx = caja[0] + (w - t.w) / 2, ty = caja[1] + pad;
     out += t.plano ? '<g transform="translate(' + tx + ' ' + ty + ')">' + t.svg + '</g>' : anidar(t, tx, ty);
-    if (g) out += barras(U, g, caja[0] + (w - gw) / 2, caja[1] + pad + t.h + gap, gw, gh, col, s);
+    if (g) out += barras(U, g, caja[0] + (w - gw) / 2, caja[1] + pad + t.h + gap, gw, gh, col, s, P);
     return U.capa(d, infla(union([caja, d.r ? infla(d.r, 8 * s) : null]), 26 * s), out).then(function(c){ if (c) c.ocupa = [caja]; return c; });
   });
 
@@ -133,25 +134,26 @@
   function ease(u){ return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; }
   function cuad(P0, Q, P2, u){ var a = (1 - u) * (1 - u), b = 2 * (1 - u) * u, c = u * u; return [a * P0[0] + b * Q[0] + c * P2[0], a * P0[1] + b * Q[1] + c * P2[1]]; }
 
-  function burbuja(U, texto, px, col, s, relleno){      // pieza: pastilla blanca con borde de color
+  function burbuja(U, texto, px, col, s, relleno, P){      // pieza: pastilla de papel con borde de color (P: la paleta de ese color)
     var w = U.medir(texto, px) + px * 1.2, h = px * 1.75, m = 4 * s;
-    var c = '<rect x="' + m + '" y="' + m + '" width="' + w + '" height="' + h + '" rx="' + h / 2 + '" fill="' + (relleno || '#ffffff') + '" stroke="' + col +
-      '" stroke-width="' + 2.6 * s + '"/><text x="' + (m + w / 2) + '" y="' + (m + h / 2) + '" text-anchor="middle" dominant-baseline="central" font-size="' + px +
-      '" font-weight="700" fill="' + (relleno ? '#ffffff' : col) + '">' + U.esc(texto) + '</text>';
+    var c = '<rect x="' + m + '" y="' + m + '" width="' + w + '" height="' + h + '" rx="' + h / 2 + '" fill="' + (relleno || P.papel) + '" stroke="' + col +
+      '" stroke-width="' + 1.5 * s + '"/><text x="' + (m + w / 2) + '" y="' + (m + h / 2) + '" text-anchor="middle" dominant-baseline="central" font-size="' + px +
+      '" font-weight="700" fill="' + (relleno ? P.sobre : P.fuerte) + '">' + U.esc(texto) + '</text>';
     return {c: c, w: w + 2 * m, h: h + 2 * m, m: m, bw: w, bh: h};
   }
 
   Dibujante.registrar('rayos_x', async function(d, U){
     var s = d.escala || 1, cw = d.cliente[0], ch = d.cliente[1];
     if (!d.r) throw new Error('el resultado no se ve en la pantalla');
-    var resCol = U.color(d.color || 'azul');
-    var paleta = PALETA.map(U.color).filter(function(c){ return c !== resCol; });
+    var PR = U.paleta(d.color || 'azul', d.tema), resCol = PR.tinta;
+    REL = PR.relleno;
+    var paleta = PALETA.map(function(n){ return U.paleta(n, d.tema); }).filter(function(q){ return q.tinta !== resCol; });
     var fu = (d.fuentes || []).slice(0, 7), n = fu.length;
     var rc = [d.r[0] + d.r[2] / 2, d.r[1] + d.r[3] / 2];
     var fuera = 0, nfuera = fu.filter(function(f){ return !f.r; }).length;
     // geometría de cada fuente
     var G = fu.map(function(f, i){
-      var col = paleta[i % paleta.length], o = {f: f, col: col, caja: f.r || null, etiqueta: f.ref};
+      var PQ = paleta[i % paleta.length], col = PQ.tinta, o = {f: f, col: col, P: PQ, caja: f.r || null, etiqueta: f.ref};
       var sentido = i % 2 ? -1 : 1, P0;
       if (f.r){ P0 = [f.r[0] + f.r[2] / 2, f.r[1] + f.r[3] / 2]; }
       else {                                        // la celda no se ve: entra por el borde más cercano
@@ -176,12 +178,12 @@
         var tw = U.medir(o.etiqueta, 11.5 * s) + 10 * s, th = 17 * s, c = infla(o.caja, 2 * s);
         var ty = c[1] - th - 1 * s; if (ty < 2) ty = c[1] + c[3] + 1 * s;
         out += '<rect x="' + c[0] + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="' + 4 * s + '" fill="' + o.col + '"/><text x="' + (c[0] + tw / 2) + '" y="' + (ty + th / 2) +
-          '" text-anchor="middle" dominant-baseline="central" font-size="' + 11.5 * s + '" font-weight="700" fill="#ffffff">' + U.esc(o.etiqueta) + '</text>';
+          '" text-anchor="middle" dominant-baseline="central" font-size="' + 11.5 * s + '" font-weight="700" fill="' + o.P.sobre + '">' + U.esc(o.etiqueta) + '</text>';
       } else {
         var tw2 = U.medir(o.etiqueta, 11.5 * s) + 10 * s, th2 = 17 * s;
         out += '<circle cx="' + o.P0[0] + '" cy="' + o.P0[1] + '" r="' + 5 * s + '" fill="' + o.col + '"/><rect x="' + (o.P0[0] - tw2 / 2) + '" y="' + (o.P0[1] - th2 - 8 * s) + '" width="' + tw2 +
           '" height="' + th2 + '" rx="' + 4 * s + '" fill="' + o.col + '"/><text x="' + o.P0[0] + '" y="' + (o.P0[1] - th2 / 2 - 8 * s) + '" text-anchor="middle" dominant-baseline="central" font-size="' + 11.5 * s +
-          '" font-weight="700" fill="#ffffff">' + U.esc(o.etiqueta) + '</text>';
+          '" font-weight="700" fill="' + o.P.sobre + '">' + U.esc(o.etiqueta) + '</text>';
       }
       return out;
     }
@@ -196,7 +198,7 @@
     for (var i = 0; i < n; i++){
       var o = G[i], t0 = i * T;
       var txt = o.caja ? corto(o.f.valor, 16) : corto(o.etiqueta + ' = ' + o.f.valor, 22);
-      var b = burbuja(U, txt, pxB, o.col, s);
+      var b = burbuja(U, txt, pxB, o.col, s, null, o.P);
       var pz = await U.pieza(b.c, b.w, b.h);
       var ruta = [[0, o.P0[0], o.P0[1], 0, 0.6], [t0, o.P0[0], o.P0[1], 0, 0.6], [t0 + 0.12 * T, o.P0[0], o.P0[1], 1, 1]];
       var ta = t0 + 0.2 * T, tb = t0 + 0.66 * T, pasos = 12;
@@ -208,10 +210,10 @@
       piezas.push({png: pz.png, ax: pz.w / 2, ay: pz.h / 2, ruta: ruta});
     }
     // la burbuja final «= valor»
-    var final = burbuja(U, '= ' + corto(d.valor, 20), 24 * s, resCol, s, resCol);
+    var final = burbuja(U, '= ' + corto(d.valor, 20), 24 * s, resCol, s, resCol, PR);
     var cajaF = hueco(d, U, final.w, final.h, {evitar: G.filter(function(o){ return o.caja; }).map(function(o){ return infla(o.caja, 22 * s); })});
     function estado(k){
-      var out = defsSombra(s), seg = k < 3 * n ? Math.floor(k / 3) : n, sl = k % 3, fin = k >= 3 * n, fs = k - 3 * n;
+      var out = defsSombra(s, PR), seg = k < 3 * n ? Math.floor(k / 3) : n, sl = k % 3, fin = k >= 3 * n, fs = k - 3 * n;
       out += marcoR(d.r, resCol, s, fin);
       for (var j = 0; j < n; j++){
         if (j > seg) break;
@@ -251,7 +253,8 @@
   }
 
   Dibujante.registrar('desarmar', async function(d, U){
-    var s = d.escala || 1, cw = d.cliente[0], col = U.color(d.color), pad = 18 * s;
+    var s = d.escala || 1, cw = d.cliente[0], PA = U.paleta(d), col = PA.tinta, pad = 18 * s;
+    REL = PA.relleno;
     var orig = String(d.original == null ? '' : d.original), partes = (d.partes || []).filter(function(p){ return p && p.texto; });
     var unaLinea = orig.indexOf('\n') < 0;
     var P = 26 * s, chw = medirMono('0', 100) / 100;
@@ -268,12 +271,12 @@
     var Np = 14.5 * s, hb = 11 * s, yTexto = pad, yLlave = yTexto + lineH * lineas.length + 3 * s;
     // ubica cada parte en el texto (de izquierda a derecha)
     var desde = 0, ubic = partes.map(function(p, k){
-      var col2 = U.color(p.color || PALETA[k % PALETA.length]), t = String(p.texto), idx = -1;
+      var PU = U.paleta(p.color || PALETA[k % PALETA.length], d.tema), col2 = PU.tinta, t = String(p.texto), idx = -1;
       if (unaLinea){
         idx = orig.indexOf(t, desde); if (idx < 0) idx = orig.indexOf(t);
         if (idx >= 0) desde = idx + t.length;
       }
-      return {p: p, k: k, col: col2, idx: idx, t: t};
+      return {p: p, k: k, col: col2, P: PU, idx: idx, t: t};
     });
     ubic.forEach(function(u){
       if (u.idx < 0) return;
@@ -309,11 +312,11 @@
     var caja = hueco(d, U, cardW, cardH);
     var ox = caja[0] - izq, oy = caja[1];                  // lo local (x desde `izq`, y desde 0) → cliente
     // base: la tarjeta con el texto
-    var out = defsSombra(s);
+    var out = defsSombra(s, PA);
     if (d.r) out += marcoR(d.r, col, s) + flechaA(U, caja, d.r, col, s);
-    out += '<rect x="' + caja[0] + '" y="' + caja[1] + '" width="' + cardW + '" height="' + cardH + '" rx="' + 11 * s + '" fill="#ffffff" fill-opacity="0.97" stroke="' + col + '" stroke-width="' + 2 * s + '" filter="url(#sombra)"/>';
+    out += '<rect x="' + caja[0] + '" y="' + caja[1] + '" width="' + cardW + '" height="' + cardH + '" rx="' + 11 * s + '" fill="' + PA.papel + '" stroke="' + col + '" stroke-width="' + 1.5 * s + '" filter="url(#sombra)"/>';
     lineas.forEach(function(l, i){
-      out += '<text xml:space="preserve" x="' + (ox + pad) + '" y="' + (oy + yTexto + lineH * i + lineH / 2) + '" dominant-baseline="central" font-family="' + MONO + '" font-size="' + P + '" font-weight="600" fill="' + TINTA + '">' + U.esc(l) + '</text>';
+      out += '<text xml:space="preserve" x="' + (ox + pad) + '" y="' + (oy + yTexto + lineH * i + lineH / 2) + '" dominant-baseline="central" font-family="' + MONO + '" font-size="' + P + '" font-weight="600" fill="' + PA.texto + '">' + U.esc(l) + '</text>';
     });
     // piezas: cada parte con su resaltado, llave y nota
     var piezas = [], T = 1300, D = partes.length * T + 700;
@@ -324,18 +327,18 @@
         var nx = u.nx, ny = yN[u.nivel];
         var x0 = Math.min(u.xa, nx), x1 = Math.max(u.xb, nx + u.nw);
         box = [x0 - 6 * s, ya - 3 * s, x1 - x0 + 12 * s, ny + u.nh - ya + 8 * s];
-        c += '<rect x="' + u.xa + '" y="' + ya + '" width="' + (u.xb - u.xa) + '" height="' + (lineH - 4 * s) + '" rx="' + 4 * s + '" fill="' + u.col + '" fill-opacity="0.2"/>';
+        c += '<rect x="' + u.xa + '" y="' + ya + '" width="' + (u.xb - u.xa) + '" height="' + (lineH - 4 * s) + '" rx="' + 4 * s + '" fill="' + u.col + '" fill-opacity="' + REL * 1.3 + '"/>';
         c += llave(u.xa + 1.5 * s, u.xb - 1.5 * s, yLlave, hb, u.col, s);
         if (u.nivel > 0) c += '<line x1="' + u.cx + '" y1="' + (yLlave + hb + 1 * s) + '" x2="' + u.cx + '" y2="' + (ny - 2 * s) + '" stroke="' + u.col + '" stroke-width="' + 1.6 * s + '" stroke-dasharray="' + 3 * s + ' ' + 3 * s + '"/>';
         u.lin.forEach(function(l, i){
-          c += '<text x="' + (u.cx) + '" y="' + (ny + Np * 1.3 * i + Np * 0.65) + '" text-anchor="middle" dominant-baseline="central" font-size="' + Np + '" font-weight="600" fill="' + u.col + '" stroke="#ffffff" stroke-width="' + 3 * s + '" paint-order="stroke" stroke-linejoin="round">' + U.esc(l) + '</text>';
+          c += '<text x="' + (u.cx) + '" y="' + (ny + Np * 1.3 * i + Np * 0.65) + '" text-anchor="middle" dominant-baseline="central" font-size="' + Np + '" font-weight="600" fill="' + u.P.fuerte + '" stroke="' + PA.papel + '" stroke-width="' + 3 * s + '" paint-order="stroke" stroke-linejoin="round">' + U.esc(l) + '</text>';
         });
       } else {
         var j = sueltas.indexOf(u), yy = ySueltas + j * hS;
         box = [pad - 6 * s, yy, u.lw + 12 * s, hS];
         c += '<rect x="' + pad + '" y="' + (yy + hS / 2 - 6 * s) + '" width="' + 12 * s + '" height="' + 12 * s + '" rx="' + 3 * s + '" fill="' + u.col + '"/>' +
-          '<text x="' + (pad + 20 * s) + '" y="' + (yy + hS / 2) + '" dominant-baseline="central" font-family="' + MONO + '" font-size="' + Np + '" font-weight="600" fill="' + u.col + '">' + U.esc(u.t) + '</text>' +
-          '<text x="' + (pad + 20 * s + medirMono(u.t, Np) + 28 * s) + '" y="' + (yy + hS / 2) + '" dominant-baseline="central" font-size="' + Np + '" fill="' + TINTA + '">' + U.esc(u.p.nota || '') + '</text>';
+          '<text x="' + (pad + 20 * s) + '" y="' + (yy + hS / 2) + '" dominant-baseline="central" font-family="' + MONO + '" font-size="' + Np + '" font-weight="600" fill="' + u.P.fuerte + '">' + U.esc(u.t) + '</text>' +
+          '<text x="' + (pad + 20 * s + medirMono(u.t, Np) + 28 * s) + '" y="' + (yy + hS / 2) + '" dominant-baseline="central" font-size="' + Np + '" fill="' + PA.texto + '">' + U.esc(u.p.nota || '') + '</text>';
         c = '<g>' + c + '</g>';
       }
       var wb = Math.ceil(box[2]), hb2 = Math.ceil(box[3]);

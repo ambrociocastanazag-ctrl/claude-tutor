@@ -39,7 +39,20 @@
   };
   var COLORES = Object.keys(TONOS);
 
+  // UNA sola fuente de color: Profe.paleta (profe.js). Si no está cargado, cae a la copia de abajo (mismos tonos planos).
+  function paletaDeProfe(color, tema) {
+    var Q = raiz.Profe.paleta(color, tema), osc = tema === 'oscuro';
+    return {
+      tinta: Q.tinta, fondo: Q.tinta, texto: Q.sobre, borde: null,
+      halo: Q.fondo, haloA: osc ? 0.8 : 0.9,
+      sombra: Q.sombra, sombraA: osc ? 0.5 : 0.2,
+      tinteA: osc ? 0.12 : 0.07,
+      marcador: Q.tinta, marcadorA: osc ? 0.4 : 0.5,
+      circulo: Q.sobre, circuloTexto: osc ? Q.tinta : Q.fuerte
+    };
+  }
   function paleta(color, tema) {
+    if (raiz.Profe && raiz.Profe.paleta) return paletaDeProfe(TONOS[color] ? color : 'azul', tema);
     var T = TONOS[color] || TONOS.azul, osc = tema === 'oscuro', h = T.h, LC = osc ? T.oscuro : T.claro;
     var tinta = oklch(LC[0], LC[1], h);
     var P = {

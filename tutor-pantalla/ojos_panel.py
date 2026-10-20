@@ -27,13 +27,16 @@ import ojos, archivos, marcador                                                 
 
 OVERLAY = AQUI.parent / "prueba-dia" / "overlay_dia.py"                 # las flechas: el mismo de Dia, sin cambios
 CAPA = AQUI / "capa.py"                                                 # los dibujos ricos (DIBUJOS.md)
-SCRIPTS_UI = ["ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "formas_3d.js",
+SCRIPTS_UI = ["profe.js", "ojos_ui.js", "preguntas_ui.js", "dibujante.js", "formas_fijas.js", "formas_animadas.js", "formas_formulas.js", "formas_3d.js",
+              "formas_profe.js",                     # las figuras de Claude Design: después de formas_fijas (mano y foco nuevas)
               "marcas.js", "formas_marcas.js", "voz.js", "marcas_ui.js", "senalar_ui.js", "motor_figuras.js", "motor_3d.js", "ilustraciones_ui.js",
               "barra_ventana.js"]
 VENDOR = {"mathjax": "tex-svg.js", "rough": "rough.js"}                 # se cargan cuando hacen falta (dib_recurso)
-FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar", "3d"}
-CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x"}       # sin objetivo no tienen sentido
-CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta", "en", "linea", "archivo"}    # "en": objetivo de la interfaz de Dia
+FORMAS = {"foco", "teclas", "mano", "lupa", "svg", "fantasma", "guia", "secuencia", "formula", "rayos_x", "desarmar", "3d",
+          "globo", "pasos", "punto", "medida", "guias", "area", "desplazar", "recorrido"}         # las 8 últimas: formas_profe.js
+CON_OBJETIVO = {"foco", "mano", "lupa", "svg", "guia", "rayos_x", "punto", "medida", "guias", "area", "desplazar", "recorrido"}   # sin objetivo no tienen sentido
+GRAFICA = {"punto", "medida", "guias", "area", "desplazar", "recorrido"}                 # van sobre una «gráfica» (valores de sus ejes)
+CLAVES_OBJETIVO = {"tipo", "id", "caja", "celda", "hoja", "nombre", "hasta", "en", "linea", "archivo", "ref"}    # "en": objetivo de la interfaz de Dia; "ref": pieza de la clase viva
 MAX_DIBUJOS = 6
 MAX_CAPTURAS = 6                                                        # las que se guardan en memoria (adjuntas o en espera)
 
@@ -83,6 +86,22 @@ Comunes: "texto" (1 a 5 palabras), "decir" (frase corta que se lee en voz alta s
   {"tipo": "dibujo", "forma": "3d", "spec": {"revolucion": "sqrt(x)", "x": [0, 4], "angulo": 300}, "vista": [-70, 18],
         "giro": "vaiven"}   figura 3D que gira sola, despacio (spec como el bloque 3d del chat; giro: vaiven | vuelta | no);
         sin objetivo sale en el centro de la ventana, con él se encaja ahí
+  {"tipo": "dibujo", "forma": "globo", "id": 12, "texto": "Una o dos frases.", "formula": "Qd = Qs → P = 20"}   la
+        explicación junto a la pieza, con un hilo hacia ella (se va al hueco libre); en una pieza de texto, como pestaña
+  {"tipo": "dibujo", "forma": "pasos", "pasos": [{"id": 3, "texto": "Primero…"}, {"id": 8, "texto": "Luego…"}]}   una
+        explicación en 2 a 6 pasos sobre la pantalla, cada uno con su número y su globo (≈ 4 s por paso)
+SOBRE UNA GRÁFICA (si tu objetivo es una «gráfica» con ejes, como en la clase viva): das VALORES de los ejes, no píxeles.
+  {"forma": "punto", "q": 60, "p": 20, "letra": "E", "texto": ""}     el punto exacto con su ficha ("lado": ne|no|se|so|e|o)
+  {"forma": "guias", "q": 60, "p": 20}                               líneas a los ejes con el valor en cada eje
+  {"forma": "medida", "p": 38, "q1": 24, "q2": 96, "texto": "sobran 72"}   cota entre dos puntos a la misma altura
+  {"forma": "area", "rect": {"q": [0, 60], "p": [0, 20]}, "texto": "Ingreso", "detalle": "20 × 60 = 1200"}  (o "poli": [[q, p], …])
+  {"forma": "desplazar", "de": [[0, 50], [100, 0]], "a": [[20, 50], [120, 0]], "nombre": "D′", "nota": "sube la demanda"}
+  {"forma": "recorrido", "camino": [[24, 38], [60, 20], [80, 10]]}   un punto que recorre esos valores con sus guías
+  (todas con "tipo": "dibujo" y el objetivo de la gráfica). En "mano", "trazo": "circulo" rodea solo lo que señalas (si es
+  ancho, con un lazo, no con una elipse gigante).
+COLORES: solo por su nombre (azul, verde, rojo, naranja, amarillo, morado), en "color" y también dentro de tu SVG (fill y
+stroke = "azul", "rojo"…, más "texto", "suave" y "papel"): el panel los pone en la paleta plana del tema. Nunca escribas hex
+ni red/blue/green.
 En Excel, con "celda": "formula" sin latex escribe la de la celda ("grafica": true añade una mini gráfica de sus
 datos), "rayos_x" anima de dónde salen los valores de la fórmula y "desarmar" sin "original" usa su fórmula.
 Úsalos cuando aclaren más que una flecha (máximo 2 o 3 por respuesta); para señalar un botón basta la flecha."""
@@ -495,6 +514,7 @@ class Ojos:
         ("celda" de Excel, "nombre" de un curso); lanza ValueError si no puede. ventana: dónde dibujar lo que no
         tiene objetivo (si no, la de la última captura). Devuelve (las demás marcas, lote o None, avisos)."""
         mias = [m for m in marcas or [] if isinstance(m, dict) and m.get("tipo") == "dibujo"]
+        mias.sort(key=lambda m: m.get("forma") in ("globo", "pasos"))      # los globos al final: así esquivan lo demás
         resto = [m for m in marcas or [] if not (isinstance(m, dict) and m.get("tipo") == "dibujo")]
         if mias and self._buscador is None: self.ult_dibujos = (json.loads(json.dumps(mias)), resolver, ventana)
         lote, avisos = [], []
@@ -563,12 +583,15 @@ class Ojos:
         except Exception: dpi = 96
         d.update(forma=forma, hwnd=hwnd, cliente=[cli[2], cli[3]], escala=round(dpi / 96, 3), r=a_cli(caja),
                  color=m.get("color") if m.get("color") in ("azul", "verde", "rojo", "naranja", "amarillo", "morado") else "azul",
-                 texto=str(m.get("texto") or "")[:60], decir=str(m.get("decir") or "")[:300])
+                 texto=str(m.get("texto") or "")[:320 if forma == "globo" else 60], decir=str(m.get("decir") or "")[:300])   # el globo explica: más largo
         for q in pasos:
             q["r"] = a_cli(q.pop("_r"))
             if "_hasta" in q: q["hasta_r"] = a_cli(q.pop("_hasta"))
         if pasos: d["pasos"] = pasos
-        elif forma in ("fantasma", "secuencia"): raise ValueError("le faltan los pasos")
+        elif forma in ("fantasma", "secuencia", "pasos"): raise ValueError("le faltan los pasos")
+        if forma in GRAFICA and not d.get("ejes"): raise ValueError("va sobre una gráfica (su objetivo tiene que ser una «gráfica» con ejes)")
+        if d.get("tema") not in ("claro", "oscuro"):         # la paleta plana (profe.js) según lo que hay detrás
+            d["tema"] = self._tema(hwnd, caja)
         if forma in CON_OBJETIVO and not d["r"]: raise ValueError("le falta el objetivo (id, caja, celda o nombre)")
         if forma == "lupa":
             if hwnd not in self.aprobadas: raise ValueError("la lupa solo va en una ventana que ya te enseñó con su permiso")
@@ -577,6 +600,15 @@ class Ojos:
         d["evitar"] = [a_cli(b) for b in extra.get("evitar") or []]          # p. ej. las celdas con datos de Excel
         if cap and cap.hwnd == hwnd: d["evitar"] += [a_cli(cap.a_pantalla(c["caja"])) for c in cap.controles[:300]]
         return d
+
+    def _tema(self, hwnd, caja):
+        """"oscuro" o "claro" alrededor de la caja (en pantalla), mirando la última captura de esa ventana; sin ella, "claro"."""
+        cap = self.ultima
+        if not caja or cap is None or getattr(cap, "hwnd", None) != hwnd: return "claro"
+        try:
+            k = cap.k; x, y, w, h = caja
+            return tema_detras(cap, [(x - cap.origen[0]) * k, (y - cap.origen[1]) * k, w * k, h * k]) or "claro"
+        except Exception: return "claro"                    # una captura sin imagen (las de las pruebas): claro
 
     def poner_capas(self, capas, grupo=None, deslizar=False):
         """Las capas que dibujó la página → capa.py (quita las de antes de ese grupo: "marcas" o "dibujos")."""

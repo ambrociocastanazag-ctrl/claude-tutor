@@ -8,17 +8,55 @@
                                     opc: {deslizar, sinVoz}
    Dibujante.ponerMarcas(lote, opc) renderiza un lote de formas «marca» y lo pone como grupo «marcas» (CONTRATO-MARCAS.md)
    Dibujante.marcasPuestas()        [{id, texto}] de las marcas y dibujos con texto que hay ahora
-   Dibujante.borrar([grupo])        quita las capas (todas, o solo las de ese grupo) */
+   Dibujante.borrar([grupo])        quita las capas (todas, o solo las de ese grupo)
+
+   Colores: UNA sola fuente, la paleta plana de profe.js (Profe.paleta(color, tema)). Cada dibujo trae d.tema ('claro' |
+   'oscuro', lo pone Python; si falta, 'claro') y todo lo que se dibuja sale de ahí:
+     U.color(nombre[, tema])   la tinta del color (o el #rrggbb que venga); el tema por defecto es el del dibujo que se está haciendo
+     U.paleta(d | nombre[, tema])  la paleta entera {tinta, sobre, fuerte, tenue, fondo, papel, borde, texto, suave, relleno, sombra, sombraA…}
+     U.tema(d)                 'claro' | 'oscuro' del dibujo */
 (function(){
   if (window.Dibujante) return;
   var FORMAS = {};
-  var COLORES = {azul: '#1e5ac8', verde: '#1e8c46', rojo: '#c02828', naranja: '#e66e00', amarillo: '#d79100', morado: '#783cbe'};
+  var temaActual = 'claro';               // el tema del dibujo que se está renderizando (los dibujos se hacen de uno en uno)
   var FUENTE = "'Segoe UI', 'Segoe UI Variable Text', system-ui, sans-serif";
   var lienzo = document.createElement('canvas').getContext('2d');
   var ocupado = {};                       // hwnd → cajas que las notas no deben tapar (en el lote que se está dibujando)
 
+  // ---- la paleta plana: Profe.paleta; si profe.js no está cargado, una copia igual (nunca vuelve el neón) ----
+  function oklch(L, C, H){
+    var h = H * Math.PI / 180, A = C * Math.cos(h), B = C * Math.sin(h), lim = function(x){ return Math.max(0, Math.min(1, x)); };
+    var l = Math.pow(L + 0.3963377774 * A + 0.2158037573 * B, 3), m = Math.pow(L - 0.1055613458 * A - 0.0638541728 * B, 3), q = Math.pow(L - 0.0894841775 * A - 1.291485548 * B, 3);
+    var rgb = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * q, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * q, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * q];
+    return '#' + rgb.map(function(x){ x = lim(x); x = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055; return ('0' + Math.round(x * 255).toString(16)).slice(-2); }).join('');
+  }
+  var TONOS = {azul: {h: 258, claro: [0.50, 0.17], oscuro: [0.77, 0.12]}, verde: {h: 150, claro: [0.50, 0.13], oscuro: [0.80, 0.15]},
+               rojo: {h: 25, claro: [0.52, 0.19], oscuro: [0.73, 0.16]}, naranja: {h: 50, claro: [0.55, 0.16], oscuro: [0.79, 0.14]},
+               amarillo: {h: 85, claro: [0.66, 0.14], oscuro: [0.87, 0.15]}, morado: {h: 300, claro: [0.50, 0.19], oscuro: [0.76, 0.14]}};
+  function paletaCopia(color, tema){
+    var nom = TONOS[color] ? color : 'azul', T = TONOS[nom], osc = tema === 'oscuro', LC = osc ? T.oscuro : T.claro, h = T.h, amC = !osc && nom === 'amarillo';
+    var N = osc ? {fondo: oklch(0.205, 0.008, 265), papel: oklch(0.265, 0.01, 265), borde: oklch(0.4, 0.012, 265), texto: oklch(0.94, 0.005, 265), suave: oklch(0.75, 0.01, 265)}
+                : {fondo: '#ffffff', papel: '#ffffff', borde: oklch(0.86, 0.008, 265), texto: oklch(0.24, 0.01, 265), suave: oklch(0.48, 0.01, 265)};
+    return {nombre: nom, osc: osc, tinta: oklch(LC[0], LC[1], h),
+            sobre: osc ? oklch(0.22, 0.05, h) : (amC ? oklch(0.27, 0.06, 75) : '#ffffff'),
+            fuerte: osc ? oklch(Math.min(0.9, LC[0] + 0.05), LC[1], h) : (amC ? oklch(0.47, 0.1, 75) : oklch(LC[0] - 0.07, LC[1], h)),
+            tenue: osc ? oklch(0.33, 0.06, h) : oklch(0.95, 0.035, h),
+            fondo: N.fondo, papel: N.papel, borde: N.borde, texto: N.texto, suave: N.suave,
+            relleno: osc ? 0.24 : 0.15, sombra: osc ? '#000000' : oklch(0.3, 0.03, 265), sombraA: osc ? 0.42 : 0.14};
+  }
   function api(){ return window.pywebview && window.pywebview.api; }
-  function color(n){ return COLORES[n] || (/^#[0-9a-f]{6}$/i.test(n || '') ? n : COLORES.azul); }
+  function temaDe(d){ return d && d.tema === 'oscuro' ? 'oscuro' : d && d.tema === 'claro' ? 'claro' : temaActual; }
+  // La paleta de un color: paleta(d) usa d.color y d.tema; paleta('rojo'[, tema]) el tema del dibujo en curso; un #rrggbb pone esa tinta.
+  function paleta(x, tema){
+    var nombre = x;
+    if (x && typeof x === 'object'){ nombre = x.color; tema = tema || x.tema; }
+    tema = tema === 'oscuro' ? 'oscuro' : tema === 'claro' ? 'claro' : temaActual;
+    var hex = /^#[0-9a-f]{6}$/i.test(nombre || '') ? nombre : null;
+    var P = (window.Profe && window.Profe.paleta ? window.Profe.paleta : paletaCopia)(hex ? 'azul' : nombre, tema);
+    if (hex){ P = Object.assign({}, P, {tinta: hex, fuerte: hex, tenue: mezclar(hex, 0.12)}); }
+    return P;
+  }
+  function color(n, tema){ return paleta(n, tema).tinta; }
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
   function medir(t, px, negrita){ lienzo.font = (negrita === false ? '400 ' : '600 ') + px + 'px ' + FUENTE; return lienzo.measureText(String(t)).width; }
   function svg(w, h, contenido){
@@ -73,11 +111,21 @@
     return png(svg(w, h, contenido), w, h).then(function(p){ return {png: p, w: w, h: h}; });
   }
 
+  // Sombra corta de una ficha (tres capas, como Profe): fuera de la caja (x, y, w, h) con esquinas r. k escala la sombra.
+  function sombraRR(x, y, w, h, r, P, s, k){
+    k = k == null ? 1 : k; var g = '';
+    [[3, 5, 0.05], [1.5, 2.5, 0.08], [0, 1, 0.12]].forEach(function(a){
+      var e = a[0] * s * k;
+      g += '<rect x="' + (x - e) + '" y="' + (y - e + a[1] * s * k) + '" width="' + (w + 2 * e) + '" height="' + (h + 2 * e) + '" rx="' + (r + e) + '" fill="' + P.sombra + '" fill-opacity="' + Math.round(a[2] * (P.osc ? 2.6 : 1) * 100) / 100 + '"/>';
+    });
+    return g;
+  }
+
   // ---- notas con flecha que no tapan nada (la misma idea que las flechas de siempre) ----
   function choca(a, b, m){ m = m || 0; return !(a[0] + a[2] + m <= b[0] || b[0] + b[2] + m <= a[0] || a[1] + a[3] + m <= b[1] || b[1] + b[3] + m <= a[1]); }
   function nota(d, texto, opc){
     opc = opc || {};
-    var s = d.escala || 1, col = color(opc.color || d.color), px = Math.round(15 * s), pad = 9 * s;
+    var s = d.escala || 1, col = color(opc.color || d.color, temaDe(d)), px = Math.round(15 * s), pad = 9 * s;
     var r = opc.cerca || d.r;
     var cw = (d.cliente || [1600, 900])[0], ch = (d.cliente || [1600, 900])[1];
     var w = medir(texto, px) + 2 * pad, h = px * 1.3 + 1.3 * pad;
@@ -107,11 +155,13 @@
       if (Math.hypot(tx - pxn, ty - pyn) > 8 * s){ pf = [pxn, pyn, tx, ty]; if (!opc.solo) out += flecha(pxn, pyn, tx, ty, {color: col, grosor: 3.2 * s}); }
     }
     if (opc.solo) return {svg: '', caja: caja, flecha: pf};      // solo la colocación: caja de la nota y los extremos de la flecha
-    var fondo = mezclar(col, 0.10);
-    out += '<rect x="' + caja[0] + '" y="' + caja[1] + '" width="' + w + '" height="' + h + '" rx="' + 7 * s + '" fill="' + fondo +
-      '" fill-opacity="0.965" stroke="' + col + '" stroke-width="' + 2.4 * s + '"/>' +
+    // el estilo de la exploración (ficha de papel): papel del tema, borde de 1.5 px de la tinta, texto en tinta fuerte y sombra corta
+    var PL = paleta(opc.color || d.color, temaDe(d));
+    out += sombraRR(caja[0], caja[1], w, h, 7 * s, PL, s, 0.5) +
+      '<rect x="' + caja[0] + '" y="' + caja[1] + '" width="' + w + '" height="' + h + '" rx="' + 7 * s + '" fill="' + PL.papel +
+      '" stroke="' + PL.tinta + '" stroke-width="' + 1.5 * s + '"/>' +
       '<text x="' + (caja[0] + pad) + '" y="' + (caja[1] + h / 2) + '" dominant-baseline="central" font-size="' + px +
-      '" font-weight="600" fill="' + col + '">' + esc(texto) + '</text>';
+      '" font-weight="600" fill="' + PL.fuerte + '">' + esc(texto) + '</text>';
     return {svg: out, caja: caja, flecha: pf};
   }
   function ocupar(d, caja){ (ocupado[d.hwnd] = ocupado[d.hwnd] || []).push(caja); }
@@ -123,7 +173,7 @@
   // Flecha de (x1, y1) a (x2, y2); curva > 0 la dobla (fracción del largo, hacia la izquierda del trayecto).
   function flecha(x1, y1, x2, y2, o){
     o = o || {};
-    var col = color(o.color), gr = o.grosor || 3, L = Math.max(1e-6, Math.hypot(x2 - x1, y2 - y1)), cu = o.curva || 0;
+    var col = color(o.color, o.tema), gr = o.grosor || 3, L = Math.max(1e-6, Math.hypot(x2 - x1, y2 - y1)), cu = o.curva || 0;
     var qx = (x1 + x2) / 2 - (y2 - y1) / L * cu * L, qy = (y1 + y2) / 2 + (x2 - x1) / L * cu * L;
     var tx = x2 - qx, ty = y2 - qy, tl = Math.max(1e-6, Math.hypot(tx, ty)), ux = tx / tl, uy = ty / tl;
     var p = Math.max(9, gr * 4), ex = x2 - ux * p * 0.8, ey = y2 - uy * p * 0.8;
@@ -177,13 +227,13 @@
       var s = nodo.querySelector('svg'), vb = s.getAttribute('viewBox').split(/[ ,]+/).map(Number);
       var w = vb[2] / 1000 * px, h = vb[3] / 1000 * px;
       s.setAttribute('width', w); s.setAttribute('height', h);
-      s.setAttribute('style', 'color:' + color(o.color || 'azul'));
+      s.setAttribute('style', 'color:' + color(o.color || 'azul', o.tema));
       s.removeAttribute('role'); s.removeAttribute('focusable');
       return {svg: new XMLSerializer().serializeToString(s), w: w, h: h};
     });
   }
 
-  var U = {color: color, esc: esc, medir: medir, svg: svg, png: png, capa: capa, fotos: fotos, pieza: pieza, nota: nota,
+  var U = {color: color, paleta: paleta, tema: temaDe, sombraRR: sombraRR, esc: esc, medir: medir, svg: svg, png: png, capa: capa, fotos: fotos, pieza: pieza, nota: nota,
            flecha: flecha, mezclar: mezclar, choca: choca, ocupar: ocupar, recorte: recorte, cargar: cargar, tex: tex, FUENTE: FUENTE};
 
   var colaRender = Promise.resolve();         // `ocupado` es común: dos renderizados no pueden mezclarse
@@ -205,6 +255,7 @@
     return dibujos.reduce(function(cadena, d){
       return cadena.then(function(){
         var f = FORMAS[d.forma];
+        temaActual = d.tema === 'oscuro' ? 'oscuro' : 'claro';       // U.color, U.paleta y U.nota usan el tema de este dibujo
         if (!f){ errores.push((d.forma || '?') + ': forma desconocida'); return; }
         // lo que ya ocupan los dibujos anteriores entra en su «evitar» (salvo lo que cubre su propio objetivo)
         var dd = {}; for (var k in d) dd[k] = d[k];

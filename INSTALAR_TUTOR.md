@@ -195,6 +195,7 @@ Para todo tema donde lo que enseña es **ver la cosa real** (animales, plantas, 
 - **Textos largos dentro de su cuadro:** rutas, enlaces, nombres de archivo y comandos llevan `overflow-wrap: anywhere` (o `min-width: 0` en su contenedor flex o grid).
 - **Republicar un artefacto que ya existe:** compara antes lo publicado con tu archivo y publica solo tu cambio. Si lo publicado trae algo que tu copia no tiene (datos que guarda la propia página, cambios de otra sesión), parte de la versión publicada. Si otra sesión está trabajando en esa carpeta, no reconstruyas ahí: espera a que termine.
 - **Tutor dentro de las guías completas:** toda guía de un curso o tema completo lleva un tutor integrado (capacidad `sample` del artefacto; carga antes la skill `artifact-capabilities`, si existe en la cuenta) para preguntar mientras estudia. Sabe en qué módulo está y qué tocó por último, y sigue las reglas de "Cómo enseñar": primero la idea y luego la cuenta, señala el paso exacto del error y en ejercicios sin resolver solo da pistas. Las **pruebas rápidas** y los artefactos sueltos no lo llevan.
+- **¿Artifact o solo local?** Al crear una clase, guía o artefacto, pregúntale si la quiere **publicada como artifact** (en claude.ai, se comparte por enlace) o **solo local** (en su PC). Las dos salen de la misma fuente. «Solo local» es la **clase viva** (`clase-viva/`) si está instalada (ver 4.11); si no, el `index.html` de la carpeta.
 - **3D girable** (superficies, sólidos, campos): Plotly dentro del artefacto.
 {{LÍNEA ANATOMY, solo si se instaló (ver 4.8); si no, borra esta línea}}
 - **Archivos** para lo que va a repasar: resúmenes, hojas de fórmulas, listas de ejercicios con solución. Van en esta carpeta, en una subcarpeta por tema en la raíz (también sus cursos de Excel o de Dia), nunca dentro de `panel-excel/`, `prueba-dia/`, `tutor-pantalla/` ni `herramientas/`, que son del repositorio.
@@ -461,6 +462,7 @@ Apunta exacto con UI Automation en Office, apps normales de Windows, Chrome, Edg
   4. Vuelve a lanzar `esperar`. Si dice «panel cerrado», se acabó.
   - `puente.py pedir-captura "…"` solo le abre la vista previa: la persona decide si la manda.
 - **Ilustraciones en el chat** (todos los tutores): `$…$`/`$$…$$`, bloques ` ```svg `, ` ```grafica {json} ` y ` ```geometria ` (guion), dibujados exactos por `tutor-pantalla/motor_figuras.js`; cada figura trae «Editar en la tarjeta».
+- **Figuras y paleta de Claude Design** (todos los tutores): `tutor-pantalla/profe.js` + `formas_profe.js` dan `globo`, `pasos`, `punto`, `guias`, `medida`, `area`, `desplazar` y `recorrido` (en una gráfica con ejes, con **valores** de los ejes, no píxeles), y `mano` (lazo, no una elipse gigante) y `foco` (velo de papel). Todos los colores son **planos**, de `Profe.paleta(color, tema)`: nunca hex chillones ni colores puros, y el tutor los nombra (azul, rojo…) también en su SVG. Prueba: `python tutor-pantalla/probar_dibujos.py tutor-pantalla/muestras/colores.json <carpeta>` y mira las tiras.
 - **Figuras 3D** (todos los tutores): bloque ` ```3d {json} ` que se gira arrastrando (superficies, sólidos de revolución con disco o capa, curvas, vectores, planos, sólidos, cargas y campos), SVG vectorial hecho por `tutor-pantalla/motor_3d.js`. «Ponlo en la app» la pone encima del programa girando sola (forma de dibujo `"3d"`) y «GIF» la guarda girando en Descargas y la copia (`tutor-pantalla/gif3d.py`, con Pillow). Marca ángulos y lados iguales, y las anotaciones y la transparencia son opcionales. Formato en `tutor-pantalla/CONTRATO-3D.md`; pruebas: `node tutor-pantalla/probar_3d.js` y `python tutor-pantalla/gif3d.py --probar`.
 ````
 
@@ -482,6 +484,23 @@ Una ventanita pegada al borde derecho (**Ctrl+Alt+L** la abre y la pliega) para 
    Cada una termina en «todo bien».
 3. **Ábrela con su permiso:** `python tarjeta-svg/abrir_tarjeta.py`. Es un solo ejemplar: si ya está abierta, la trae al frente. Los paneles la abren con su botón «Tarjeta».
 4. En su `CLAUDE.md`, añade a la tabla de herramientas la fila de la Tarjeta SVG; si no se instaló, quítala.
+
+### 4.11 Clase viva (opcional, necesita la 4.9)
+
+Una guía de estudio del molde del tutor (la misma que se publica como artifact) abierta **en una ventana de la PC**, con el tutor de los paneles pegado a su derecha. El tutor tiene tres formas: abierto, **pastilla** en el borde (se abre con un clic o **Ctrl+Espacio**) y caja de pregunta. Plegado, no explica en el chat sino **sobre la clase**, con globos y pasos.
+
+El tutor lee la clase por dentro (un mapa con un ref por pieza, los deslizadores con su valor y las gráficas con sus ejes) y además:
+- señala y dibuja con todo lo de la 4.9;
+- **mueve deslizadores y pulsa botones** para enseñar, con el cursor «Tutor» y «↺ Devolver»;
+- con permiso (tarjeta Aplicar / No / Deshacer), **añade y cambia piezas**: notas, fórmulas, ejemplos, ejercicios que se revisan solos e interactivos nuevos con los números verificados por el `build.py` de la guía;
+- pone **comportamientos**: reglas sin código y, si no alcanzan, código suyo en una caja aislada (iframe sandbox con CSP sin red), que solo toca lo que declara.
+
+Lo que aplica se guarda aparte, en `clase-viva/capas/`, y la guía no cambia. Detalle en `clase-viva/README.md`.
+
+1. **Los archivos ya están en `clase-viva/`** (`clase_viva.py`, `puente_clase.js`, `modo_clase.js`): no los reescribas. Usa lo de `tutor-pantalla/` y `panel-excel/panel.html`; no hace falta ninguna librería nueva.
+2. **Prueba (con su permiso: abre una ventana de prueba de la guía):** si tiene una guía de ese molde, `python clase-viva/clase_viva.py <carpeta de la guía> --probar` tiene que terminar en «Clase viva: todo bien». Si no tiene ninguna, no la pruebes: queda lista para la primera guía que se haga en local.
+3. En su `CLAUDE.md`, añade a la tabla de herramientas la fila «quiere estudiar una guía en su PC con el tutor completo → la clase viva (`clase-viva/`)», y en «Artefactos y archivos» deja la regla «¿Artifact o solo local?» como está. Si no se instaló, quita la fila y en esa regla deja solo «el `index.html` de la carpeta».
+4. **Pruebas con ventanas:** que vayan fuera de la pantalla y se capturen con PrintWindow (solo esa ventana), nunca con el rectángulo de la pantalla.
 
 ## Paso 5. README de la carpeta
 
