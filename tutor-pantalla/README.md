@@ -75,6 +75,8 @@ del panel) y **`capa.py` proyecta**: una ventana transparente por capa que deja 
 anima a 30 fps solo lo que se mueve (fondo fijo + fotogramas + piezas con ruta). La lupa lee solo su zona de la
 pantalla y nunca la guarda ni la manda.
 
+## Cómo hacer un curso
+
 Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/`) con `curso.json` y un JSON por módulo. El panel es el de los tutores de Excel y Dia (Lección | Tutor, progreso recordado en `progreso.json` de esa carpeta, botón 📷).
 
 ```json
@@ -114,6 +116,9 @@ Un curso es **una carpeta propia en la raíz** (nunca dentro de `tutor-pantalla/
 - **`errores`:** el primero cuyo `si` se cumple da su mensaje (mismos tipos que `pide`).
 - **`tutor`:** lo que solo se ve en la imagen. Si lo de `pide` está bien, Comprobar abre la vista previa de la app; con la captura adjunta, el tutor responde bien / casi / revisa.
 - **Antes de darlo:** `python tutor-pantalla/panel_curso.py <curso.json> --probar` hasta «Curso: todo bien», con la app abierta para que busque cada `senalar`. Luego pruébalo de verdad con el panel.
+- **Botones sin nombre:** si un control solo trae el nombre de su clase interna (`Avalonia.Controls.Shapes.Path`) o ninguno, se usa su **tooltip** (primera línea: «Lápiz (2)»). Para los que no tienen ni eso, `"alias"` en `app`: `[{"nombre": "Reproducir", "es": "Avalonia.Controls.Shapes.Path", "n": 1, "ventana": "OpenUtau v"}]` (el n-ésimo con ese nombre, en el orden de UI Automation; los alias se aplican en orden, así que tras renombrar el primero, `n: 1` es el siguiente).
+- **Apps con varias ventanas** (OpenUtau: principal y piano roll): `"ventanas": "todas"` en `app` y se leen todas las de ese exe, no solo la más reciente.
+- **Revisar el archivo que guarda la app** (sin abrirla): tipo `ustx` para proyectos de OpenUtau (`ustx.py`, claves en su docstring: notas, ritmo, letras en romaji o kana, cantante, fonemizador, bpm, vibrato, curvas, audio, pistas). `archivo` es relativo a la carpeta del curso. En `--probar`, cada Tu turno con `ustx` se prueba con archivos de verdad: `solucion/<módulo>/bien/` (debe salir bien), `error<k>/` (el error típico k) y sin nada guardado (mal). Ejemplo completo: `openutau/`.
 
 ### Capacidades de los tutores (el asistente es la vara)
 
@@ -264,6 +269,7 @@ Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato en
 | `panel_pantalla.py` | El panel del asistente (pywebview): la API que llama la página, el modo puente y la prueba `--probar`. |
 | `capacidades.py` | Lo que comparten todos los tutores con el asistente: el bloque del prompt (`reglas`), `ConWeb` (WebSearch/WebFetch), `raices_curso`, `contexto_editor`, `ubicar_linea` y `marcas_linea`. `python capacidades.py` prueba sin ventanas. |
 | `editor_vscode.py` | Leer el editor de VS Code sin tocarlo: archivo abierto, cursor y rectángulo de una línea (`rect_linea`). |
+| `ustx.py` | Revisión sin IA de proyectos de OpenUtau (`.ustx`) para el tipo `ustx` del modo curso: lee notas, letras, pistas y curvas y dice lo primero que falla («la nota 3 está en F4 (fa) y va en G4 (sol)»); kana ↔ romaji. `python ustx.py --probar`. |
 | `curso_pantalla.py` | El modo curso: cargar el curso, leer el estado de la app, revisar el «Tu turno» sin IA, buscar lo que se señala y el estado en texto para el tutor. También los cursos de código: `ContextoCodigo`, `correr_maven`, `peticion` (ver «Cursos de código»). |
 | `panel_curso.py` | El panel de un curso (la página de los tutores): pasos, «Señálamelo», Comprobar (sin IA y con el tutor), el tutor del curso y `--probar`. |
 | `puente.py` | El modo puente: los dos lados se pasan mensajes por una carpeta temporal (`%TEMP%\tutor-pantalla-puente`, se borra al cerrar el panel, capturas incluidas). Desde el chat: `esperar` (en segundo plano: al llegar un mensaje termina y despierta al chat), `responder`, `pedir-captura`, `estado`. |

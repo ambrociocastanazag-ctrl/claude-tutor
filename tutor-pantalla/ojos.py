@@ -13,7 +13,7 @@ UI Automation, la captura y el overlay hablan las mismas coordenadas.
 Pruebas sueltas:
   python ojos.py --lista
   python ojos.py --capturar "Word" salida.png     (la primera ventana cuyo título o app contenga el texto)"""
-import base64, ctypes, io, sys, time
+import base64, ctypes, io, re, sys, time
 from ctypes import wintypes as W
 
 from PIL import Image, ImageGrab
@@ -56,6 +56,19 @@ TIPOS = {50000: "botón", 50031: "botón", 50011: "menú", 50019: "pestaña", 50
          50002: "casilla", 50013: "opción", 50007: "elemento", 50005: "enlace", 50024: "rama", 50030: "documento",
          50016: "contador", 50015: "deslizador", 50029: "celda", 50035: "encabezado"}
 UIA_CAJA, UIA_TIPO, UIA_NOMBRE, UIA_OCULTO = 30001, 30003, 30005, 30022
+UIA_AYUDA = 30013                                                       # HelpText: el tooltip
+CLASE_INTERNA = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*){2,}$")      # «Avalonia.Controls.Shapes.Path»: el nombre de la clase, no del botón
+
+
+def nombre_de(e):
+    """El nombre de un elemento (de la caché). Si no tiene, o solo trae el de su clase interna (los botones con ícono de
+    Avalonia, como en OpenUtau), su tooltip, primera línea: «Lápiz (2)», «Ver Vibrato (U)»."""
+    nombre = (e.CachedName or "").strip().replace("\n", " ")
+    if nombre and not CLASE_INTERNA.match(nombre): return nombre
+    try: ayuda = e.GetCachedPropertyValue(UIA_AYUDA)
+    except Exception: ayuda = None
+    ayuda = ayuda.strip().splitlines()[0].strip() if isinstance(ayuda, str) and ayuda.strip() else ""
+    return ayuda or nombre
 
 
 class Tapada(Exception):
@@ -213,14 +226,14 @@ def leer_controles(h, caja, limite=400):
         with auto.UIAutomationInitializerInThread():
             ia = uia._AutomationClient.instance().IUIAutomation
             cr = ia.CreateCacheRequest()
-            for p in (UIA_NOMBRE, UIA_TIPO, UIA_CAJA, UIA_OCULTO): cr.AddProperty(p)
+            for p in (UIA_NOMBRE, UIA_TIPO, UIA_CAJA, UIA_OCULTO, UIA_AYUDA): cr.AddProperty(p)
             raiz = ia.ElementFromHandle(h)
             els = raiz.FindAllBuildCache(4, ia.CreateTrueCondition(), cr)        # 4 = TreeScope_Descendants
             for i in range(els.Length):
                 e = els.GetElement(i)
                 tipo = TIPOS.get(e.CachedControlType)
                 if not tipo or e.CachedIsOffscreen: continue
-                nombre = (e.CachedName or "").strip().replace("\n", " ")
+                nombre = nombre_de(e)
                 if not nombre: continue
                 r = e.CachedBoundingRectangle
                 if r.right - r.left < 4 or r.bottom - r.top < 4: continue
@@ -250,14 +263,14 @@ def leer_estado(h):
         with auto.UIAutomationInitializerInThread():
             ia = uia._AutomationClient.instance().IUIAutomation
             cr = ia.CreateCacheRequest()
-            for p in (UIA_NOMBRE, UIA_TIPO, UIA_CAJA, UIA_OCULTO, UIA_ACTIVADO, UIA_SELECCIONADO, UIA_VALOR): cr.AddProperty(p)
+            for p in (UIA_NOMBRE, UIA_TIPO, UIA_CAJA, UIA_OCULTO, UIA_ACTIVADO, UIA_SELECCIONADO, UIA_VALOR, UIA_AYUDA): cr.AddProperty(p)
             els = ia.ElementFromHandle(h).FindAllBuildCache(4, ia.CreateTrueCondition(), cr)
             for i in range(els.Length):
                 e = els.GetElement(i)
                 t = e.CachedControlType
                 tipo = TIPOS.get(t) or ("texto" if t == UIA_TEXTO else None)
                 if not tipo or e.CachedIsOffscreen: continue
-                nombre = (e.CachedName or "").strip().replace("\n", " ")
+                nombre = nombre_de(e) if tipo != "texto" else (e.CachedName or "").strip().replace("\n", " ")
                 def prop(pid):
                     try: v = e.GetCachedPropertyValue(pid)
                     except Exception: return None

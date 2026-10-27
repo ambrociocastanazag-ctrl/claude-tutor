@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import ojos
+import ustx
 
 # Lo que se comprueba sin IA en un «Tu turno» (cada objeto de "pide" y cada "si" de un error típico)
 TIPOS_PIDE = {
@@ -26,6 +27,8 @@ TIPOS_CODIGO = {
     "pruebas": "pruebas JUnit: {\"tipo\": \"pruebas\", \"clases\": [...] o \"todas\", \"ocultas\": true, \"minimo\": 3}",
     "http":    "una petición a la API que corre el estudiante: {\"tipo\": \"http\", \"metodo\": \"POST\", \"url\": \"...\", \"cuerpo\": {...}, \"codigo\": 201, \"json\": {...}}",
 }
+TIPOS_ARCHIVO = dict(ustx.TIPO)        # proyectos guardados por la app (OpenUtau): se revisan sin IA y sin abrir la app
+SIN_APP = set(TIPOS_CODIGO) | set(TIPOS_ARCHIVO)
 IGNORAR_COPIA = ("target", ".git", "node_modules")
 PRIVADO = re.compile(r"^(signed in as|iniciaste sesi|sesi[oó]n iniciada|account|cuenta)", re.I)    # el botón de la cuenta lleva su nombre
 
@@ -75,10 +78,13 @@ def validar_codigo(q, donde, con_proyecto):
         if "codigo" in q and not isinstance(q["codigo"], int): raise ValueError(f"{donde}: «codigo» es un número (200, 201…)")
 
 
-def valida_q(q, donde, con_proyecto):
+def valida_q(q, donde, con_proyecto, base=None):
     if q.get("tipo") in TIPOS_CODIGO: validar_codigo(q, donde, con_proyecto)
+    elif q.get("tipo") == "ustx":
+        ustx.validar(q, donde)
+        q["_base"] = str(base or "")             # las rutas de «archivo» son relativas a la carpeta del curso
     elif q.get("tipo") not in TIPOS_PIDE:
-        raise ValueError(f"{donde}: «{q.get('tipo')}» no es un tipo de comprobación ({', '.join(list(TIPOS_PIDE) + (list(TIPOS_CODIGO) if con_proyecto else []))})")
+        raise ValueError(f"{donde}: «{q.get('tipo')}» no es un tipo de comprobación ({', '.join(list(TIPOS_PIDE) + list(TIPOS_ARCHIVO) + (list(TIPOS_CODIGO) if con_proyecto else []))})")
 
 
 class Modulo:
@@ -101,7 +107,7 @@ class Modulo:
                 if any(q.get("tipo") in TIPOS_CODIGO for q in qs) and not t.get("proyecto") and not con_proyecto:
                     raise ValueError(f"{donde}: este turno revisa código: pon «proyecto»: \"<nombre>\" (de «proyectos») o «proyecto» en curso.json")
                 for q in qs:
-                    valida_q(q, donde, bool(con_proyecto or proyectos))
+                    valida_q(q, donde, bool(con_proyecto or proyectos), ruta.parent)
                 if not t.get("pide") and not t.get("tutor"): raise ValueError(f"{donde}: el «turno» necesita «pide» (sin IA) o «tutor» (con captura)")
                 if t.get("tutor") and not isinstance(t["tutor"], dict): raise ValueError(f"{donde}: «tutor» va así: {{\"revisar\": \"qué tiene que verse\"}}")
 
@@ -156,23 +162,39 @@ def abrir_app(app):
     subprocess.Popen(app.get("abrir") or app["exe"], shell=True)
 
 
-def estado(exe):
+def estado(app):
     """{"titulo", "titulos", "controles": [...]} de la ventana de la app con la que trabaja (la más reciente; en las apps
     modernas los diálogos van dentro de ella), o None si no está abierta. Solo una: con dos Paint abiertos, mezclar el
-    lienzo de uno con el título del otro daría por buena una mezcla."""
-    v = ventana_app(exe)
+    lienzo de uno con el título del otro daría por buena una mezcla.
+    `app` es el «app» de curso.json (o solo el exe). Con "ventanas": "todas" se leen todas las ventanas de la app, para
+    las que reparten su trabajo en varias (OpenUtau: la principal y el piano roll); con "alias", los botones sin nombre
+    ni tooltip reciben uno (ver aplicar_alias)."""
+    app = app if isinstance(app, dict) else {"exe": app}
+    v = ventana_app(app["exe"])
     if not v: return None
-    vs = [v]
+    vs = [v] + ([w for w in ventanas_app(app["exe"]) if w["hwnd"] != v["hwnd"]] if app.get("ventanas") == "todas" else [])
     ctrl = []
     for v in vs:
-        ctrl += [dict(c, ventana=v["titulo"]) for c in ojos.leer_estado(v["hwnd"])]
+        ctrl += aplicar_alias([dict(c, ventana=v["titulo"]) for c in ojos.leer_estado(v["hwnd"])], v["titulo"], app.get("alias"))
         ctrl.append({"tipo": "ventana", "nombre": v["titulo"], "caja": None, "activo": False, "valor": "", "ventana": v["titulo"]})
     return {"titulo": vs[0]["titulo"], "titulos": [v["titulo"] for v in vs], "controles": ctrl}
+
+
+def aplicar_alias(controles, titulo, alias):
+    """"alias": [{"nombre": "Reproducir", "es": "Avalonia.Controls.Shapes.Path", "n": 2, "ventana": "OpenUtau v"}]:
+    el n-ésimo control (en el orden de UI Automation, que no cambia al mover la ventana) que se llama «es», en la
+    ventana cuyo título contiene «ventana», pasa a llamarse «nombre». Para los íconos que no traen nombre ni tooltip."""
+    for a in alias or []:
+        if a.get("ventana") and norm(a["ventana"]) not in norm(titulo): continue
+        iguales = [c for c in controles if c["nombre"] == a["es"]]
+        if 0 < a.get("n", 1) <= len(iguales): iguales[a.get("n", 1) - 1]["nombre"] = a["nombre"]
+    return controles
 
 
 def cumple(est, q, ctx=None):
     """¿El estado cumple esta comprobación ("pide" o "si")? Las de código (compila, archivo, pruebas, http) las resuelve `ctx`."""
     if q["tipo"] in TIPOS_CODIGO: return bool(ctx and ctx.evalua(q)[0])
+    if q["tipo"] == "ustx": return ustx.revisar(q)[0]
     if est is None: return False
     tipo, cs = q["tipo"], est["controles"]
     if tipo == "activo":
@@ -204,12 +226,12 @@ def revisar_turno(est, turno, ctx=None):
     """La revisión sin IA: {"estado": bien | parcial | mal | vacio, "ok", "total", "mensaje", "puntos"}.
     Si el turno también lleva "tutor", "bien" aquí significa que falta la revisión del tutor (la pide el panel)."""
     pide = turno.get("pide") or []
-    if est is None and (ctx is None or any(q["tipo"] not in TIPOS_CODIGO for q in pide)):
+    if est is None and any(q["tipo"] not in (SIN_APP if ctx else TIPOS_ARCHIVO) for q in pide):
         return {"estado": "vacio", "ok": 0, "total": len(pide), "puntos": [],
                 "mensaje": "No encuentro la app abierta: ábrela y vuelve a pulsar Comprobar."}
     puntos = []
     for q in pide:
-        ok, detalle = ctx.evalua(q) if q["tipo"] in TIPOS_CODIGO and ctx else (cumple(est, q, ctx), "")
+        ok, detalle = ctx.evalua(q) if q["tipo"] in TIPOS_CODIGO and ctx else ustx.revisar(q) if q["tipo"] == "ustx" else (cumple(est, q, ctx), "")
         puntos.append({"ok": ok, "texto": q.get("texto") or q.get("nombre") or q["tipo"], "detalle": detalle})
     ok = sum(p["ok"] for p in puntos)
     if ok == len(pide):

@@ -12,7 +12,7 @@ La página es la de los tutores (../panel-excel/panel.html) con los ojos (ojos_u
   y el tutor mira la captura que la persona adjunta (bien / casi / revisa).
 - Tutor: conoce el curso, recibe el estado de la app EN TEXTO (lo activo, valores; nunca el botón de la cuenta) y marca
   encima de la app por nombre o, con una captura adjunta, por caja."""
-import json, os, re, shutil, subprocess, sys, threading, time
+import json, os, re, shutil, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
@@ -160,7 +160,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
     # ----- señalar por nombre -----
     def _senalar(self, objetivos, color="azul"):
         """Flechas encima de la app en los controles con esos nombres. Devuelve el aviso para la persona."""
-        est = cp.estado(self._curso.app["exe"])
+        est = cp.estado(self._curso.app)
         marcas, faltan = [], []
         for k, o in enumerate(objetivos):
             if o.get("linea") is not None:                # una línea del editor
@@ -194,7 +194,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         """Vuelve a ubicar los controles de «Señálamelo» (sin imagen: la lista de UI Automation) y los pone con deslizar.
         Devuelve {"movidas", "fuera", "perdidas"}."""
         objetivos, color = getattr(self, "_objetivos_senal", ([], "azul"))
-        est = cp.estado(self._curso.app["exe"])
+        est = cp.estado(self._curso.app)
         marcas, perdidas = [], []
         for k, o in enumerate(objetivos):
             if o.get("linea") is not None:
@@ -218,7 +218,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         hwnd = v["hwnd"]; cli = ojos.cliente(hwnd)
         evitar = []
         try:
-            est = cp.estado(self._curso.app["exe"]) or {"controles": []}
+            est = cp.estado(self._curso.app) or {"controles": []}
             evitar = [[a, b, c - a, d - b] for (a, b, c, d) in (x["caja"] for x in est["controles"] if x.get("caja") and x["tipo"] != "texto")]
         except Exception: pass
         r = self._ojos.ov.orden({"cmd": "mostrar", "pids": [v["pid"], os.getpid()], "panel": self._hwnd_panel(), "marcas": [
@@ -245,7 +245,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
                 ctx = cp.ContextoCodigo(self._curso, self._mod, t)
                 self._aviso_pagina("Revisando…", f"Revisando… (corriendo tus pruebas, ~{self._seg_estimados} s)" if cp.ContextoCodigo.usa_maven(t) else "Revisando…")
             ui = any(q["tipo"] not in cp.TIPOS_CODIGO for q in t.get("pide") or []) or bool(t.get("tutor"))
-            est = cp.estado(self._curso.app["exe"]) if (ui or not codigo) else None
+            est = cp.estado(self._curso.app) if (ui or not codigo) else None
             t0 = time.time()
             rev = cp.revisar_turno(est, t, ctx) if t.get("pide") else {"estado": "bien", "ok": 0, "total": 0, "puntos": [], "mensaje": ""}
             if ctx is not None and ctx._mvn: self._seg_estimados = max(5, int(round(time.time() - t0)))
@@ -288,7 +288,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         p, t = self._paso(), self._turno()
         mods = f"Módulo {self._m + 1} de {len(self._curso.modulos)} («{self._mod.titulo}»). " if len(self._curso.modulos) > 1 else ""
         partes = [f"[Estado actual] {mods}Paso {self._n + 1} de {len(self._mod.pasos)}: {p.get('titulo', '')}. El panel dice: {p['texto']}"]
-        est = cp.estado(self._curso.app["exe"])
+        est = cp.estado(self._curso.app)
         if t:
             if cp.ContextoCodigo.usa_codigo(t):          # Maven no se corre por cada pregunta: lo último que vio Comprobar
                 partes.append("Este Tu turno revisa " + cp.ContextoCodigo(self._curso, self._mod, t).descripcion()
@@ -333,7 +333,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
                 if a.startswith(("Sube", "Baja")): self._ojos.avisos_linea.append(a)
         por_nombre = [m for m in marcas if isinstance(m, dict) and m.get("tipo") == "app" and m.get("nombre")]
         if por_nombre:
-            est = cp.estado(self._curso.app["exe"])
+            est = cp.estado(self._curso.app)
             for k, m in enumerate(por_nombre[:4]):
                 c = cp.buscar(est, {"nombre": m["nombre"]}) if est else None
                 if c: ms.append({"c": c, "texto": str(m.get("texto") or "")[:40], "n": m.get("n"), "color": m.get("color") or "azul"})
@@ -355,7 +355,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         est = {}
         def resolver(m):
             if not m.get("nombre"): return None
-            if "e" not in est: est["e"] = cp.estado(self._curso.app["exe"])
+            if "e" not in est: est["e"] = cp.estado(self._curso.app)
             c = cp.buscar(est["e"], {"nombre": m["nombre"]}) if est["e"] else None
             v = self._app()
             if not c or not v: raise ValueError(f"«{m['nombre']}» no está a la vista")
@@ -407,7 +407,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
             self._empujar("(function(){var b=document.getElementById('ejtComprobarTxt');if(b)b.textContent='Corriendo sus pruebas…';})()")
             try: return {"tutor_ej": self._ej.comprobar()}
             finally: self._rev_lock.release()
-        return {"tutor_ej": self._ej.comprobar(cp.estado(self._curso.app["exe"]))}
+        return {"tutor_ej": self._ej.comprobar(cp.estado(self._curso.app))}
 
     def ir_ejercicio(self):
         if self._codigo and self._ej.abrir(): return {"ok": True}
@@ -488,6 +488,33 @@ def probar_otro_proyecto(curso, mod, i, t, pide_ui, ver):
         print(f"      {'✓' if p['ok'] else '·'} {p['texto']}" + (f" → {p['detalle'][:120]}" if p.get("detalle") else ""))
 
 
+def probar_archivos(curso, mod, i, t, ver):
+    """--probar de un «Tu turno» que revisa archivos guardados por la app (ustx): los archivos de prueba van en
+    solucion/<módulo>/bien/ (debe salir bien), solucion/<módulo>/error<k>/ (el error típico k da su mensaje) y, sin
+    nada guardado, debe salir mal. Dentro, cada archivo va en la misma ruta que en el curso (mis_proyectos/x.ustx).
+    Lo de la app (activo, titulo…) se simula hecho, como en los demás turnos."""
+    sol = curso.carpeta / "solucion" / mod.ruta.stem
+    ui = [q for q in t.get("pide") or [] if q["tipo"] not in cp.TIPOS_ARCHIVO]
+
+    def con_base(base):
+        def q2(q): return dict(q, _base=str(base)) if q["tipo"] in cp.TIPOS_ARCHIVO else q
+        return dict(t, pide=[q2(q) for q in t.get("pide") or []], errores=[dict(e, si=q2(e["si"])) for e in t.get("errores") or []])
+    bien = sol / "bien"
+    if not bien.is_dir():
+        ver(False, f"  paso {i + 1} (Tu turno): falta solucion/{mod.ruta.stem}/bien/ con los archivos bien hechos"); return
+    r = cp.revisar_turno(cp.simular(ui), con_base(bien))
+    ver(r["estado"] == "bien", f"  paso {i + 1} (Tu turno): con solucion/{mod.ruta.stem}/bien/ → {r['estado']} ({r['mensaje'][:90]})")
+    with tempfile.TemporaryDirectory() as vacio:
+        r = cp.revisar_turno(cp.simular(ui), con_base(vacio))
+        ver(r["estado"] in ("mal", "parcial") and r["ok"] < r["total"], f"  paso {i + 1}: sin guardar nada → {r['estado']} («{r['mensaje'][:70]}»)")
+    for k, e in enumerate(t.get("errores") or []):
+        d = sol / f"error{k + 1}"
+        if not d.is_dir():
+            ver(False, f"  paso {i + 1}: falta solucion/{mod.ruta.stem}/error{k + 1}/ para el error típico {k + 1}"); continue
+        r = cp.revisar_turno(cp.simular(ui), con_base(d))
+        ver(r["estado"] == "mal" and r["mensaje"] == e["mensaje"], f"  paso {i + 1}: error típico {k + 1} se reconoce ({r['estado']}: «{r['mensaje'][:60]}…»)")
+
+
 def probar(curso):
     """--probar: sin ventanas ni IA. Devuelve los fallos."""
     malos = 0
@@ -497,7 +524,7 @@ def probar(curso):
         malos += not c; print("✔" if c else "✘", txt)
 
     print(f"Curso «{curso.titulo}» ({curso.app_nombre}): {len(curso.modulos)} módulo(s)")
-    est = cp.estado(curso.app["exe"])
+    est = cp.estado(curso.app)
     print(f"  {curso.app_nombre} {'abierto: se buscan los «senalar»' if est else 'cerrado: no se buscan los «senalar» (ábrelo para probarlos)'}")
     for kmod, mod in enumerate(curso.modulos):
         print(f"Módulo {mod.codigo} «{mod.titulo}»: {len(mod.pasos)} pasos")
@@ -531,7 +558,9 @@ def probar(curso):
                 if q["tipo"] == "pruebas" and q.get("ocultas"):
                     d = curso.carpeta / "pruebas" / mod.ruta.stem
                     ver(d.is_dir() and any(d.rglob("*.java")), f"  paso {i + 1}: hay pruebas ocultas en pruebas/{mod.ruta.stem}/")
-            if pide:
+            if any(q["tipo"] in cp.TIPOS_ARCHIVO for q in pide + [e["si"] for e in t_ui.get("errores") or []]):
+                probar_archivos(curso, mod, i, t_ui, ver)
+            elif pide:
                 r = cp.revisar_turno(cp.simular(pide), t_ui)
                 ver(r["estado"] == "bien", f"  paso {i + 1} (Tu turno): con la solución → {r['estado']}")
                 r = cp.revisar_turno(cp.simular(), t_ui)
