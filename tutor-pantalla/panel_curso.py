@@ -162,6 +162,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
         """Flechas encima de la app en los controles con esos nombres. Devuelve el aviso para la persona."""
         est = cp.estado(self._curso.app)
         marcas, faltan = [], []
+        self._abrir_archivo(objetivos)
         for k, o in enumerate(objetivos):
             if o.get("linea") is not None:                # una línea del editor
                 ms, av = capacidades.marcas_linea([dict(o, tipo="app")], self._raices, (self._app() or {}).get("hwnd"))
@@ -184,6 +185,18 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
             return {"ok": False, "aviso": f"Ahora no veo eso en {self._curso.app_nombre}" + (f": {', '.join(faltan[:2])}." if faltan else ".")}
         falta = f" (no veo: {faltan[0]})" if faltan else ""
         return {"ok": True, "aviso": f"Mira {self._curso.app_nombre}: te señalé {len(marcas)} cosa{'s' if len(marcas) != 1 else ''}{falta}.{extra}"}
+
+    def _abrir_archivo(self, objetivos):
+        """Un «senalar» con "archivo" y "linea" (p. ej. «En tu código»: un archivo real de otro repo, en «lectura» o
+        «proyectos» de curso.json) abre antes ese archivo en VS Code en esa línea (`code -r -g`), solo para leerlo."""
+        o = next((x for x in objetivos if x.get("archivo") and x.get("linea") is not None), None)
+        if not o or not editor_vscode.es_vscode(self._curso.app.get("exe")): return
+        ruta = Path(o["archivo"])
+        if not ruta.is_absolute():
+            ruta = next((Path(r) / ruta for r in self._raices if (Path(r) / ruta).is_file()), ruta)
+        if not ruta.is_file(): return
+        subprocess.Popen(f'code -r -g "{ruta}:{int(o["linea"])}"', shell=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        time.sleep(1.8)                                # que VS Code lo muestre antes de ubicar la línea
 
     def _registrar_rehacer(self, si):
         """🎯 Reajustar: «Señálamelo» se rehace volviendo a buscar sus controles por nombre (ojos_panel.registrar_rehacer)."""
@@ -243,7 +256,7 @@ class Api(practica.PracticaApi, ojos_panel.OjosApi):
             ctx = None
             if codigo:                  # Maven corre en este hilo (no en el de la página): el panel y el tutor siguen vivos
                 ctx = cp.ContextoCodigo(self._curso, self._mod, t)
-                self._aviso_pagina("Revisando…", f"Revisando… (corriendo tus pruebas, ~{self._seg_estimados} s)" if cp.ContextoCodigo.usa_maven(t) else "Revisando…")
+                self._aviso_pagina("Revisando…", f"Revisando… (corriendo tus pruebas, ~{self._seg_estimados} s)" if cp.ContextoCodigo.usa_pruebas(t) else "Revisando…")
             ui = any(q["tipo"] not in cp.TIPOS_CODIGO for q in t.get("pide") or []) or bool(t.get("tutor"))
             est = cp.estado(self._curso.app) if (ui or not codigo) else None
             t0 = time.time()
@@ -453,9 +466,39 @@ def abrir_ventana(api):
         api._ojos.poner_js(lambda c: api._ventana.evaluate_js(c) if api._ventana else None)
 
 
+def armar_estado(curso, stem, estado, destino):
+    """curso.json "armar": un script que deja en `destino` el proyecto del módulo `stem` en `estado` (inicio, solucion,
+    o los de un turno: p<N>-inicio, p<N>-solucion y p<N>-error<k>, el error típico k del turno del paso N). Sale con 0 si lo hizo y con 2 si ese estado no existe. Sirve para lo que no cabe en
+    solucion/ (un repositorio git con su historia). Devuelve (código, salida)."""
+    script = Path(curso.d["armar"])
+    script = script if script.is_absolute() else curso.carpeta / script
+    p = subprocess.run([sys.executable, str(script), stem, estado, str(destino)], capture_output=True, timeout=180,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return p.returncode, (p.stdout + p.stderr).decode("utf-8", "replace").strip()
+
+
+def probar_con_armar(curso, mod, i, t, pide_ui, ver):
+    """--probar de un «Tu turno» de código con "armar": solucion → bien, inicio → no bien, error<k> → su mensaje."""
+    est = cp.simular(pide_ui)
+    casos = [("solucion", "bien", None), ("inicio", "no", None)] + [(f"error{k + 1}", "mal", e["mensaje"]) for k, e in enumerate(t.get("errores") or [])]
+    for estado, espera, mensaje in casos:
+        with tempfile.TemporaryDirectory(prefix="curso_armar_") as d:
+            dest = Path(d) / "p"
+            c, sal = armar_estado(curso, mod.ruta.stem, f"p{i + 1}-{estado}", dest)    # el estado de ese turno, si lo hay
+            if c == 2 and not estado.startswith("error"): c, sal = armar_estado(curso, mod.ruta.stem, estado, dest)
+            if c == 2: print(f"ℹ   paso {i + 1}: «armar» no tiene el estado «p{i + 1}-{estado}»"); continue
+            if c != 0: ver(False, f"  paso {i + 1}: «armar {mod.ruta.stem} {estado}» falló: {sal[-200:]}"); continue
+            r = cp.revisar_turno(est, t, cp.ContextoCodigo(curso, mod, t, raiz=dest, sin_http=True))
+            ok = r["estado"] == "bien" if espera == "bien" else r["estado"] != "bien" if espera == "no" else (r["estado"] == "mal" and r["mensaje"] == mensaje)
+            ver(ok, f"  paso {i + 1} (código, armar «{estado}»): → {r['estado']} ({r['mensaje'][:90]})")
+
+
 def probar_codigo(curso, mod, kmod, i, t, pide_ui, ver):
     """--probar de un «Tu turno» de código: contra solucion/<stem>/ debe salir bien y contra la del módulo anterior (o
-    solucion/plantilla/) no. Los http no se prueban aquí. Devuelve 0 (los fallos los cuenta `ver`)."""
+    solucion/plantilla/) no. Con "armar" en curso.json, los estados los arma ese script. Los http no se prueban aquí.
+    Devuelve 0 (los fallos los cuenta `ver`)."""
+    if curso.d.get("armar"):
+        probar_con_armar(curso, mod, i, t, pide_ui, ver); return 0
     sol = curso.carpeta / "solucion"
     mia = sol / mod.ruta.stem
     ant = next((sol / curso.modulos[j].ruta.stem for j in range(kmod - 1, -1, -1) if (sol / curso.modulos[j].ruta.stem).is_dir()), sol / "plantilla")
@@ -558,6 +601,9 @@ def probar(curso):
                 if q["tipo"] == "pruebas" and q.get("ocultas"):
                     d = curso.carpeta / "pruebas" / mod.ruta.stem
                     ver(d.is_dir() and any(d.rglob("*.java")), f"  paso {i + 1}: hay pruebas ocultas en pruebas/{mod.ruta.stem}/")
+                if q["tipo"] in ("pytest", "vitest") and q.get("ocultas"):
+                    d = curso.carpeta / "pruebas" / mod.ruta.stem
+                    ver(d.is_dir() and any(f.is_file() for f in d.rglob("*")), f"  paso {i + 1}: hay pruebas ocultas en pruebas/{mod.ruta.stem}/")
             if any(q["tipo"] in cp.TIPOS_ARCHIVO for q in pide + [e["si"] for e in t_ui.get("errores") or []]):
                 probar_archivos(curso, mod, i, t_ui, ver)
             elif pide:

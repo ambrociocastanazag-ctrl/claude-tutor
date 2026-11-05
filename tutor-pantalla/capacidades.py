@@ -100,6 +100,7 @@ def raices_curso(d):
     if d.get("proyecto"): r.append(str(d["proyecto"]))
     for info in (d.get("proyectos") or {}).values():
         if isinstance(info, dict) and info.get("ruta"): r.append(str(info["ruta"]))
+    r += [str(x) for x in d.get("lectura") or []]          # carpetas solo para leer y señalar (p. ej. un repo real del estudiante)
     abrir = (d.get("app") or {}).get("abrir") or ""
     for c in re.findall(r'"([^"]+)"', abrir) or abrir.split()[1:]:
         if Path(c).is_dir(): r.append(c)

@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import ojos
+import revisores
 import ustx
 
 # Lo que se comprueba sin IA en un «Tu turno» (cada objeto de "pide" y cada "si" de un error típico)
@@ -27,6 +28,7 @@ TIPOS_CODIGO = {
     "pruebas": "pruebas JUnit: {\"tipo\": \"pruebas\", \"clases\": [...] o \"todas\", \"ocultas\": true, \"minimo\": 3}",
     "http":    "una petición a la API que corre el estudiante: {\"tipo\": \"http\", \"metodo\": \"POST\", \"url\": \"...\", \"cuerpo\": {...}, \"codigo\": 201, \"json\": {...}}",
 }
+TIPOS_CODIGO.update(revisores.TIPOS)    # pytest, vitest, git y comando (revisores.py)
 TIPOS_ARCHIVO = dict(ustx.TIPO)        # proyectos guardados por la app (OpenUtau): se revisan sin IA y sin abrir la app
 SIN_APP = set(TIPOS_CODIGO) | set(TIPOS_ARCHIVO)
 IGNORAR_COPIA = ("target", ".git", "node_modules")
@@ -61,7 +63,8 @@ def validar_codigo(q, donde, con_proyecto):
     """Valida un «pide» (o «si») de los tipos de código; lanza ValueError con la causa."""
     t = q.get("tipo")
     if not con_proyecto: raise ValueError(f"{donde}: «{t}» solo existe en cursos con «proyecto» en curso.json")
-    if t == "archivo":
+    if t in revisores.TIPOS: revisores.validar(q, donde)
+    elif t == "archivo":
         if not q.get("ruta"): raise ValueError(f"{donde}: «archivo» necesita «ruta» (relativa al proyecto)")
         if os.path.isabs(str(q["ruta"])) or ".." in Path(str(q["ruta"])).parts: raise ValueError(f"{donde}: «ruta» tiene que ser relativa al proyecto (sin «..»)")
         for k in ("contiene", "no_contiene"):
@@ -450,12 +453,37 @@ class ContextoCodigo:
         self.clases = sorted({c for q in pr if not es_todas(q) for c in lista(q["clases"])})
         self.ocultas = any(q.get("ocultas") for q in pr)
         self._mvn = None
+        qs = _qs(turno)
+        self._lotes = {}                                              # pytest / vitest: una corrida por tipo, como Maven
+        for tipo in ("pytest", "vitest"):
+            qt = [q for q in qs if q.get("tipo") == tipo]
+            if qt: self._lotes[tipo] = {"todas": any(revisores.es_todas(q) for q in qt), "ocultas": any(q.get("ocultas") for q in qt),
+                                        "archivos": sorted({a.replace("\\", "/") for q in qt if not revisores.es_todas(q) for a in lista(q["archivos"])}),
+                                        "res": None}
+        alumno = info["ruta"]                                        # el venv y el node_modules salen del proyecto real si la copia no los tiene
+        self._raices_dep = [self.raiz, alumno, curso.proyecto]
 
     @staticmethod
     def usa_codigo(turno): return any(q.get("tipo") in TIPOS_CODIGO for q in _qs(turno))
 
     @staticmethod
     def usa_maven(turno): return any(q.get("tipo") in ("compila", "pruebas") for q in _qs(turno))
+
+    @staticmethod
+    def usa_pruebas(turno):
+        """¿Este Comprobar corre algo que tarda (Maven, pytest, vitest)? Para el aviso «corriendo tus pruebas»."""
+        return any(q.get("tipo") in ("compila", "pruebas", "pytest", "vitest") for q in _qs(turno))
+
+    def _lote(self, tipo):
+        l = self._lotes[tipo]
+        if l["res"] is None:
+            ocultas = self.curso.carpeta / "pruebas" / self.mod.ruta.stem if l["ocultas"] else None
+            archivos = [] if l["todas"] else l["archivos"]
+            if tipo == "pytest":
+                l["res"] = revisores.correr_pytest(self.raiz, archivos, ocultas, revisores.python_para(self._raices_dep, self.curso.d.get("python", "")))
+            else:
+                l["res"] = revisores.correr_vitest(self.raiz, archivos, ocultas, revisores.node_modules_de(self._raices_dep))
+        return l["res"]
 
     def maven(self):
         if self._mvn is None:
@@ -468,6 +496,12 @@ class ContextoCodigo:
         t = q["tipo"]
         if t == "http": return (True, "") if self.sin_http else peticion(q)
         if t == "archivo": return self._archivo(q)
+        if t == "git": return revisores.revisar_git(self.raiz, q)
+        if t == "comando": return revisores.correr_comando(self.raiz, q)
+        if t in ("pytest", "vitest"):
+            r = self._lote(t)
+            if not r["ok_corrio"]: return False, r["error"]
+            return revisores._resume(r["archivos"], q, t)
         r = self.maven()
         if not r["compila"]: return False, r["error"]
         if t == "compila": return True, ""

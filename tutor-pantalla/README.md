@@ -224,6 +224,25 @@ Un curso puede revisar **más de un proyecto** (p. ej. una práctica y el proyec
 - **`--probar`:** valida estos turnos (tipos, nombre de proyecto, comodines) y **no** los prueba contra `solucion/`; en cambio **informa con ℹ** (nunca ✘) cómo saldrían hoy contra el proyecto real, en una copia temporal, punto por punto. Los `http` no se corren.
 - **Tutor:** en los turnos de código recibe una línea «Este Tu turno revisa «carrito» (ruta; Maven en api/)», para no confundir el proyecto de ese paso con el de otros.
 
+#### Python, JavaScript, Git y la terminal (`revisores.py`)
+
+Además de Maven, `pide` y los `si` de `errores` aceptan cuatro tipos más (también sin IA). El código vive en `revisores.py` y se prueba solo con `python tutor-pantalla/revisores.py --probar` (vitest, con `--probar --vitest <carpeta con node_modules>`).
+
+```json
+{"tipo": "pytest", "archivos": ["tests/test_profe.py"], "ocultas": true, "texto": "Pasas las pruebas del profe"}
+{"tipo": "pytest", "archivos": "todas", "minimo": 3, "texto": "Tus pruebas pasan"}
+{"tipo": "vitest", "archivos": ["src/Lista.test.jsx"], "ocultas": true, "texto": "La lista pasa las pruebas"}
+{"tipo": "git", "en_curso": "ninguno", "sin_conflictos": true, "merge": true, "ancestro": "otra-rama", "texto": "Uniste la rama"}
+{"tipo": "comando", "cmd": "bash contar.sh app.log", "codigo": 0, "salida": {"regex": "^2\\s*$"}, "texto": "Tu script cuenta 2"}
+```
+
+- **`pytest`** y **`vitest`**: como `pruebas`, pero por **archivo** (rutas relativas al proyecto) o `"todas"`, con `minimo` y `ocultas` (las de `<curso>/pruebas/<stem>/` se copian **respetando su ruta** dentro del proyecto). Una sola corrida por tipo y por Comprobar, en una **copia temporal**; si falla, «falta» trae la primera prueba que falló y su mensaje (`test_neg: AssertionError: suma con negativos`). Python: el `.venv` (o `venv`) del proyecto; si la copia no lo tiene (en `--probar`, la de `solucion/`), el del proyecto del estudiante; si no, `"python"` de `curso.json`, y si no, el del PATH. Vitest: `node node_modules/vitest/vitest.mjs run --reporter=json`, con el `node_modules` del proyecto **enlazado** (unión de Windows, no se copia; se quita antes de borrar la copia y el original queda intacto). Sin `node_modules/vitest`: «falta instalar las dependencias (npm install…)».
+- **`git`**: lee el repositorio del proyecto **sin tocarlo** (comandos de lectura, `GIT_OPTIONAL_LOCKS=0`: ni siquiera refresca el índice). Todas las claves que pongas tienen que cumplirse: `rama`, `limpio` (sin cambios pendientes), `sin_conflictos` (ni archivos *unmerged* ni marcas `<<<<<<<`/`>>>>>>>`), `en_curso` (`ninguno`, `merge`, `rebase`, `cherry-pick`, `revert`), `merge` (el último commit es un merge), `commit` (regex o lista: algún commit de la historia lo dice en su mensaje), `desde` (limita `commit` y `commits` a `desde..HEAD`), `commits` (mínimo), `ancestro` (esa rama ya está unida), `existe_rama`, `igual_a` (HEAD igual que esa ref: p. ej. `origin/main` tras el push) y `salida` (`{"cmd": ["log", "origin/main", "--format=%s"], "contiene"/"no_contiene"/"regex"}`, solo subcomandos de lectura: `push`, `branch -D`, `branch <nueva>` y parecidos se rechazan al cargar el curso). En un `si`, todas sus claves juntas son la condición: `{"tipo": "git", "merge": true, "salida": {"cmd": ["show", "HEAD:recetas.py"], "no_contiene": "math.ceil"}}`.
+- **`comando`**: corre `cmd` en una **copia temporal** del proyecto con `shell` `bash` (el de Git for Windows, no el de WSL; por defecto), `powershell`, `cmd` o `ninguno`; revisa `codigo` (0 por defecto; `null` = no mirar), `salida` y `stderr` (`contiene`/`no_contiene`/`regex`), `crea` (archivos que tienen que existir después), con `env`, `entrada` (stdin) y `timeout` (30 s). Lo escribe el autor del curso, nunca el estudiante.
+- **`"armar"` en `curso.json`** (para lo que no cabe en `solucion/`, como un repositorio con su historia): un script `python <armar> <stem> <estado> <destino>` que arma el proyecto del módulo en `inicio`, `solucion`, o por turno `p<N>-inicio`, `p<N>-solucion` y `p<N>-error<k>` (el error típico k del Tu turno del paso N); sale con 2 si ese estado no existe. Con `armar`, `--probar` prueba cada Tu turno de código así: solución → **bien**, inicio → **no** bien, cada `error<k>` → **su** mensaje. Ejemplo típico: un curso de Git cuyo `armar.py` arma el taller con su historia y un remoto *bare* al lado (hace de GitHub).
+- **`"lectura"` en `curso.json`**: carpetas solo para leer (p. ej. el repo real del estudiante). Cuentan como carpetas del curso para el tutor (Read y Glob, nunca secretos) y para ubicar la línea abierta en VS Code. Un `senalar` con `"archivo"` (absoluto o relativo a esas carpetas) y `"linea"` abre antes ese archivo en VS Code en esa línea (`code -r -g`) y la marca: sirve para pasos «En tu código».
+- El aviso «Revisando… (corriendo tus pruebas, ~N s)» sale también con `pytest` y `vitest`.
+
 ## Marcas en SVG, 🎯 Reajustar, ✏️ Señalar e ilustraciones en el chat
 
 Todo esto está en los 4 paneles (asistente, curso, Excel y Dia). El contrato entre las piezas está en `CONTRATO-MARCAS.md`.
