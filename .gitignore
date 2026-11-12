@@ -6,6 +6,9 @@
 /*
 !/.gitignore
 !/INSTALAR_TUTOR.md
+!/.github/
+/.github/*
+!/.github/README.md
 !/paquete-tutor/
 /paquete-tutor/*
 !/paquete-tutor/requirements.txt
